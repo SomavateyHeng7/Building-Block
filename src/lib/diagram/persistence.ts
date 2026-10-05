@@ -25,9 +25,19 @@ function readIndex(): DiagramSummary[] {
   }
 }
 
-function writeIndex(index: DiagramSummary[]) {
-  if (!isBrowser()) return;
-  window.localStorage.setItem(INDEX_KEY, JSON.stringify(index));
+/** Storage can be full, blocked or disabled (private mode); callers decide how to tell the user. */
+function writeItem(key: string, value: string): boolean {
+  if (!isBrowser()) return false;
+  try {
+    window.localStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function writeIndex(index: DiagramSummary[]): boolean {
+  return writeItem(INDEX_KEY, JSON.stringify(index));
 }
 
 function sortByRecency(index: DiagramSummary[]): DiagramSummary[] {
@@ -59,13 +69,14 @@ export function getDiagramIndexServerSnapshot(): DiagramSummary[] {
   return EMPTY_INDEX;
 }
 
-export function saveDiagram(diagram: Diagram): void {
-  if (!isBrowser()) return;
-  window.localStorage.setItem(DIAGRAM_KEY_PREFIX + diagram.id, JSON.stringify(diagram));
+/** Returns false when the browser refused to store it, so the diagram exists only in memory. */
+export function saveDiagram(diagram: Diagram): boolean {
+  if (!writeItem(DIAGRAM_KEY_PREFIX + diagram.id, JSON.stringify(diagram))) return false;
   const index = readIndex().filter((entry) => entry.id !== diagram.id);
   index.unshift({ id: diagram.id, name: diagram.name, updatedAt: diagram.updatedAt });
-  writeIndex(index);
+  const indexed = writeIndex(index);
   emitIndexChange();
+  return indexed;
 }
 
 export function loadDiagramFromStorage(id: string): Diagram | null {
@@ -122,6 +133,8 @@ export async function importDiagramFile(file: File): Promise<ParsedDiagram> {
   }
   const { diagram, fixes } = parseDiagram(json);
   const imported: Diagram = { ...diagram, id: createId("diagram"), updatedAt: new Date().toISOString() };
-  saveDiagram(imported);
+  if (!saveDiagram(imported)) {
+    throw new DiagramFileError("Your browser wouldn't store it (storage may be full or blocked).");
+  }
   return { diagram: imported, fixes };
 }

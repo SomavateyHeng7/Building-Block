@@ -31,23 +31,18 @@ export function exportTitle(diagram: Diagram, section: DiagramSection): string {
   return diagram.sections.length > 1 ? `${diagram.name} — ${section.name}` : diagram.name;
 }
 
-/** Renders the diagram at 1:1 zoom with a title above and the legend below. */
-async function renderComposite(
-  options: ImageExportOptions,
-): Promise<{ canvas: HTMLCanvasElement; width: number; height: number }> {
-  const { toCanvas } = await import("html-to-image");
-  const { viewport, bounds, title, legend, dark } = options;
+interface LegendLayout {
+  items: { entry: LegendEntry; x: number; row: number }[];
+  legendHeight: number;
+  totalWidth: number;
+  totalHeight: number;
+}
 
-  const width = Math.ceil(bounds.width + PADDING * 2);
-  const height = Math.ceil(bounds.height + PADDING * 2);
-  const colors = dark
-    ? { background: "#0a0a0a", text: "#ededed", muted: "#a1a1aa", swatchBorder: "rgba(255,255,255,0.3)" }
-    : { background: "#ffffff", text: "#171717", muted: "#52525b", swatchBorder: "rgba(0,0,0,0.25)" };
-
-  // Legend layout: items flow left to right and wrap at the image width.
+/** Legend items flow left to right and wrap at the image width; also gives the final image size. */
+function layoutLegend(legend: LegendEntry[], width: number, height: number): LegendLayout {
   const measure = document.createElement("canvas").getContext("2d")!;
   measure.font = `12px ${FONT_FAMILY}`;
-  const items: { entry: LegendEntry; x: number; row: number }[] = [];
+  const items: LegendLayout["items"] = [];
   let x = PADDING;
   let row = 0;
   for (const entry of legend) {
@@ -61,7 +56,25 @@ async function renderComposite(
   }
   const legendHeight = legend.length ? 28 + (row + 1) * LEGEND_ROW_HEIGHT + PADDING / 2 : 0;
   const totalWidth = Math.max(width, legend.length ? 480 : 0);
-  const totalHeight = HEADER_HEIGHT + height + legendHeight;
+  return { items, legendHeight, totalWidth, totalHeight: HEADER_HEIGHT + height + legendHeight };
+}
+
+export type RenderedComposite = { canvas: HTMLCanvasElement; width: number; height: number };
+
+/** Renders the diagram at 1:1 zoom with a title above and the legend below. */
+export async function renderComposite(
+  options: ImageExportOptions,
+): Promise<{ canvas: HTMLCanvasElement; width: number; height: number }> {
+  const { toCanvas } = await import("html-to-image");
+  const { viewport, bounds, title, legend, dark } = options;
+
+  const width = Math.ceil(bounds.width + PADDING * 2);
+  const height = Math.ceil(bounds.height + PADDING * 2);
+  const colors = dark
+    ? { background: "#0a0a0a", text: "#ededed", muted: "#a1a1aa", swatchBorder: "rgba(255,255,255,0.3)" }
+    : { background: "#ffffff", text: "#171717", muted: "#52525b", swatchBorder: "rgba(0,0,0,0.25)" };
+
+  const { items, totalWidth, totalHeight } = layoutLegend(legend, width, height);
 
   const pixelRatio = Math.min(2, MAX_CANVAS_SIDE / Math.max(totalWidth, totalHeight));
   const diagramCanvas = await toCanvas(viewport, {
@@ -135,6 +148,26 @@ export async function exportPdf(options: ImageExportOptions): Promise<void> {
   pdf.save(`${fileBaseName(options.filename)}.pdf`);
 }
 
+/** Canvases are one-per-tab; the PDF gets one page per canvas, each sized to its diagram. */
+export async function exportPdfPages(pages: RenderedComposite[], filename: string): Promise<void> {
+  const { jsPDF } = await import("jspdf");
+  const orient = (page: RenderedComposite) => (page.width >= page.height ? "landscape" : "portrait");
+  const [first, ...rest] = pages;
+  const pdf = new jsPDF({ orientation: orient(first), unit: "pt", format: [first.width, first.height] });
+  pdf.addImage(first.canvas.toDataURL("image/png"), "PNG", 0, 0, first.width, first.height);
+  for (const page of rest) {
+    pdf.addPage([page.width, page.height], orient(page));
+    pdf.addImage(page.canvas.toDataURL("image/png"), "PNG", 0, 0, page.width, page.height);
+  }
+  pdf.save(`${fileBaseName(filename)}.pdf`);
+}
+
+export async function downloadCanvasPng(canvas: HTMLCanvasElement, filename: string): Promise<void> {
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+  if (!blob) throw new Error("Could not render PNG");
+  downloadBlob(blob, `${fileBaseName(filename)}.png`);
+}
+
 /** Every container and component in every section, for the solution document's component catalogue. */
 export function exportComponentsCsv(diagram: Diagram): void {
   const categories = new Map(diagram.legend.map((entry) => [entry.key, entry.label]));
@@ -160,4 +193,57 @@ export function exportComponentsCsv(diagram: Diagram): void {
   const csv = rows.map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")).join("\r\n");
   // The BOM makes Excel read the file as UTF-8.
   downloadBlob(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), `${fileBaseName(diagram.name)}-components.csv`);
+}
+
+const escapeXml = (value: string) =>
+  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/**
+ * SVG with the title and legend as real, editable text and shapes. The diagram itself is embedded
+ * as a nested SVG picture, so individual boxes aren't separate shapes in a vector editor.
+ */
+export async function exportSvg(options: ImageExportOptions): Promise<void> {
+  const { toSvg } = await import("html-to-image");
+  const { viewport, bounds, title, legend, dark } = options;
+  const width = Math.ceil(bounds.width + PADDING * 2);
+  const height = Math.ceil(bounds.height + PADDING * 2);
+  const colors = dark
+    ? { background: "#0a0a0a", text: "#ededed", muted: "#a1a1aa", swatchBorder: "rgba(255,255,255,0.3)" }
+    : { background: "#ffffff", text: "#171717", muted: "#52525b", swatchBorder: "rgba(0,0,0,0.25)" };
+  const { items, totalWidth, totalHeight } = layoutLegend(legend, width, height);
+
+  const diagramUri = await toSvg(viewport, {
+    backgroundColor: colors.background,
+    width,
+    height,
+    style: {
+      width: `${width}px`,
+      height: `${height}px`,
+      transform: `translate(${PADDING - bounds.x}px, ${PADDING - bounds.y}px) scale(1)`,
+    },
+    filter: (node) => !node.classList?.contains("react-flow__resize-control"),
+  });
+
+  const legendTop = HEADER_HEIGHT + height;
+  const legendSvg = legend.length
+    ? `<text x="${PADDING}" y="${legendTop + 12}" fill="${colors.muted}" font-size="11" font-weight="bold" dominant-baseline="middle">LEGEND</text>` +
+      items
+        .map((item) => {
+          const y = legendTop + 28 + item.row * LEGEND_ROW_HEIGHT;
+          return (
+            `<rect x="${item.x + 0.5}" y="${y + 0.5}" width="${SWATCH - 1}" height="${SWATCH - 1}" fill="${item.entry.color}" stroke="${colors.swatchBorder}"/>` +
+            `<text x="${item.x + SWATCH + 6}" y="${y + SWATCH / 2}" fill="${colors.text}" font-size="12" dominant-baseline="middle">${escapeXml(item.entry.label)}</text>`
+          );
+        })
+        .join("")
+    : "";
+
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="${totalHeight}" viewBox="0 0 ${totalWidth} ${totalHeight}" font-family="${FONT_FAMILY}">` +
+    `<rect width="100%" height="100%" fill="${colors.background}"/>` +
+    `<text x="${PADDING}" y="${HEADER_HEIGHT / 2 + 8}" fill="${colors.text}" font-size="18" font-weight="bold" dominant-baseline="middle">${escapeXml(title)}</text>` +
+    `<image x="0" y="${HEADER_HEIGHT}" width="${width}" height="${height}" href="${diagramUri}"/>` +
+    legendSvg +
+    `</svg>`;
+  downloadBlob(new Blob([svg], { type: "image/svg+xml" }), `${fileBaseName(options.filename)}.svg`);
 }

@@ -5,8 +5,20 @@ import { useState } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { useTheme } from "next-themes";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
+import { useSaveStatus } from "@/lib/diagram/saveStatus";
 import { downloadDiagramJson } from "@/lib/diagram/persistence";
-import { exportComponentsCsv, exportPdf, exportPng, exportTitle, legendUsedIn } from "@/lib/diagram/export";
+import {
+  downloadCanvasPng,
+  exportComponentsCsv,
+  exportPdf,
+  exportPdfPages,
+  exportPng,
+  exportSvg,
+  exportTitle,
+  legendUsedIn,
+  renderComposite,
+  type RenderedComposite,
+} from "@/lib/diagram/export";
 import { nextSlotInContainer } from "@/lib/diagram/layout";
 import { saveUserTemplate } from "@/templates/userTemplates";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -15,16 +27,27 @@ import { ImportDiagramButton } from "@/components/ImportDiagramButton";
 const SECONDARY_BUTTON =
   "rounded border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900";
 
-type ExportFormat = "png" | "pdf" | "csv" | "json";
+type ExportFormat = "png" | "pdf" | "svg" | "png-all" | "pdf-all" | "csv" | "json";
 
 const EXPORT_OPTIONS: { format: ExportFormat; label: string; hint: string }[] = [
   { format: "png", label: "PNG image", hint: "Current tab, with legend" },
   { format: "pdf", label: "PDF document", hint: "Current tab, with legend" },
+  { format: "svg", label: "SVG vector", hint: "Current tab, editable title and legend" },
+  { format: "png-all", label: "PNG images (all tabs)", hint: "One file per tab, with legend" },
+  { format: "pdf-all", label: "PDF document (all tabs)", hint: "One page per tab, with legend" },
   { format: "csv", label: "Component list (CSV)", hint: "All tabs, with details" },
   { format: "json", label: "Diagram file (JSON)", hint: "Re-importable backup" },
 ];
 
-function ExportMenu({ busy, onSelect }: { busy: boolean; onSelect: (format: ExportFormat) => void }) {
+function ExportMenu({
+  busy,
+  multiTab,
+  onSelect,
+}: {
+  busy: boolean;
+  multiTab: boolean;
+  onSelect: (format: ExportFormat) => void;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <div
@@ -51,7 +74,7 @@ function ExportMenu({ busy, onSelect }: { busy: boolean; onSelect: (format: Expo
           role="menu"
           className="absolute right-0 z-50 mt-1 w-56 overflow-hidden rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
         >
-          {EXPORT_OPTIONS.map((option) => (
+          {EXPORT_OPTIONS.filter((option) => multiTab || !option.format.endsWith("-all")).map((option) => (
             <button
               key={option.format}
               type="button"
@@ -88,6 +111,7 @@ export default function Toolbar() {
   const canUndo = useDiagramStore((state) => state.past.length > 0);
   const canRedo = useDiagramStore((state) => state.future.length > 0);
   const [exporting, setExporting] = useState(false);
+  const saveStatus = useSaveStatus();
 
   const section = getActiveSection(diagram);
   const nodeCount = section.nodes.length;
@@ -111,13 +135,75 @@ export default function Toolbar() {
   function handleSaveTemplate() {
     const name = window.prompt("Template name", diagram.name)?.trim();
     if (!name) return;
-    saveUserTemplate(diagram, name);
-    window.alert(`Saved "${name}". It's under My templates on the Templates page.`);
+    if (saveUserTemplate(diagram, name)) {
+      window.alert(`Saved "${name}". It's under My templates on the Templates page.`);
+    } else {
+      window.alert("Couldn't save the template: browser storage is full or blocked.");
+    }
+  }
+
+  const nextFrames = () =>
+    new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+  /** Waits until the canvas shows the section's nodes with measured sizes. */
+  async function waitForSection(nodeCount: number) {
+    for (let attempt = 0; attempt < 40; attempt++) {
+      await nextFrames();
+      const nodes = getNodes();
+      if (nodes.length === nodeCount && nodes.every((node) => node.measured?.width && node.measured?.height)) return;
+    }
+  }
+
+  /** The canvas only renders the active tab, so step through the tabs and put the original one back after. */
+  async function handleExportAll(format: "png-all" | "pdf-all") {
+    const originalId = diagram.activeSectionId;
+    const { setActiveSection } = useDiagramStore.getState();
+    setExporting(true);
+    setSelection([]);
+    try {
+      const pages: { name: string; page: RenderedComposite }[] = [];
+      for (const target of diagram.sections) {
+        if (!target.nodes.length) continue;
+        setActiveSection(target.id);
+        await waitForSection(target.nodes.length);
+        const viewport = document.querySelector<HTMLElement>(".react-flow__viewport");
+        if (!viewport) continue;
+        const page = await renderComposite({
+          viewport,
+          bounds: getNodesBounds(getNodes()),
+          title: exportTitle(diagram, target),
+          legend: legendUsedIn(diagram, target),
+          dark: resolvedTheme === "dark",
+          filename: exportTitle(diagram, target),
+        });
+        pages.push({ name: exportTitle(diagram, target), page });
+      }
+      if (!pages.length) {
+        window.alert("There's nothing to export yet.");
+        return;
+      }
+      if (format === "pdf-all") {
+        await exportPdfPages(pages.map((entry) => entry.page), diagram.name);
+      } else {
+        for (const entry of pages) {
+          await downloadCanvasPng(entry.page.canvas, entry.name);
+          // Browsers drop downloads fired back to back.
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+      }
+    } catch (error) {
+      console.error(error);
+      window.alert("Export failed. Please try again.");
+    } finally {
+      setActiveSection(originalId);
+      setExporting(false);
+    }
   }
 
   async function handleExport(format: ExportFormat) {
     if (format === "json") return downloadDiagramJson(diagram);
     if (format === "csv") return exportComponentsCsv(diagram);
+    if (format === "png-all" || format === "pdf-all") return handleExportAll(format);
 
     const viewport = document.querySelector<HTMLElement>(".react-flow__viewport");
     const nodes = getNodes();
@@ -138,7 +224,7 @@ export default function Toolbar() {
         dark: resolvedTheme === "dark",
         filename: exportTitle(diagram, section),
       };
-      await (format === "png" ? exportPng(options) : exportPdf(options));
+      await (format === "png" ? exportPng(options) : format === "svg" ? exportSvg(options) : exportPdf(options));
     } catch (error) {
       console.error(error);
       window.alert("Export failed. Please try again.");
@@ -161,6 +247,19 @@ export default function Toolbar() {
         value={diagram.name}
         onChange={(event) => renameDiagram(event.target.value)}
       />
+      {saveStatus === "error" ? (
+        <span
+          role="alert"
+          className="rounded bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950 dark:text-red-300"
+          title="The browser refused to store this diagram (storage full, blocked or private mode). Export it as JSON so you don't lose it."
+        >
+          Not saved — export JSON to keep your work
+        </span>
+      ) : saveStatus === "saved" ? (
+        <span className="text-xs text-zinc-400" title="Diagrams are stored only in this browser. Export JSON to back up or move one.">
+          Saved in this browser
+        </span>
+      ) : null}
       <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-800" />
       <div className="flex items-center gap-0.5">
         <button
@@ -235,7 +334,7 @@ export default function Toolbar() {
           Save as template
         </button>
         <ImportDiagramButton className={SECONDARY_BUTTON} />
-        <ExportMenu busy={exporting} onSelect={handleExport} />
+        <ExportMenu multiTab={diagram.sections.length > 1} busy={exporting} onSelect={handleExport} />
       </div>
     </div>
   );

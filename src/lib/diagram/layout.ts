@@ -266,3 +266,27 @@ export function restyleContainer(nodes: DiagramNode[], containerId: string, patc
     return node;
   });
 }
+
+/**
+ * Moves the given nodes by (dx, dy). A container carries its children, so a child is only moved
+ * when its container isn't. Children stay inside their container's header/padding on the top and
+ * left, and the container grows to fit them on the bottom and right (as when dragging).
+ */
+export function nudgeNodes(nodes: DiagramNode[], ids: string[], dx: number, dy: number): DiagramNode[] {
+  const moving = new Set(ids);
+  const touchedParents = new Set<string>();
+  let next = nodes.map((node) => {
+    if (!moving.has(node.id) || (node.parentId && moving.has(node.parentId))) return node;
+    let x = node.position.x + dx;
+    let y = node.position.y + dy;
+    if (node.parentId) {
+      const insets = insetsOf(nodes, node.parentId);
+      x = Math.max(insets.left, x);
+      y = Math.max(insets.top, y);
+      touchedParents.add(node.parentId);
+    }
+    return { ...node, position: { x, y } };
+  });
+  for (const parentId of touchedParents) next = growContainerToFit(next, parentId);
+  return next;
+}

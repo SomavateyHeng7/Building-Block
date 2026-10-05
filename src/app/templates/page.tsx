@@ -29,7 +29,10 @@ export default function TemplatesPage() {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   function open(diagram: Diagram) {
-    saveDiagram(diagram);
+    if (!saveDiagram(diagram)) {
+      window.alert("Your browser wouldn't store the new diagram (storage may be full or blocked).");
+      return;
+    }
     router.push(`/editor/${diagram.id}`);
   }
 
@@ -94,7 +97,7 @@ export default function TemplatesPage() {
                 <button
                   type="button"
                   title="Delete template"
-                  className="absolute right-3 top-3 rounded px-1.5 text-zinc-400 opacity-0 hover:text-red-600 focus:opacity-100 group-hover:opacity-100"
+                  className="absolute right-3 top-3 rounded px-1.5 text-zinc-400 opacity-0 [@media(hover:none)]:opacity-100 hover:text-red-600 focus:opacity-100 group-hover:opacity-100"
                   onClick={() => setPendingDeleteId(template.id)}
                 >
                   ×
