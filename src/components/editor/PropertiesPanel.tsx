@@ -1,26 +1,163 @@
 "use client";
 
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
-import type { BlockColorKey } from "@/lib/diagram/types";
+import type { ArrangeOp } from "@/lib/diagram/layout";
+import type { BlockColorKey, LegendEntry, NodeDetails } from "@/lib/diagram/types";
+
+const DETAIL_FIELDS: {
+  key: keyof NodeDetails;
+  label: string;
+  placeholder: string;
+  multiline?: boolean;
+  blockOnly?: boolean;
+}[] = [
+  { key: "technology", label: "Technology", placeholder: "e.g. Java / Spring Boot, Kafka", blockOnly: true },
+  { key: "owner", label: "Owner", placeholder: "Team, vendor or contact" },
+  { key: "description", label: "Description", placeholder: "What it does and why it's here", multiline: true },
+  { key: "notes", label: "Notes", placeholder: "Assumptions, risks, open questions", multiline: true },
+];
+
+const ARRANGE_GROUPS: { title: string; ops: { op: ArrangeOp; label: string; icon: string }[] }[] = [
+  {
+    title: "Align",
+    ops: [
+      { op: "align-left", label: "Align left edges", icon: "M4 3v18M8 7h12M8 17h7" },
+      { op: "align-center", label: "Align horizontal centers", icon: "M12 3v18M6 7h12M8 17h8" },
+      { op: "align-right", label: "Align right edges", icon: "M20 3v18M4 7h12M9 17h7" },
+      { op: "align-top", label: "Align top edges", icon: "M3 4h18M7 8v12M17 8v7" },
+      { op: "align-middle", label: "Align vertical centers", icon: "M3 12h18M7 6v12M17 8v8" },
+      { op: "align-bottom", label: "Align bottom edges", icon: "M3 20h18M7 4v12M17 9v7" },
+    ],
+  },
+  {
+    title: "Distribute & size",
+    ops: [
+      { op: "distribute-horizontal", label: "Distribute horizontally (even gaps)", icon: "M4 4v16M20 4v16M10 8v8M14 8v8" },
+      { op: "distribute-vertical", label: "Distribute vertically (even gaps)", icon: "M4 4h16M4 20h16M8 10h8M8 14h8" },
+      { op: "same-width", label: "Make same width (widest)", icon: "M3 12h18M6 9l-3 3 3 3M18 9l3 3-3 3" },
+      { op: "same-height", label: "Make same height (tallest)", icon: "M12 3v18M9 6l3-3 3 3M9 18l3 3 3-3" },
+    ],
+  },
+];
+
+const SECTION_TITLE = "text-xs font-semibold uppercase tracking-wide text-zinc-500";
+const ACTION_BUTTON =
+  "rounded border border-zinc-300 px-2 py-1 text-xs font-medium hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:hover:bg-zinc-900";
+
+function ColorSwatches({
+  legend,
+  activeKey,
+  onPick,
+}: {
+  legend: LegendEntry[];
+  activeKey?: string;
+  onPick: (key: BlockColorKey) => void;
+}) {
+  if (!legend.length) {
+    return <p className="text-[11px] font-normal text-zinc-400">Add a legend entry below to color items.</p>;
+  }
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {legend.map((entry) => (
+        <button
+          type="button"
+          key={entry.key}
+          title={entry.label}
+          onClick={() => onPick(entry.key)}
+          className="h-6 w-6 rounded-sm border-2"
+          style={{
+            backgroundColor: entry.color,
+            borderColor: activeKey === entry.key ? "#2563eb" : "rgba(0,0,0,0.2)",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function MultiSelectionPanel({ ids }: { ids: string[] }) {
+  const legend = useDiagramStore((state) => state.diagram.legend);
+  const arrangeSelection = useDiagramStore((state) => state.arrangeSelection);
+  const updateNodesColor = useDiagramStore((state) => state.updateNodesColor);
+  const duplicateSelection = useDiagramStore((state) => state.duplicateSelection);
+  const deleteNodes = useDiagramStore((state) => state.deleteNodes);
+
+  return (
+    <div className="flex flex-col gap-3 border-b border-zinc-200 p-3 dark:border-zinc-800">
+      <h2 className={SECTION_TITLE}>{ids.length} items selected</h2>
+      {ARRANGE_GROUPS.map((group) => (
+        <div key={group.title} className="flex flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+          {group.title}
+          <div className="flex flex-wrap gap-1">
+            {group.ops.map(({ op, label, icon }) => (
+              <button
+                key={op}
+                type="button"
+                title={label}
+                aria-label={label}
+                onClick={() => arrangeSelection(op)}
+                className="rounded border border-zinc-300 p-1 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <path d={icon} />
+                </svg>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div className="flex flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+        Color all
+        <ColorSwatches legend={legend} onPick={(key) => updateNodesColor(ids, key)} />
+      </div>
+      <div className="flex gap-2">
+        <button type="button" className={ACTION_BUTTON} onClick={duplicateSelection}>
+          Duplicate
+        </button>
+        <button
+          type="button"
+          onClick={() => deleteNodes(ids)}
+          className="rounded border border-red-300 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950"
+        >
+          Delete all
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function PropertiesPanel() {
   const diagram = useDiagramStore((state) => state.diagram);
-  const selectedNodeId = useDiagramStore((state) => state.selectedNodeId);
+  const selectedNodeIds = useDiagramStore((state) => state.selectedNodeIds);
   const legend = useDiagramStore((state) => state.diagram.legend);
   const updateNodeLabel = useDiagramStore((state) => state.updateNodeLabel);
   const updateNodeColor = useDiagramStore((state) => state.updateNodeColor);
-  const deleteNode = useDiagramStore((state) => state.deleteNode);
+  const deleteNodes = useDiagramStore((state) => state.deleteNodes);
+  const updateNodeDetails = useDiagramStore((state) => state.updateNodeDetails);
+  const fitContainer = useDiagramStore((state) => state.fitContainer);
+  const tidyContainer = useDiagramStore((state) => state.tidyContainer);
 
   const section = getActiveSection(diagram);
-  const node = section.nodes.find((candidate) => candidate.id === selectedNodeId);
+
+  if (selectedNodeIds.length > 1) return <MultiSelectionPanel ids={selectedNodeIds} />;
+
+  const node = section.nodes.find((candidate) => candidate.id === selectedNodeIds[0]);
 
   if (!node) {
     return (
-      <div className="p-3 text-xs text-zinc-400">
-        Select a container or component to edit its properties.
+      <div className="flex flex-col gap-2 border-b border-zinc-200 p-3 text-xs text-zinc-400 dark:border-zinc-800">
+        <p>Select a container or component to edit its properties.</p>
+        <ul className="flex flex-col gap-0.5 text-[11px] leading-snug">
+          <li>Shift-click or Shift-drag to select several</li>
+          <li>⌘/Ctrl + C, V, D to copy, paste, duplicate</li>
+          <li>⌘/Ctrl + Z / Shift+Z to undo / redo</li>
+          <li>Delete or Backspace to remove</li>
+        </ul>
       </div>
     );
   }
+
+  const childCount = section.nodes.filter((candidate) => candidate.parentId === node.id).length;
 
   const showColor = node.type === "block" || node.type === "container";
 
@@ -42,27 +179,62 @@ export default function PropertiesPanel() {
       {showColor && (
         <div className="flex flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
           Color
+          <ColorSwatches
+            legend={legend}
+            activeKey={node.data.colorKey}
+            onPick={(key) => updateNodeColor(node.id, key)}
+          />
+        </div>
+      )}
+
+      {DETAIL_FIELDS.filter((field) => node.type === "block" || !field.blockOnly).map((field) => {
+        const Input = field.multiline ? "textarea" : "input";
+        return (
+          <label
+            key={field.key}
+            className="flex flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-300"
+          >
+            {field.label}
+            <Input
+              rows={field.multiline ? 3 : undefined}
+              placeholder={field.placeholder}
+              className="resize-y rounded border border-zinc-300 px-2 py-1 text-sm font-normal outline-none placeholder:text-zinc-400 focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+              value={node.data[field.key] ?? ""}
+              onChange={(event) => updateNodeDetails(node.id, { [field.key]: event.target.value })}
+            />
+          </label>
+        );
+      })}
+
+      {node.type === "container" && (
+        <div className="flex flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+          Layout
           <div className="flex flex-wrap gap-1.5">
-            {legend.map((entry) => (
-              <button
-                type="button"
-                key={entry.key}
-                title={entry.label}
-                onClick={() => updateNodeColor(node.id, entry.key as BlockColorKey)}
-                className="h-6 w-6 rounded-sm border-2"
-                style={{
-                  backgroundColor: entry.color,
-                  borderColor: node.data.colorKey === entry.key ? "#2563eb" : "rgba(0,0,0,0.2)",
-                }}
-              />
-            ))}
+            <button
+              type="button"
+              className={ACTION_BUTTON}
+              disabled={!childCount}
+              title="Arrange the components inside in a neat grid"
+              onClick={() => tidyContainer(node.id)}
+            >
+              Tidy layout
+            </button>
+            <button
+              type="button"
+              className={ACTION_BUTTON}
+              disabled={!childCount}
+              title="Shrink or grow the container to wrap its components"
+              onClick={() => fitContainer(node.id)}
+            >
+              Fit to contents
+            </button>
           </div>
         </div>
       )}
 
       <button
         type="button"
-        onClick={() => deleteNode(node.id)}
+        onClick={() => deleteNodes([node.id])}
         className="self-start rounded border border-red-300 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950"
       >
         Delete

@@ -41,6 +41,33 @@ export default function EditorApp({ diagramId }: EditorAppProps) {
     router.replace(`/editor/${blank.id}`);
   }, [diagramId, loadDiagram, router]);
 
+  // Editing shortcuts. Text fields keep their native behaviour (text undo, copy/paste, select all).
+  // Delete/Backspace is handled by React Flow on the canvas.
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+
+      const store = useDiagramStore.getState();
+      const key = event.key.toLowerCase();
+      const hasSelection = store.selectedNodeIds.length > 0;
+      if (key === "z" && !event.shiftKey) store.undo();
+      else if ((key === "z" && event.shiftKey) || key === "y") store.redo();
+      else if (key === "c" && hasSelection) store.copySelection();
+      else if (key === "x" && hasSelection) {
+        store.copySelection();
+        store.deleteNodes(store.selectedNodeIds);
+      } else if (key === "v") store.paste();
+      else if (key === "d" && hasSelection) store.duplicateSelection();
+      else if (key === "a") store.selectAll();
+      else return;
+      event.preventDefault();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   // Only autosave once the store's active diagram actually matches the route:
   // avoids writing the stale/blank diagram while hydration or a "new" → real-id
   // redirect is still in flight.
@@ -51,11 +78,11 @@ export default function EditorApp({ diagramId }: EditorAppProps) {
   }, [diagram, diagramId]);
 
   return (
-    <div className="flex h-dvh w-full flex-col bg-zinc-100 dark:bg-zinc-900">
-      <Toolbar />
-      <SectionTabs />
-      <div className="flex flex-1 overflow-hidden">
-        <ReactFlowProvider>
+    <ReactFlowProvider>
+      <div className="flex h-dvh w-full flex-col bg-zinc-100 dark:bg-zinc-900">
+        <Toolbar />
+        <SectionTabs />
+        <div className="flex flex-1 overflow-hidden">
           <Sidebar />
           <div className="relative flex-1">
             <Canvas />
@@ -64,8 +91,8 @@ export default function EditorApp({ diagramId }: EditorAppProps) {
             <PropertiesPanel />
             <LegendPanel />
           </aside>
-        </ReactFlowProvider>
+        </div>
       </div>
-    </div>
+    </ReactFlowProvider>
   );
 }

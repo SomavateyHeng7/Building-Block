@@ -12,11 +12,12 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* next-themes sets class="dark" on <html>; "system" is resolved by next-themes too. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
 }
 
 body {

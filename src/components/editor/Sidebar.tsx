@@ -36,6 +36,11 @@ export default function Sidebar() {
           Components
         </h2>
         <div className="flex flex-col gap-1.5">
+          {legend.length === 0 && (
+            <p className="text-[11px] leading-snug text-zinc-400">
+              Add a legend entry to get a draggable component for it.
+            </p>
+          )}
           {legend.map((entry) => (
             <div
               key={entry.key}

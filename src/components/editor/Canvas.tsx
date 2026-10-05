@@ -6,14 +6,18 @@ import {
   Controls,
   MiniMap,
   ReactFlow,
+  SelectionMode,
   applyNodeChanges,
   useReactFlow,
   type NodeChange,
   type OnNodeDrag,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
+import { useTheme } from "next-themes";
+import { useMounted } from "@/components/theme-toggle";
+import { getActiveSection, useDiagramStore, type NodesChangeOptions } from "@/lib/diagram/store";
 import { fromFlowNodes, toFlowNodes, type FlowNode } from "@/lib/diagram/flowAdapter";
+import { CONTAINER_HEADER, CONTAINER_PADDING, growContainerToFit } from "@/lib/diagram/layout";
 import ContainerNode from "./nodes/ContainerNode";
 import BlockNode from "./nodes/BlockNode";
 import { PALETTE_DATA_FORMAT, type PaletteDragPayload } from "./Sidebar";
@@ -21,8 +25,9 @@ import type { BlockColorKey } from "@/lib/diagram/types";
 
 const nodeTypes = { container: ContainerNode, block: BlockNode };
 
+/** The top-most container under the point (later containers render above earlier ones). */
 function findContainerAtPoint(containers: FlowNode[], point: { x: number; y: number }) {
-  return containers.find((container) => {
+  return containers.findLast((container) => {
     const width = container.width ?? 0;
     const height = container.height ?? 0;
     return (
@@ -34,23 +39,66 @@ function findContainerAtPoint(containers: FlowNode[], point: { x: number; y: num
   });
 }
 
+/**
+ * Decides how a batch of React Flow changes is recorded in undo history.
+ * Returns null when the batch is only selection or size measurement — not an edit.
+ */
+function historyOptionsFor(changes: NodeChange[]): NodesChangeOptions | null {
+  const resized = changes.filter((change) => change.type === "dimensions" && change.resizing !== undefined);
+  if (resized.length) {
+    return { coalesceKey: `resize:${resized.map((change) => ("id" in change ? change.id : "")).join(",")}` };
+  }
+  const moved = changes.filter((change) => change.type === "position");
+  if (moved.length) {
+    return { coalesceKey: `move:${moved.map((change) => ("id" in change ? change.id : "")).join(",")}` };
+  }
+  if (changes.some((change) => change.type === "remove" || change.type === "add" || change.type === "replace")) {
+    return {};
+  }
+  return null;
+}
+
 export default function Canvas() {
   const diagram = useDiagramStore((state) => state.diagram);
+  const selectedNodeIds = useDiagramStore((state) => state.selectedNodeIds);
   const setActiveSectionNodes = useDiagramStore((state) => state.setActiveSectionNodes);
-  const selectNode = useDiagramStore((state) => state.selectNode);
+  const setSelection = useDiagramStore((state) => state.setSelection);
   const addContainer = useDiagramStore((state) => state.addContainer);
   const addBlock = useDiagramStore((state) => state.addBlock);
   const { getIntersectingNodes, screenToFlowPosition } = useReactFlow();
+  const { resolvedTheme } = useTheme();
+  const mounted = useMounted();
+  const colorMode = mounted && resolvedTheme === "dark" ? "dark" : "light";
 
   const section = getActiveSection(diagram);
-  const flowNodes = useMemo(() => toFlowNodes(section.nodes), [section.nodes]);
+  const flowNodes = useMemo(
+    () => toFlowNodes(section.nodes, new Set(selectedNodeIds)),
+    [section.nodes, selectedNodeIds],
+  );
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
+      // Selection lives in the store; React Flow reports clicks, shift-clicks and box selection here.
+      const selectChanges = changes.filter((change) => change.type === "select");
+      const removed = new Set(
+        changes.flatMap((change) => (change.type === "remove" ? [change.id] : [])),
+      );
+      if (selectChanges.length || removed.size) {
+        const next = new Set(selectedNodeIds);
+        for (const change of selectChanges) {
+          if (change.selected) next.add(change.id);
+          else next.delete(change.id);
+        }
+        removed.forEach((id) => next.delete(id));
+        setSelection([...next]);
+      }
+
+      const options = historyOptionsFor(changes);
+      if (!options) return;
       const updated = applyNodeChanges(changes, flowNodes) as FlowNode[];
-      setActiveSectionNodes(fromFlowNodes(updated));
+      setActiveSectionNodes(fromFlowNodes(updated), options);
     },
-    [flowNodes, setActiveSectionNodes],
+    [flowNodes, selectedNodeIds, setActiveSectionNodes, setSelection],
   );
 
   const handleNodeDragStop: OnNodeDrag = useCallback(
@@ -60,7 +108,9 @@ export default function Canvas() {
       const current = flowNodes.find((candidate) => candidate.id === node.id);
       if (!current) return;
 
-      const overlap = getIntersectingNodes(node).find((candidate) => candidate.type === "container");
+      const overlap = getIntersectingNodes(node)
+        .filter((candidate) => candidate.type === "container")
+        .at(-1);
       const newParentId = overlap?.id;
       if (newParentId === current.parentId) return;
 
@@ -72,7 +122,10 @@ export default function Canvas() {
       const absoluteY = node.position.y + (oldParent?.position.y ?? 0);
 
       const nextPosition = newParent
-        ? { x: absoluteX - newParent.position.x, y: absoluteY - newParent.position.y }
+        ? {
+            x: Math.max(CONTAINER_PADDING, absoluteX - newParent.position.x),
+            y: Math.max(CONTAINER_HEADER, absoluteY - newParent.position.y),
+          }
         : { x: absoluteX, y: absoluteY };
 
       const updated: FlowNode[] = flowNodes.map((candidate) =>
@@ -86,7 +139,11 @@ export default function Canvas() {
             }
           : candidate,
       );
-      setActiveSectionNodes(fromFlowNodes(updated));
+      const nodes = fromFlowNodes(updated);
+      // Same key as the drag itself, so the move and the re-parent undo together.
+      setActiveSectionNodes(newParentId ? growContainerToFit(nodes, newParentId) : nodes, {
+        coalesceKey: `move:${node.id}`,
+      });
     },
     [flowNodes, getIntersectingNodes, setActiveSectionNodes],
   );
@@ -113,7 +170,10 @@ export default function Canvas() {
       const containers = flowNodes.filter((node) => node.type === "container");
       const target = findContainerAtPoint(containers, point);
       const position = target
-        ? { x: point.x - target.position.x - 70, y: point.y - target.position.y - 28 }
+        ? {
+            x: Math.max(CONTAINER_PADDING, point.x - target.position.x - 70),
+            y: Math.max(CONTAINER_HEADER, point.y - target.position.y - 28),
+          }
         : { x: point.x - 70, y: point.y - 28 };
 
       addBlock(position, target?.id ?? null, payload.colorKey as BlockColorKey);
@@ -127,9 +187,11 @@ export default function Canvas() {
       nodes={flowNodes}
       edges={[]}
       nodeTypes={nodeTypes}
+      colorMode={colorMode}
       onNodesChange={handleNodesChange}
       onNodeDragStop={handleNodeDragStop}
-      onPaneClick={() => selectNode(null)}
+      deleteKeyCode={["Backspace", "Delete"]}
+      selectionMode={SelectionMode.Partial}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
       snapToGrid

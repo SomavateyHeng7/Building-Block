@@ -94,15 +94,24 @@ export function deleteDiagram(id: string): void {
   emitIndexChange();
 }
 
-export function downloadDiagramJson(diagram: Diagram): void {
+/** File-name-safe version of a diagram name, e.g. "L0 Architecture" → "l0-architecture". */
+export function fileBaseName(name: string): string {
+  return name.trim().replace(/\s+/g, "-").toLowerCase() || "diagram";
+}
+
+export function downloadBlob(blob: Blob, filename: string): void {
   if (!isBrowser()) return;
-  const blob = new Blob([JSON.stringify(diagram, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `${diagram.name.trim().replace(/\s+/g, "-").toLowerCase() || "diagram"}.json`;
+  link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+export function downloadDiagramJson(diagram: Diagram): void {
+  const blob = new Blob([JSON.stringify(diagram, null, 2)], { type: "application/json" });
+  downloadBlob(blob, `${fileBaseName(diagram.name)}.json`);
 }
 
 export async function readDiagramJsonFile(file: File): Promise<Diagram> {

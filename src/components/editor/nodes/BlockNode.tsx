@@ -9,27 +9,27 @@ export type BlockFlowNode = Node<BlockNodeData, "block">;
 
 function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
   const updateNodeLabel = useDiagramStore((state) => state.updateNodeLabel);
-  const selectNode = useDiagramStore((state) => state.selectNode);
   const legend = useDiagramStore((state) => state.diagram.legend);
+  const showTechnology = useDiagramStore((state) => state.diagram.showTechnology !== false);
   const [editing, setEditing] = useState(false);
 
-  const color = legend.find((entry) => entry.key === data.colorKey)?.color ?? "#9ca3af";
+  const entryColor = legend.find((entry) => entry.key === data.colorKey)?.color;
+  const color = entryColor ?? "#ffffff";
 
   return (
     <div
-      className="flex h-full w-full items-center justify-center rounded border text-center text-xs font-medium"
+      className="relative flex h-full w-full items-center justify-center rounded border text-center text-xs font-medium"
+      title={data.description ?? (entryColor ? undefined : "No legend category assigned")}
       style={{
         backgroundColor: color,
         borderColor: selected ? "#2563eb" : "rgba(0,0,0,0.25)",
+        borderStyle: entryColor ? "solid" : "dashed",
         color: textColorFor(color),
-      }}
-      onClick={(event) => {
-        event.stopPropagation();
-        selectNode(id);
       }}
       onDoubleClick={() => setEditing(true)}
     >
       <NodeResizer minWidth={80} minHeight={32} isVisible={selected} />
+      {data.notes && <NotesMarker notes={data.notes} />}
       {editing ? (
         <input
           autoFocus
@@ -44,9 +44,27 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
           }}
         />
       ) : (
-        <span className="px-1">{data.label}</span>
+        <span className="flex flex-col px-1 leading-tight">
+          <span>{data.label}</span>
+          {showTechnology && data.technology && (
+            <span className="text-[10px] font-normal opacity-75">[{data.technology}]</span>
+          )}
+        </span>
       )}
     </div>
+  );
+}
+
+/** Corner badge telling the SA this node has notes; hover shows them. */
+export function NotesMarker({ notes }: { notes: string }) {
+  return (
+    <span
+      title={`Notes: ${notes}`}
+      aria-label="Has notes"
+      className="absolute -right-1.5 -top-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-white bg-amber-500 text-[9px] font-bold leading-none text-white shadow-sm dark:border-zinc-900"
+    >
+      !
+    </span>
   );
 }
 

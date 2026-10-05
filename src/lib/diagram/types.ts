@@ -1,13 +1,5 @@
-export type BlockColorKey =
-  | "product"
-  | "replacement"
-  | "enhancement"
-  | "new"
-  | "microservice"
-  | "non-existent"
-  | "ai-focus"
-  | "rest-api"
-  | "third-party";
+/** Key of a LegendEntry. Legends are user-defined, so any string is valid. */
+export type BlockColorKey = string;
 
 export interface LegendEntry {
   key: BlockColorKey;
@@ -25,19 +17,27 @@ export interface Size {
   height: number;
 }
 
-export interface ContainerNodeData {
+/** Free-text details an SA records against a node; all optional. */
+export interface NodeDetails {
+  technology?: string;
+  owner?: string;
+  description?: string;
+  notes?: string;
+}
+
+export interface ContainerNodeData extends NodeDetails {
   [key: string]: unknown;
   kind: "container";
   label: string;
   colorKey?: BlockColorKey;
-  description?: string;
 }
 
-export interface BlockNodeData {
+export interface BlockNodeData extends NodeDetails {
   [key: string]: unknown;
   kind: "block";
   label: string;
-  colorKey: BlockColorKey;
+  /** Undefined when unassigned, e.g. after its legend entry was removed. */
+  colorKey?: BlockColorKey;
   containerId: string | null;
   icon?: string;
 }
@@ -67,6 +67,8 @@ export interface Diagram {
   legend: LegendEntry[];
   sections: DiagramSection[];
   activeSectionId: string;
+  /** Show each component's technology under its label. Defaults to true. */
+  showTechnology?: boolean;
   createdAt: string;
   updatedAt: string;
 }
