@@ -11,6 +11,7 @@ import {
   subscribeDiagramIndex,
 } from "@/lib/diagram/persistence";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { toast } from "@/lib/toast";
 import type { Diagram } from "@/lib/diagram/types";
 import { ImportDiagramButton } from "@/components/ImportDiagramButton";
 
@@ -124,7 +125,8 @@ export default function DiagramsPage() {
             type="button"
             className="font-medium underline"
             onClick={() => {
-              if (!saveDiagram(undoable)) window.alert("Couldn't restore it: browser storage is full or blocked.");
+              if (saveDiagram(undoable)) toast.success(`Restored "${undoable.name}"`);
+              else toast.error("Couldn't restore the diagram", { details: ["Browser storage is full or blocked."] });
               setUndoable(null);
             }}
           >

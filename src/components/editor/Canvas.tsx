@@ -207,6 +207,17 @@ export default function Canvas() {
       <Background gap={16} />
       <Controls />
       <MiniMap pannable zoomable />
+      {section.nodes.length === 0 && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+          <div className="max-w-xs rounded-lg border border-dashed border-zinc-300 bg-white/80 p-5 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-300">
+            <p className="font-medium">This tab is empty</p>
+            <p className="mt-1">
+              Drag a container or component from the left, or press <kbd className="font-mono">C</kbd> /{" "}
+              <kbd className="font-mono">B</kbd>. Press <kbd className="font-mono">?</kbd> for all shortcuts.
+            </p>
+          </div>
+        </div>
+      )}
     </ReactFlow>
   );
 }

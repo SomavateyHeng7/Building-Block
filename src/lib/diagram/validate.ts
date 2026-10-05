@@ -133,7 +133,6 @@ function parseNode(raw: unknown, legendKeys: Set<string>): { node: DiagramNode; 
             label,
             ...details,
             containerId: null,
-            ...(text(data.icon) ? { icon: text(data.icon) } : {}),
             ...(colorKey && legendKeys.has(colorKey) ? { colorKey } : {}),
           },
   };

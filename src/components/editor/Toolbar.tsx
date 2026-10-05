@@ -21,11 +21,24 @@ import {
 } from "@/lib/diagram/export";
 import { nextSlotInContainer } from "@/lib/diagram/layout";
 import { saveUserTemplate } from "@/templates/userTemplates";
+import { toast } from "@/lib/toast";
+import TemplateNameDialog from "./TemplateNameDialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ImportDiagramButton } from "@/components/ImportDiagramButton";
 
 const SECONDARY_BUTTON =
   "rounded border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900";
+
+type ExportTheme = "light" | "dark";
+const EXPORT_THEME_KEY = "bb:exportTheme";
+
+function readExportTheme(): ExportTheme {
+  try {
+    return window.localStorage.getItem(EXPORT_THEME_KEY) === "dark" ? "dark" : "light";
+  } catch {
+    return "light";
+  }
+}
 
 type ExportFormat = "png" | "pdf" | "svg" | "png-all" | "pdf-all" | "csv" | "json";
 
@@ -42,10 +55,14 @@ const EXPORT_OPTIONS: { format: ExportFormat; label: string; hint: string }[] = 
 function ExportMenu({
   busy,
   multiTab,
+  imageTheme,
+  onImageThemeChange,
   onSelect,
 }: {
   busy: boolean;
   multiTab: boolean;
+  imageTheme: ExportTheme;
+  onImageThemeChange: (theme: ExportTheme) => void;
   onSelect: (format: ExportFormat) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -74,6 +91,29 @@ function ExportMenu({
           role="menu"
           className="absolute right-0 z-50 mt-1 w-56 overflow-hidden rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
         >
+          <div className="border-b border-zinc-200 px-3 pb-2 pt-1.5 dark:border-zinc-700">
+            <p id="export-style-label" className="mb-1 text-[11px] font-medium text-zinc-500">
+              Image style (PNG, PDF, SVG)
+            </p>
+            <div role="radiogroup" aria-labelledby="export-style-label" className="flex overflow-hidden rounded border border-zinc-300 text-xs font-medium dark:border-zinc-700">
+              {(["light", "dark"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={imageTheme === value}
+                  className={`flex-1 px-2 py-1 capitalize ${
+                    imageTheme === value
+                      ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                      : "hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  }`}
+                  onClick={() => onImageThemeChange(value)}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
+          </div>
           {EXPORT_OPTIONS.filter((option) => multiTab || !option.format.endsWith("-all")).map((option) => (
             <button
               key={option.format}
@@ -97,7 +137,8 @@ function ExportMenu({
 
 export default function Toolbar() {
   const { getNodes, getNodesBounds } = useReactFlow();
-  const { resolvedTheme } = useTheme();
+  const { theme, resolvedTheme, setTheme } = useTheme();
+  const [exportTheme, setExportTheme] = useState<ExportTheme>(readExportTheme);
   const diagram = useDiagramStore((state) => state.diagram);
   const selectedNodeIds = useDiagramStore((state) => state.selectedNodeIds);
   const renameDiagram = useDiagramStore((state) => state.renameDiagram);
@@ -111,6 +152,7 @@ export default function Toolbar() {
   const canUndo = useDiagramStore((state) => state.past.length > 0);
   const canRedo = useDiagramStore((state) => state.future.length > 0);
   const [exporting, setExporting] = useState(false);
+  const [namingTemplate, setNamingTemplate] = useState(false);
   const saveStatus = useSaveStatus();
 
   const section = getActiveSection(diagram);
@@ -132,13 +174,12 @@ export default function Toolbar() {
     else addBlock(nextPosition());
   }
 
-  function handleSaveTemplate() {
-    const name = window.prompt("Template name", diagram.name)?.trim();
-    if (!name) return;
+  function handleSaveTemplate(name: string) {
+    setNamingTemplate(false);
     if (saveUserTemplate(diagram, name)) {
-      window.alert(`Saved "${name}". It's under My templates on the Templates page.`);
+      toast.success(`Saved template "${name}"`, { details: ["Find it under My templates on the Templates page."] });
     } else {
-      window.alert("Couldn't save the template: browser storage is full or blocked.");
+      toast.error("Couldn't save the template", { details: ["Browser storage is full or blocked."] });
     }
   }
 
@@ -173,13 +214,13 @@ export default function Toolbar() {
           bounds: getNodesBounds(getNodes()),
           title: exportTitle(diagram, target),
           legend: legendUsedIn(diagram, target),
-          dark: resolvedTheme === "dark",
+          dark: exportTheme === "dark",
           filename: exportTitle(diagram, target),
         });
         pages.push({ name: exportTitle(diagram, target), page });
       }
       if (!pages.length) {
-        window.alert("There's nothing to export yet.");
+        toast.info("There's nothing to export yet", { details: ["Add a container or component first."] });
         return;
       }
       if (format === "pdf-all") {
@@ -191,24 +232,62 @@ export default function Toolbar() {
           await new Promise((resolve) => setTimeout(resolve, 300));
         }
       }
+      toast.success(format === "pdf-all" ? "PDF downloaded" : `${pages.length} PNG files downloaded`);
     } catch (error) {
       console.error(error);
-      window.alert("Export failed. Please try again.");
+      toast.error("Export failed", { details: ["Please try again. If it keeps failing, export the diagram as JSON to keep your work."] });
     } finally {
       setActiveSection(originalId);
       setExporting(false);
     }
   }
 
+  function changeExportTheme(next: ExportTheme) {
+    setExportTheme(next);
+    try {
+      window.localStorage.setItem(EXPORT_THEME_KEY, next);
+    } catch {
+      // The choice just isn't remembered.
+    }
+  }
+
+  /**
+   * Images are drawn from the live page, so the app itself has to be in the chosen style while
+   * they render. Switch the theme, export, then put the user's theme back.
+   */
   async function handleExport(format: ExportFormat) {
-    if (format === "json") return downloadDiagramJson(diagram);
-    if (format === "csv") return exportComponentsCsv(diagram);
+    if (format === "json" || format === "csv" || resolvedTheme === exportTheme) return runExport(format);
+    const previous = theme;
+    setTheme(exportTheme);
+    for (let attempt = 0; attempt < 40; attempt++) {
+      await nextFrames();
+      if (document.documentElement.classList.contains("dark") === (exportTheme === "dark")) break;
+    }
+    await nextFrames();
+    try {
+      await runExport(format);
+    } finally {
+      if (previous) setTheme(previous);
+    }
+  }
+
+  async function runExport(format: ExportFormat) {
+    if (format === "json") {
+      downloadDiagramJson(diagram);
+      toast.success("Diagram file downloaded", { details: ["Re-import it any time from Import."] });
+      return;
+    }
+    if (format === "csv") {
+      exportComponentsCsv(diagram);
+      toast.success("Component list downloaded");
+      return;
+    }
     if (format === "png-all" || format === "pdf-all") return handleExportAll(format);
 
     const viewport = document.querySelector<HTMLElement>(".react-flow__viewport");
     const nodes = getNodes();
     if (!viewport || !nodes.length) {
-      window.alert("There's nothing on this tab to export yet.");
+      toast.info("There's nothing on this tab to export yet", { details: ["Add a container or component first."] });
       return;
     }
     setExporting(true);
@@ -221,20 +300,21 @@ export default function Toolbar() {
         bounds: getNodesBounds(nodes),
         title: exportTitle(diagram, section),
         legend: legendUsedIn(diagram, section),
-        dark: resolvedTheme === "dark",
+        dark: exportTheme === "dark",
         filename: exportTitle(diagram, section),
       };
       await (format === "png" ? exportPng(options) : format === "svg" ? exportSvg(options) : exportPdf(options));
+      toast.success(`${format.toUpperCase()} downloaded`);
     } catch (error) {
       console.error(error);
-      window.alert("Export failed. Please try again.");
+      toast.error("Export failed", { details: ["Please try again. If it keeps failing, export the diagram as JSON to keep your work."] });
     } finally {
       setExporting(false);
     }
   }
 
   return (
-    <div className="flex items-center gap-3 border-b border-zinc-200 bg-white px-4 py-2 dark:border-zinc-800 dark:bg-zinc-950">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-zinc-200 bg-white px-4 py-2 dark:border-zinc-800 dark:bg-zinc-950">
       <Link
         href="/diagrams"
         className="text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
@@ -243,9 +323,21 @@ export default function Toolbar() {
       </Link>
       <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-800" />
       <input
-        className="rounded border border-transparent bg-transparent px-2 py-1 text-sm font-semibold outline-none hover:border-zinc-300 focus:border-zinc-400 dark:hover:border-zinc-700"
+        aria-label="Diagram name"
+        title="Click to rename this diagram"
+        placeholder="Name this diagram"
+        maxLength={80}
+        className="w-48 rounded border border-zinc-200 bg-transparent px-2 py-1 text-sm font-semibold outline-none placeholder:font-normal placeholder:text-zinc-400 hover:border-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-zinc-800 dark:hover:border-zinc-600"
         value={diagram.name}
         onChange={(event) => renameDiagram(event.target.value)}
+        onFocus={(event) => event.target.select()}
+        // An empty name would leave a nameless entry in My diagrams and blank file names.
+        onBlur={(event) => {
+          if (!event.target.value.trim()) renameDiagram("Untitled Diagram");
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+        }}
       />
       {saveStatus === "error" ? (
         <span
@@ -315,7 +407,7 @@ export default function Toolbar() {
         </button>
       )}
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex flex-wrap items-center gap-2">
         <label
           className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300"
           title="Show each component's technology under its name"
@@ -330,12 +422,19 @@ export default function Toolbar() {
         </label>
         <ThemeToggle />
         <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-800" />
-        <button type="button" className={SECONDARY_BUTTON} onClick={handleSaveTemplate}>
+        <button type="button" className={SECONDARY_BUTTON} onClick={() => setNamingTemplate(true)}>
           Save as template
         </button>
         <ImportDiagramButton className={SECONDARY_BUTTON} />
-        <ExportMenu multiTab={diagram.sections.length > 1} busy={exporting} onSelect={handleExport} />
+        <ExportMenu imageTheme={exportTheme} onImageThemeChange={changeExportTheme} multiTab={diagram.sections.length > 1} busy={exporting} onSelect={handleExport} />
       </div>
+      {namingTemplate && (
+        <TemplateNameDialog
+          initialName={diagram.name}
+          onSave={handleSaveTemplate}
+          onCancel={() => setNamingTemplate(false)}
+        />
+      )}
     </div>
   );
 }

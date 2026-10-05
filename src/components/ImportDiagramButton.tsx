@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { importDiagramFile } from "@/lib/diagram/persistence";
+import { toast } from "@/lib/toast";
 import { DiagramFileError } from "@/lib/diagram/validate";
 
 /** Opens a diagram backup (.json) as a new diagram, never overwriting an existing one. */
@@ -19,16 +20,17 @@ export function ImportDiagramButton({ className, label = "Import" }: { className
     setBusy(true);
     try {
       const { diagram, fixes } = await importDiagramFile(file);
-      if (fixes.length) {
-        window.alert(`Imported "${diagram.name}" with some repairs:\n\n• ${fixes.join("\n• ")}`);
-      }
+      if (fixes.length) toast.info(`Imported "${diagram.name}" with some repairs`, { details: fixes });
+      else toast.success(`Imported "${diagram.name}"`);
       router.push(`/editor/${diagram.id}`);
     } catch (error) {
-      window.alert(
-        error instanceof DiagramFileError
-          ? `Couldn't import "${file.name}". ${error.message}`
-          : `Couldn't import "${file.name}". Please check it's a diagram exported from Building Block.`,
-      );
+      toast.error(`Couldn't import "${file.name}"`, {
+        details: [
+          error instanceof DiagramFileError
+            ? error.message
+            : "Please check it's a diagram exported from Building Block.",
+        ],
+      });
     } finally {
       setBusy(false);
     }

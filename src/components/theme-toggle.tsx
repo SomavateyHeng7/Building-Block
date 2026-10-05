@@ -26,16 +26,16 @@ const OPTIONS = [
     label: "Dark",
     icon: <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />,
   },
-  {
-    value: "system",
-    label: "System",
-    icon: (
-      <>
-        <rect x="2" y="3" width="20" height="14" rx="2" />
-        <path d="M8 21h8M12 17v4" />
-      </>
-    ),
-  },
+  // {
+  //   value: "system",
+  //   label: "System",
+  //   icon: (
+  //     <>
+  //       <rect x="2" y="3" width="20" height="14" rx="2" />
+  //       <path d="M8 21h8M12 17v4" />
+  //     </>
+  //   ),
+  // },
 ] as const;
 
 export function ThemeToggle() {

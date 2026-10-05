@@ -56,7 +56,6 @@ export interface BlockNodeData extends NodeDetails {
   /** Undefined when unassigned, e.g. after its legend entry was removed. */
   colorKey?: BlockColorKey;
   containerId: string | null;
-  icon?: string;
 }
 
 export type DiagramNodeData = ContainerNodeData | BlockNodeData;

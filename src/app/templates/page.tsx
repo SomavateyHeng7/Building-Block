@@ -13,6 +13,7 @@ import {
   type UserTemplate,
 } from "@/templates/userTemplates";
 import { saveDiagram } from "@/lib/diagram/persistence";
+import { toast } from "@/lib/toast";
 import type { Diagram } from "@/lib/diagram/types";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -30,7 +31,7 @@ export default function TemplatesPage() {
 
   function open(diagram: Diagram) {
     if (!saveDiagram(diagram)) {
-      window.alert("Your browser wouldn't store the new diagram (storage may be full or blocked).");
+      toast.error("Couldn't create the diagram", { details: ["Your browser wouldn't store it. Storage may be full or blocked."] });
       return;
     }
     router.push(`/editor/${diagram.id}`);

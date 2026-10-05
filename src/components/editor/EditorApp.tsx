@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ReactFlowProvider } from "@xyflow/react";
 import Canvas from "./Canvas";
@@ -13,7 +14,14 @@ import ShortcutsHelp from "./ShortcutsHelp";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { nextSlotInContainer, nudgeNodes } from "@/lib/diagram/layout";
 import { createBlankDiagram } from "@/lib/diagram/factory";
-import { loadDiagramFromStorage, saveDiagram } from "@/lib/diagram/persistence";
+import {
+  getDiagramIndexServerSnapshot,
+  getDiagramIndexSnapshot,
+  loadDiagramFromStorage,
+  saveDiagram,
+  subscribeDiagramIndex,
+} from "@/lib/diagram/persistence";
+import { useMounted } from "@/components/theme-toggle";
 import { setSaveStatus } from "@/lib/diagram/saveStatus";
 
 interface EditorAppProps {
@@ -26,17 +34,29 @@ export default function EditorApp({ diagramId }: EditorAppProps) {
   const loadDiagram = useDiagramStore((state) => state.loadDiagram);
   const hydratedForId = useRef<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const mounted = useMounted();
+  const savedDiagrams = useSyncExternalStore(
+    subscribeDiagramIndex,
+    getDiagramIndexSnapshot,
+    getDiagramIndexServerSnapshot,
+  );
+  // A link to a diagram that isn't in this browser. Only judged after mount, once storage can be read.
+  const missing =
+    mounted &&
+    diagramId !== "new" &&
+    diagram.id !== diagramId &&
+    !savedDiagrams.some((entry) => entry.id === diagramId);
 
   useEffect(() => {
     if (hydratedForId.current === diagramId) return;
     hydratedForId.current = diagramId;
 
     if (diagramId !== "new") {
+      // Just created and redirected here: it is already in the store, even if storage refused it.
+      if (useDiagramStore.getState().diagram.id === diagramId) return;
       const existing = loadDiagramFromStorage(diagramId);
-      if (existing) {
-        loadDiagram(existing);
-        return;
-      }
+      if (existing) loadDiagram(existing);
+      return;
     }
 
     const blank = createBlankDiagram();
@@ -114,6 +134,35 @@ export default function EditorApp({ diagramId }: EditorAppProps) {
     const timeout = setTimeout(() => setSaveStatus(saveDiagram(diagram) ? "saved" : "error"), 400);
     return () => clearTimeout(timeout);
   }, [diagram, diagramId]);
+
+  if (missing) {
+    return (
+      <div className="flex h-dvh w-full flex-col items-center justify-center gap-4 bg-zinc-50 p-6 text-center dark:bg-zinc-950">
+        <h1 className="text-xl font-semibold">Diagram not found</h1>
+        <p className="max-w-sm text-sm text-zinc-600 dark:text-zinc-400">
+          This diagram isn&apos;t saved in this browser. Diagrams are stored only on the device that created them,
+          so a link or bookmark won&apos;t work on another browser, or after the site data was cleared.
+        </p>
+        <div className="flex gap-3">
+          <Link href="/diagrams" className="rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900">
+            My diagrams
+          </Link>
+          <Link href="/editor/new" className="rounded border border-zinc-300 px-4 py-2 text-sm font-medium dark:border-zinc-700">
+            Start a new diagram
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // The store still holds a placeholder (or the previous diagram) until the saved one has loaded.
+  if (diagram.id !== diagramId) {
+    return (
+      <div role="status" aria-label="Loading diagram" className="flex h-dvh w-full items-center justify-center bg-zinc-100 text-sm text-zinc-500 dark:bg-zinc-900">
+        Loading diagram…
+      </div>
+    );
+  }
 
   return (
     <ReactFlowProvider>
