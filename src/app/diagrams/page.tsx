@@ -8,6 +8,7 @@ import {
   subscribeDiagramIndex,
 } from "@/lib/diagram/persistence";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { ImportDiagramButton } from "@/components/ImportDiagramButton";
 
 export default function DiagramsPage() {
   const diagrams = useSyncExternalStore(
@@ -29,7 +30,7 @@ export default function DiagramsPage() {
           Drag containers and components onto a canvas to build architecture diagrams, then
           export them as PNG or PDF.
         </p>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap justify-center gap-3">
           <Link
             href="/editor/new"
             className="rounded-full bg-foreground px-6 py-3 text-sm font-medium text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc]"
@@ -42,6 +43,10 @@ export default function DiagramsPage() {
           >
             Browse templates
           </Link>
+          <ImportDiagramButton
+            label="Import file"
+            className="rounded-full border border-zinc-300 px-6 py-3 text-sm font-medium transition-colors hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:hover:bg-zinc-900"
+          />
         </div>
       </div>
 

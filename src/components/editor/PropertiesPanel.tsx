@@ -2,7 +2,16 @@
 
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import type { ArrangeOp } from "@/lib/diagram/layout";
-import type { BlockColorKey, LegendEntry, NodeDetails } from "@/lib/diagram/types";
+import type {
+  BlockColorKey,
+  ContainerNodeData,
+  ContainerStyle,
+  HeaderAlign,
+  HeaderPosition,
+  LegendEntry,
+  NodeDetails,
+  OutlineStyle,
+} from "@/lib/diagram/types";
 
 const DETAIL_FIELDS: {
   key: keyof NodeDetails;
@@ -43,6 +52,141 @@ const ARRANGE_GROUPS: { title: string; ops: { op: ArrangeOp; label: string; icon
 const SECTION_TITLE = "text-xs font-semibold uppercase tracking-wide text-zinc-500";
 const ACTION_BUTTON =
   "rounded border border-zinc-300 px-2 py-1 text-xs font-medium hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:hover:bg-zinc-900";
+
+const HEADER_POSITIONS: { value: HeaderPosition; label: string; icon: string }[] = [
+  { value: "top", label: "Top", icon: "M4 4h16v16H4zM4 9h16" },
+  { value: "bottom", label: "Bottom", icon: "M4 4h16v16H4zM4 15h16" },
+  { value: "left", label: "Left", icon: "M4 4h16v16H4zM9 4v16" },
+  { value: "right", label: "Right", icon: "M4 4h16v16H4zM15 4v16" },
+];
+
+const OUTLINE_STYLES: { value: OutlineStyle; label: string; icon: string }[] = [
+  { value: "solid", label: "Solid", icon: "M3 12h18" },
+  { value: "dashed", label: "Dashed", icon: "M3 12h4M10 12h4M17 12h4" },
+];
+
+/** A row of toggle buttons where exactly one is pressed. */
+function Segmented<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: { value: T; label: string; icon?: string }[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex rounded border border-zinc-300 p-0.5 dark:border-zinc-700">
+      {options.map((option) => {
+        const active = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            title={option.label}
+            onClick={() => onChange(option.value)}
+            className={`flex flex-1 items-center justify-center gap-1 rounded px-1.5 py-1 text-[11px] font-medium ${
+              active
+                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            }`}
+          >
+            {option.icon ? (
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+                <path d={option.icon} />
+              </svg>
+            ) : (
+              option.label
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Header placement and outline for a container. */
+function ContainerStyleControls({
+  id,
+  data,
+  legend,
+  onChange,
+}: {
+  id: string;
+  data: ContainerNodeData;
+  legend: LegendEntry[];
+  onChange: (id: string, patch: ContainerStyle) => void;
+}) {
+  const headerPosition = data.headerPosition ?? "top";
+  const vertical = headerPosition === "left" || headerPosition === "right";
+  const alignOptions: { value: HeaderAlign; label: string }[] = vertical
+    ? [
+        { value: "start", label: "Top" },
+        { value: "center", label: "Middle" },
+        { value: "end", label: "Bottom" },
+      ]
+    : [
+        { value: "start", label: "Left" },
+        { value: "center", label: "Center" },
+        { value: "end", label: "Right" },
+      ];
+  const categoryColor = legend.find((entry) => entry.key === data.colorKey)?.color;
+  const outlineColor = data.outlineColor ?? categoryColor ?? "#9ca3af";
+
+  return (
+    <>
+      <div className="flex flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+        Header
+        <Segmented
+          label="Header position"
+          options={HEADER_POSITIONS}
+          value={headerPosition}
+          onChange={(value) => onChange(id, { headerPosition: value })}
+        />
+        <Segmented
+          label="Header alignment"
+          options={alignOptions}
+          value={data.headerAlign ?? "start"}
+          onChange={(value) => onChange(id, { headerAlign: value })}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+        Outline
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            aria-label="Outline color"
+            value={outlineColor}
+            onChange={(event) => onChange(id, { outlineColor: event.target.value })}
+            className="h-7 w-9 cursor-pointer rounded border border-zinc-300 bg-transparent p-0.5 dark:border-zinc-700"
+          />
+          <div className="flex-1">
+            <Segmented
+              label="Outline style"
+              options={OUTLINE_STYLES}
+              value={data.outlineStyle ?? "solid"}
+              onChange={(value) => onChange(id, { outlineStyle: value })}
+            />
+          </div>
+        </div>
+        {data.outlineColor && (
+          <button
+            type="button"
+            className="self-start text-[11px] font-normal text-blue-600 hover:underline dark:text-blue-400"
+            onClick={() => onChange(id, { outlineColor: undefined })}
+          >
+            {categoryColor ? "Use category color" : "Reset to default"}
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
 
 function ColorSwatches({
   legend,
@@ -136,6 +280,9 @@ export default function PropertiesPanel() {
   const updateNodeDetails = useDiagramStore((state) => state.updateNodeDetails);
   const fitContainer = useDiagramStore((state) => state.fitContainer);
   const tidyContainer = useDiagramStore((state) => state.tidyContainer);
+  const fitAllContainers = useDiagramStore((state) => state.fitAllContainers);
+  const setSelection = useDiagramStore((state) => state.setSelection);
+  const updateContainerStyle = useDiagramStore((state) => state.updateContainerStyle);
 
   const section = getActiveSection(diagram);
 
@@ -147,6 +294,19 @@ export default function PropertiesPanel() {
     return (
       <div className="flex flex-col gap-2 border-b border-zinc-200 p-3 text-xs text-zinc-400 dark:border-zinc-800">
         <p>Select a container or component to edit its properties.</p>
+        {section.nodes.some((candidate) => candidate.parentId) && (
+          <button
+            type="button"
+            className={`${ACTION_BUTTON} self-start`}
+            title="Shrink or grow every container to wrap its components"
+            onClick={fitAllContainers}
+          >
+            Fit all containers
+          </button>
+        )}
+        <p className="text-[11px] leading-snug">
+          Drag a container&apos;s edge or corner to resize it, or select it and use Fit to contents.
+        </p>
         <ul className="flex flex-col gap-0.5 text-[11px] leading-snug">
           <li>Shift-click or Shift-drag to select several</li>
           <li>⌘/Ctrl + C, V, D to copy, paste, duplicate</li>
@@ -159,6 +319,10 @@ export default function PropertiesPanel() {
 
   const childCount = section.nodes.filter((candidate) => candidate.parentId === node.id).length;
 
+  const parentContainer = node.parentId
+    ? section.nodes.find((candidate) => candidate.id === node.parentId)
+    : undefined;
+
   const showColor = node.type === "block" || node.type === "container";
 
   return (
@@ -166,6 +330,19 @@ export default function PropertiesPanel() {
       <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
         {node.type === "container" ? "Container" : "Component"}
       </h2>
+      {parentContainer && (
+        <p className="-mt-2 text-xs text-zinc-500">
+          In{" "}
+          <button
+            type="button"
+            className="font-medium text-blue-600 hover:underline dark:text-blue-400"
+            title="Select the container to resize or tidy it"
+            onClick={() => setSelection([parentContainer.id])}
+          >
+            {parentContainer.data.label}
+          </button>
+        </p>
+      )}
 
       <label className="flex flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
         Label
@@ -205,6 +382,15 @@ export default function PropertiesPanel() {
           </label>
         );
       })}
+
+      {node.data.kind === "container" && (
+        <ContainerStyleControls
+          id={node.id}
+          data={node.data}
+          legend={legend}
+          onChange={updateContainerStyle}
+        />
+      )}
 
       {node.type === "container" && (
         <div className="flex flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">

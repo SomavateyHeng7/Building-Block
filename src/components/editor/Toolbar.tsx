@@ -1,17 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { useTheme } from "next-themes";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
-import { createId } from "@/lib/diagram/factory";
-import { downloadDiagramJson, readDiagramJsonFile, saveDiagram } from "@/lib/diagram/persistence";
+import { downloadDiagramJson } from "@/lib/diagram/persistence";
 import { exportComponentsCsv, exportPdf, exportPng, exportTitle, legendUsedIn } from "@/lib/diagram/export";
 import { nextSlotInContainer } from "@/lib/diagram/layout";
 import { saveUserTemplate } from "@/templates/userTemplates";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { ImportDiagramButton } from "@/components/ImportDiagramButton";
 
 const SECONDARY_BUTTON =
   "rounded border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900";
@@ -74,7 +73,6 @@ function ExportMenu({ busy, onSelect }: { busy: boolean; onSelect: (format: Expo
 }
 
 export default function Toolbar() {
-  const router = useRouter();
   const { getNodes, getNodesBounds } = useReactFlow();
   const { resolvedTheme } = useTheme();
   const diagram = useDiagramStore((state) => state.diagram);
@@ -83,14 +81,12 @@ export default function Toolbar() {
   const addContainer = useDiagramStore((state) => state.addContainer);
   const addBlock = useDiagramStore((state) => state.addBlock);
   const deleteNodes = useDiagramStore((state) => state.deleteNodes);
-  const loadDiagram = useDiagramStore((state) => state.loadDiagram);
   const setSelection = useDiagramStore((state) => state.setSelection);
   const setShowTechnology = useDiagramStore((state) => state.setShowTechnology);
   const undo = useDiagramStore((state) => state.undo);
   const redo = useDiagramStore((state) => state.redo);
   const canUndo = useDiagramStore((state) => state.past.length > 0);
   const canRedo = useDiagramStore((state) => state.future.length > 0);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [exporting, setExporting] = useState(false);
 
   const section = getActiveSection(diagram);
@@ -110,21 +106,6 @@ export default function Toolbar() {
       singleSelected?.type === "container" ? singleSelected.id : singleSelected?.parentId;
     if (containerId) addBlock(nextSlotInContainer(section.nodes, containerId), containerId);
     else addBlock(nextPosition());
-  }
-
-  async function handleImport(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    try {
-      const imported = await readDiagramJsonFile(file);
-      const withNewId = { ...imported, id: createId("diagram") };
-      loadDiagram(withNewId);
-      saveDiagram(withNewId);
-      router.replace(`/editor/${withNewId.id}`);
-    } catch {
-      window.alert("That file doesn't look like a valid diagram export.");
-    }
   }
 
   function handleSaveTemplate() {
@@ -253,16 +234,7 @@ export default function Toolbar() {
         <button type="button" className={SECONDARY_BUTTON} onClick={handleSaveTemplate}>
           Save as template
         </button>
-        <button type="button" className={SECONDARY_BUTTON} onClick={() => fileInputRef.current?.click()}>
-          Import
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/json"
-          className="hidden"
-          onChange={handleImport}
-        />
+        <ImportDiagramButton className={SECONDARY_BUTTON} />
         <ExportMenu busy={exporting} onSelect={handleExport} />
       </div>
     </div>

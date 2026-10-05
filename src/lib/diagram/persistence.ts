@@ -1,5 +1,6 @@
-import { createBlankSection } from "./factory";
+import { createId } from "./factory";
 import type { Diagram } from "./types";
+import { DiagramFileError, parseDiagram, type ParsedDiagram } from "./validate";
 
 const DIAGRAM_KEY_PREFIX = "bb:diagram:";
 const INDEX_KEY = "bb:index";
@@ -51,17 +52,11 @@ export function getDiagramIndexSnapshot(): DiagramSummary[] {
   return cachedSummaries;
 }
 
-export function getDiagramIndexServerSnapshot(): DiagramSummary[] {
-  return [];
-}
+// Must be the same array on every call, or useSyncExternalStore loops during hydration.
+const EMPTY_INDEX: DiagramSummary[] = [];
 
-/** Guarantees at least one section and a valid activeSectionId. */
-export function normalizeDiagram(diagram: Diagram): Diagram {
-  const sections = diagram.sections?.length ? diagram.sections : [createBlankSection()];
-  const activeSectionId = sections.some((section) => section.id === diagram.activeSectionId)
-    ? diagram.activeSectionId
-    : sections[0].id;
-  return { ...diagram, sections, activeSectionId };
+export function getDiagramIndexServerSnapshot(): DiagramSummary[] {
+  return EMPTY_INDEX;
 }
 
 export function saveDiagram(diagram: Diagram): void {
@@ -77,7 +72,7 @@ export function loadDiagramFromStorage(id: string): Diagram | null {
   if (!isBrowser()) return null;
   try {
     const raw = window.localStorage.getItem(DIAGRAM_KEY_PREFIX + id);
-    return raw ? normalizeDiagram(JSON.parse(raw) as Diagram) : null;
+    return raw ? parseDiagram(JSON.parse(raw)).diagram : null;
   } catch {
     return null;
   }
@@ -114,11 +109,19 @@ export function downloadDiagramJson(diagram: Diagram): void {
   downloadBlob(blob, `${fileBaseName(diagram.name)}.json`);
 }
 
-export async function readDiagramJsonFile(file: File): Promise<Diagram> {
-  const text = await file.text();
-  const parsed = JSON.parse(text) as Diagram;
-  if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.sections)) {
-    throw new Error("Invalid diagram file");
+/**
+ * Reads a diagram backup, repairs what it can, and saves it as a new diagram
+ * (a new id, so importing never overwrites an existing diagram).
+ */
+export async function importDiagramFile(file: File): Promise<ParsedDiagram> {
+  let json: unknown;
+  try {
+    json = JSON.parse(await file.text());
+  } catch {
+    throw new DiagramFileError("That file isn't a valid JSON file.");
   }
-  return normalizeDiagram(parsed);
+  const { diagram, fixes } = parseDiagram(json);
+  const imported: Diagram = { ...diagram, id: createId("diagram"), updatedAt: new Date().toISOString() };
+  saveDiagram(imported);
+  return { diagram: imported, fixes };
 }

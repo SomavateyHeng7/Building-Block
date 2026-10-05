@@ -5,10 +5,11 @@ import {
   arrangeNodes,
   fitContainerToContents,
   growContainerToFit,
+  restyleContainer,
   tidyContainer,
   type ArrangeOp,
 } from "./layout";
-import type { BlockColorKey, Diagram, DiagramNode, LegendEntry, NodeDetails, Position } from "./types";
+import type { BlockColorKey, ContainerStyle, Diagram, DiagramNode, LegendEntry, NodeDetails, Position } from "./types";
 
 function touch(diagram: Diagram): Diagram {
   return { ...diagram, updatedAt: new Date().toISOString() };
@@ -125,6 +126,8 @@ interface DiagramState {
   deleteNodes: (ids: string[]) => void;
   arrangeSelection: (op: ArrangeOp) => void;
   fitContainer: (id: string) => void;
+  /** Fits every container in the active section that has components. */
+  fitAllContainers: () => void;
   tidyContainer: (id: string) => void;
   setShowTechnology: (show: boolean) => void;
   setActiveSectionNodes: (nodes: DiagramNode[], options?: NodesChangeOptions) => void;
@@ -134,6 +137,7 @@ interface DiagramState {
   updateNodeColor: (id: string, colorKey: BlockColorKey) => void;
   updateNodesColor: (ids: string[], colorKey: BlockColorKey) => void;
   updateNodeDetails: (id: string, patch: NodeDetails) => void;
+  updateContainerStyle: (id: string, patch: ContainerStyle) => void;
   updateLegendEntry: (key: BlockColorKey, patch: Partial<LegendEntry>) => void;
   addLegendEntry: () => BlockColorKey;
   removeLegendEntry: (key: BlockColorKey) => void;
@@ -242,6 +246,18 @@ export const useDiagramStore = create<DiagramState>((set) => ({
   fitContainer: (id) =>
     set((state) =>
       commit(state, mapActiveSection(state.diagram, (nodes) => fitContainerToContents(nodes, id))),
+    ),
+
+  fitAllContainers: () =>
+    set((state) =>
+      commit(
+        state,
+        mapActiveSection(state.diagram, (nodes) =>
+          nodes
+            .filter((node) => node.type === "container")
+            .reduce((current, container) => fitContainerToContents(current, container.id), nodes),
+        ),
+      ),
     ),
 
   tidyContainer: (id) =>
@@ -429,6 +445,16 @@ export const useDiagramStore = create<DiagramState>((set) => ({
         selectedNodeIds: [],
       };
     }),
+
+  // Keyed by field so dragging the colour picker undoes as one step.
+  updateContainerStyle: (id, patch) =>
+    set((state) =>
+      commit(
+        state,
+        mapActiveSection(state.diagram, (nodes) => restyleContainer(nodes, id, patch)),
+        `style:${id}:${Object.keys(patch).sort().join(",")}`,
+      ),
+    ),
 
   updateLegendEntry: (key, patch) =>
     set((state) =>

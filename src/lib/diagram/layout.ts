@@ -1,10 +1,29 @@
-import type { DiagramNode, Position, Size } from "./types";
+import type { ContainerStyle, DiagramNode, Position, Size } from "./types";
 
-/** Inner spacing of a container; the top leaves room for its title bar. */
+/** Inner spacing of a container; the side with the header leaves room for it. */
 export const CONTAINER_PADDING = 16;
 export const CONTAINER_HEADER = 40;
 export const LAYOUT_GAP = 12;
-const CONTAINER_MIN: Size = { width: 200, height: 120 };
+export const CONTAINER_MIN: Size = { width: 200, height: 120 };
+
+export interface Insets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+/** Where a container's children may start and end, depending on which side its header is on. */
+export function containerInsets(style?: ContainerStyle): Insets {
+  const side = style?.headerPosition ?? "top";
+  const inset = (edge: keyof Insets) => (edge === side ? CONTAINER_HEADER : CONTAINER_PADDING);
+  return { top: inset("top"), right: inset("right"), bottom: inset("bottom"), left: inset("left") };
+}
+
+function insetsOf(nodes: DiagramNode[], containerId: string): Insets {
+  const container = nodes.find((node) => node.id === containerId);
+  return containerInsets(container?.data.kind === "container" ? container.data : undefined);
+}
 
 export type ArrangeOp =
   | "align-left"
@@ -112,8 +131,9 @@ function snap(position: Position): Position {
 export function growContainerToFit(nodes: DiagramNode[], containerId: string): DiagramNode[] {
   const children = childrenOf(nodes, containerId);
   if (!children.length) return nodes;
-  const needWidth = Math.max(...children.map((c) => c.position.x + c.size.width)) + CONTAINER_PADDING;
-  const needHeight = Math.max(...children.map((c) => c.position.y + c.size.height)) + CONTAINER_PADDING;
+  const insets = insetsOf(nodes, containerId);
+  const needWidth = Math.max(...children.map((c) => c.position.x + c.size.width)) + insets.right;
+  const needHeight = Math.max(...children.map((c) => c.position.y + c.size.height)) + insets.bottom;
   return nodes.map((node) =>
     node.id === containerId && (needWidth > node.size.width || needHeight > node.size.height)
       ? {
@@ -131,10 +151,11 @@ export function growContainerToFit(nodes: DiagramNode[], containerId: string): D
 export function fitContainerToContents(nodes: DiagramNode[], containerId: string): DiagramNode[] {
   const children = childrenOf(nodes, containerId);
   if (!children.length) return nodes;
+  const insets = insetsOf(nodes, containerId);
   const minX = Math.min(...children.map((c) => c.position.x));
   const minY = Math.min(...children.map((c) => c.position.y));
-  const dx = CONTAINER_PADDING - minX;
-  const dy = CONTAINER_HEADER - minY;
+  const dx = insets.left - minX;
+  const dy = insets.top - minY;
   const maxX = Math.max(...children.map((c) => c.position.x + c.size.width)) + dx;
   const maxY = Math.max(...children.map((c) => c.position.y + c.size.height)) + dy;
 
@@ -148,8 +169,8 @@ export function fitContainerToContents(nodes: DiagramNode[], containerId: string
         // Keep children where they are on screen by moving the container by the same offset.
         position: { x: node.position.x - dx, y: node.position.y - dy },
         size: {
-          width: Math.max(CONTAINER_MIN.width, maxX + CONTAINER_PADDING),
-          height: Math.max(CONTAINER_MIN.height, maxY + CONTAINER_PADDING),
+          width: Math.max(CONTAINER_MIN.width, maxX + insets.right),
+          height: Math.max(CONTAINER_MIN.height, maxY + insets.bottom),
         },
       };
     }
@@ -167,10 +188,11 @@ export function tidyContainer(nodes: DiagramNode[], containerId: string): Diagra
     (a, b) => a.position.y - b.position.y || a.position.x - b.position.x,
   );
   if (!container || !children.length) return nodes;
+  const insets = insetsOf(nodes, containerId);
 
   const cellWidth = Math.max(...children.map((c) => c.size.width));
   const cellHeight = Math.max(...children.map((c) => c.size.height));
-  const usableWidth = container.size.width - CONTAINER_PADDING * 2;
+  const usableWidth = container.size.width - insets.left - insets.right;
   const columns = Math.max(1, Math.floor((usableWidth + LAYOUT_GAP) / (cellWidth + LAYOUT_GAP)));
   const rows = Math.ceil(children.length / columns);
 
@@ -178,8 +200,8 @@ export function tidyContainer(nodes: DiagramNode[], containerId: string): Diagra
     children.map((child, index) => [
       child.id,
       {
-        x: CONTAINER_PADDING + (index % columns) * (cellWidth + LAYOUT_GAP),
-        y: CONTAINER_HEADER + Math.floor(index / columns) * (cellHeight + LAYOUT_GAP),
+        x: insets.left + (index % columns) * (cellWidth + LAYOUT_GAP),
+        y: insets.top + Math.floor(index / columns) * (cellHeight + LAYOUT_GAP),
       },
     ]),
   );
@@ -191,10 +213,10 @@ export function tidyContainer(nodes: DiagramNode[], containerId: string): Diagra
       return {
         ...node,
         size: {
-          width: Math.max(node.size.width, CONTAINER_PADDING * 2 + cellWidth),
+          width: Math.max(node.size.width, insets.left + cellWidth + insets.right),
           height: Math.max(
             CONTAINER_MIN.height,
-            CONTAINER_HEADER + rows * (cellHeight + LAYOUT_GAP) - LAYOUT_GAP + CONTAINER_PADDING,
+            insets.top + rows * (cellHeight + LAYOUT_GAP) - LAYOUT_GAP + insets.bottom,
           ),
         },
       };
@@ -206,7 +228,41 @@ export function tidyContainer(nodes: DiagramNode[], containerId: string): Diagra
 /** Where a new block should go inside a container: below its lowest child. */
 export function nextSlotInContainer(nodes: DiagramNode[], containerId: string): Position {
   const children = childrenOf(nodes, containerId);
-  if (!children.length) return { x: CONTAINER_PADDING, y: CONTAINER_HEADER };
+  const insets = insetsOf(nodes, containerId);
+  if (!children.length) return { x: insets.left, y: insets.top };
   const lowest = Math.max(...children.map((c) => c.position.y + c.size.height));
-  return { x: CONTAINER_PADDING, y: lowest + LAYOUT_GAP };
+  return { x: insets.left, y: lowest + LAYOUT_GAP };
+}
+
+/**
+ * Applies a style change to a container. Moving the header to another side shifts the
+ * children and resizes the container, so nothing ends up under the header.
+ */
+export function restyleContainer(nodes: DiagramNode[], containerId: string, patch: ContainerStyle): DiagramNode[] {
+  const container = nodes.find((node) => node.id === containerId);
+  if (!container || container.data.kind !== "container") return nodes;
+  const before = containerInsets(container.data);
+  const after = containerInsets({ ...container.data, ...patch });
+  const dx = after.left - before.left;
+  const dy = after.top - before.top;
+  const hasChildren = nodes.some((node) => node.parentId === containerId);
+
+  return nodes.map((node) => {
+    if (node.id === containerId) {
+      return {
+        ...node,
+        data: { ...node.data, ...patch },
+        size: hasChildren
+          ? {
+              width: Math.max(CONTAINER_MIN.width, node.size.width + dx + after.right - before.right),
+              height: Math.max(CONTAINER_MIN.height, node.size.height + dy + after.bottom - before.bottom),
+            }
+          : node.size,
+      };
+    }
+    if (node.parentId === containerId && (dx || dy)) {
+      return { ...node, position: { x: node.position.x + dx, y: node.position.y + dy } };
+    }
+    return node;
+  });
 }

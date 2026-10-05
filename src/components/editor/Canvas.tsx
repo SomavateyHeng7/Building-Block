@@ -17,11 +17,11 @@ import { useTheme } from "next-themes";
 import { useMounted } from "@/components/theme-toggle";
 import { getActiveSection, useDiagramStore, type NodesChangeOptions } from "@/lib/diagram/store";
 import { fromFlowNodes, toFlowNodes, type FlowNode } from "@/lib/diagram/flowAdapter";
-import { CONTAINER_HEADER, CONTAINER_PADDING, growContainerToFit } from "@/lib/diagram/layout";
+import { containerInsets, growContainerToFit } from "@/lib/diagram/layout";
 import ContainerNode from "./nodes/ContainerNode";
 import BlockNode from "./nodes/BlockNode";
 import { PALETTE_DATA_FORMAT, type PaletteDragPayload } from "./Sidebar";
-import type { BlockColorKey } from "@/lib/diagram/types";
+import type { BlockColorKey, ContainerNodeData } from "@/lib/diagram/types";
 
 const nodeTypes = { container: ContainerNode, block: BlockNode };
 
@@ -121,12 +121,14 @@ export default function Canvas() {
       const absoluteX = node.position.x + (oldParent?.position.x ?? 0);
       const absoluteY = node.position.y + (oldParent?.position.y ?? 0);
 
-      const nextPosition = newParent
-        ? {
-            x: Math.max(CONTAINER_PADDING, absoluteX - newParent.position.x),
-            y: Math.max(CONTAINER_HEADER, absoluteY - newParent.position.y),
-          }
-        : { x: absoluteX, y: absoluteY };
+      const insets = newParent ? containerInsets(newParent.data as ContainerNodeData) : null;
+      const nextPosition =
+        newParent && insets
+          ? {
+              x: Math.max(insets.left, absoluteX - newParent.position.x),
+              y: Math.max(insets.top, absoluteY - newParent.position.y),
+            }
+          : { x: absoluteX, y: absoluteY };
 
       const updated: FlowNode[] = flowNodes.map((candidate) =>
         candidate.id === node.id
@@ -169,12 +171,14 @@ export default function Canvas() {
 
       const containers = flowNodes.filter((node) => node.type === "container");
       const target = findContainerAtPoint(containers, point);
-      const position = target
-        ? {
-            x: Math.max(CONTAINER_PADDING, point.x - target.position.x - 70),
-            y: Math.max(CONTAINER_HEADER, point.y - target.position.y - 28),
-          }
-        : { x: point.x - 70, y: point.y - 28 };
+      const insets = target ? containerInsets(target.data as ContainerNodeData) : null;
+      const position =
+        target && insets
+          ? {
+              x: Math.max(insets.left, point.x - target.position.x - 70),
+              y: Math.max(insets.top, point.y - target.position.y - 28),
+            }
+          : { x: point.x - 70, y: point.y - 28 };
 
       addBlock(position, target?.id ?? null, payload.colorKey as BlockColorKey);
     },
