@@ -25,3 +25,56 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
+
+html {
+  /* Stop iOS/Android from inflating text after rotation. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Safe-area padding for notches, rounded corners and home indicators. */
+.pt-safe { padding-top: env(safe-area-inset-top); }
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+.pl-safe { padding-left: env(safe-area-inset-left); }
+.pr-safe { padding-right: env(safe-area-inset-right); }
+.px-safe {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Buttons and links respond to the first tap, with no double-tap-zoom delay. */
+button, a, summary, [role="button"], [role="tab"], [role="menuitem"], label {
+  touch-action: manipulation;
+}
+
+/* Touch screens (phones, tablets, touch laptops): comfortable targets, and no iOS zoom-on-focus. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  button, [role="menuitem"], [role="tab"] {
+    min-height: 40px;
+  }
+  .react-flow__controls-button {
+    width: 36px;
+    height: 36px;
+  }
+  .react-flow__handle {
+    min-width: 14px;
+    min-height: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

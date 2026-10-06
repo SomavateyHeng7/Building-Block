@@ -22,14 +22,14 @@ export default function SectionTabs() {
   }
 
   return (
-    <div className="flex items-center gap-1 overflow-x-auto border-b border-zinc-200 bg-zinc-50 px-3 pt-1.5 dark:border-zinc-800 dark:bg-zinc-950">
+    <div className="flex items-center gap-1 overflow-x-auto overscroll-x-contain border-b border-zinc-200 bg-zinc-50 px-2 pt-1.5 sm:px-3 dark:border-zinc-800 dark:bg-zinc-950">
       {sections.map((section) => {
         const active = section.id === activeSectionId;
         const confirming = pendingDeleteId === section.id;
         return (
           <div
             key={section.id}
-            className={`group flex items-center gap-1 rounded-t border border-b-0 px-3 py-1.5 text-sm ${
+            className={`group flex shrink-0 items-center gap-1 whitespace-nowrap rounded-t border border-b-0 px-3 py-1.5 text-sm ${
               active
                 ? "border-zinc-200 bg-white font-medium text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                 : "border-transparent text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
@@ -55,6 +55,7 @@ export default function SectionTabs() {
                 }}
                 onDoubleClick={() => setEditingId(section.id)}
                 title="Double-click to rename"
+                className="min-h-0"
               >
                 {section.name}
               </button>
@@ -63,8 +64,18 @@ export default function SectionTabs() {
               <>
                 <button
                   type="button"
+                  title="Rename section"
+                  aria-label="Rename section"
+                  className="min-h-0 px-1 text-zinc-400 hover:text-zinc-900 pointer-coarse:px-2 dark:hover:text-zinc-100"
+                  onClick={() => setEditingId(section.id)}
+                >
+                  ✎
+                </button>
+                <button
+                  type="button"
                   title="Duplicate section"
-                  className="px-0.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                  aria-label="Duplicate section"
+                  className="min-h-0 px-0.5 pointer-coarse:px-2 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                   onClick={() => duplicateSection(section.id)}
                 >
                   ⧉
@@ -73,7 +84,7 @@ export default function SectionTabs() {
                   (confirming ? (
                     <button
                       type="button"
-                      className="rounded bg-red-600 px-1.5 text-xs text-white"
+                      className="min-h-0 rounded bg-red-600 px-1.5 text-xs text-white pointer-coarse:px-2.5 pointer-coarse:py-1"
                       onClick={() => {
                         deleteSection(section.id);
                         setPendingDeleteId(null);
@@ -87,7 +98,8 @@ export default function SectionTabs() {
                     <button
                       type="button"
                       title="Delete section"
-                      className="px-0.5 text-zinc-400 hover:text-red-600"
+                      aria-label="Delete section"
+                      className="min-h-0 px-0.5 pointer-coarse:px-2 text-zinc-400 hover:text-red-600"
                       onClick={() => setPendingDeleteId(section.id)}
                     >
                       ×
@@ -101,7 +113,7 @@ export default function SectionTabs() {
       <button
         type="button"
         title="Add section"
-        className="ml-1 rounded px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+        className="ml-1 shrink-0 rounded px-3 py-1 text-sm text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-800"
         onClick={() => addSection()}
       >
         +

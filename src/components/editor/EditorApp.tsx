@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ReactFlowProvider } from "@xyflow/react";
@@ -13,79 +13,27 @@ import SectionTabs from "./SectionTabs";
 import ShortcutsHelp from "./ShortcutsHelp";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { nextSlotInContainer, nudgeNodes } from "@/lib/diagram/layout";
-import { createBlankDiagram } from "@/lib/diagram/factory";
-import {
-  downloadDiagramJson,
-  getDiagramIndexServerSnapshot,
-  getDiagramIndexSnapshot,
-  loadDiagramFromStorage,
-  saveDiagram,
-  subscribeDiagramIndex,
-  subscribeToOtherTabs,
-} from "@/lib/diagram/persistence";
-import { getLastBackup, needsBackupNudge, requestPersistentStorage } from "@/lib/diagram/backup";
-import type { Diagram } from "@/lib/diagram/types";
-import { toast } from "@/lib/toast";
-import { useMounted } from "@/components/theme-toggle";
-import { setSaveStatus } from "@/lib/diagram/saveStatus";
+import { saveDiagramToFile, useFileStore, useIsDirty } from "@/lib/diagram/file";
 
-/** Another tab changed or deleted this diagram while this tab had unsaved edits. */
-type TabConflict = "changed" | "deleted";
+/** Wait this long after the last edit before writing to the open file. */
+const AUTOSAVE_DELAY_MS = 1000;
 
-interface EditorAppProps {
-  diagramId: string;
-}
-
-export default function EditorApp({ diagramId }: EditorAppProps) {
+export default function EditorApp() {
   const router = useRouter();
   const diagram = useDiagramStore((state) => state.diagram);
-  const loadDiagram = useDiagramStore((state) => state.loadDiagram);
-  const hydratedForId = useRef<string | null>(null);
+  const opened = useFileStore((state) => state.opened);
+  const handle = useFileStore((state) => state.handle);
+  const saving = useFileStore((state) => state.saving);
+  const saveFailed = useFileStore((state) => state.error);
+  const dirty = useIsDirty();
   const [helpOpen, setHelpOpen] = useState(false);
-  const [conflict, setConflict] = useState<TabConflict | null>(null);
-  // updatedAt of the version this tab last loaded from or wrote to storage; anything else is unsaved here.
-  const syncedAt = useRef<string | null>(null);
-  const nudgedFor = useRef<string | null>(null);
-  const mounted = useMounted();
-  const savedDiagrams = useSyncExternalStore(
-    subscribeDiagramIndex,
-    getDiagramIndexSnapshot,
-    getDiagramIndexServerSnapshot,
-  );
-  // A link to a diagram that isn't in this browser. Only judged after mount, once storage can be read.
-  const missing =
-    mounted &&
-    diagramId !== "new" &&
-    diagram.id !== diagramId &&
-    !savedDiagrams.some((entry) => entry.id === diagramId);
+  // Below the lg breakpoint the palette and properties panels are drawers over the canvas.
+  const [drawer, setDrawer] = useState<"palette" | "properties" | null>(null);
 
+  // The diagram lives only in memory, so a fresh load (or a direct link) has nothing to edit yet.
   useEffect(() => {
-    if (hydratedForId.current === diagramId) return;
-    hydratedForId.current = diagramId;
-
-    if (diagramId !== "new") {
-      // Just created and redirected here: it is already in the store, even if storage refused it.
-      const current = useDiagramStore.getState().diagram;
-      if (current.id === diagramId) {
-        syncedAt.current = loadDiagramFromStorage(diagramId)?.updatedAt ?? null;
-        return;
-      }
-      const existing = loadDiagramFromStorage(diagramId);
-      if (existing) {
-        loadDiagram(existing);
-        syncedAt.current = existing.updatedAt;
-        setSaveStatus("saved");
-      }
-      return;
-    }
-
-    const blank = createBlankDiagram();
-    loadDiagram(blank);
-    const saved = saveDiagram(blank);
-    if (saved) syncedAt.current = blank.updatedAt;
-    setSaveStatus(saved ? "saved" : "error");
-    router.replace(`/editor/${blank.id}`);
-  }, [diagramId, loadDiagram, router]);
+    if (!opened) router.replace("/diagrams");
+  }, [opened, router]);
 
   // Editing shortcuts. Text fields keep their native behaviour (text undo, copy/paste, select all).
   // Delete/Backspace is handled by React Flow on the canvas.
@@ -98,6 +46,13 @@ export default function EditorApp({ diagramId }: EditorAppProps) {
     };
 
     function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setDrawer(null);
+      // Save works from anywhere, including text fields.
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        void saveDiagramToFile({ saveAs: event.shiftKey });
+        return;
+      }
       if (event.defaultPrevented || event.altKey) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest("input, textarea, select, button, [contenteditable='true'], [role='dialog']")) return;
@@ -148,126 +103,89 @@ export default function EditorApp({ diagramId }: EditorAppProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Only autosave once the store's active diagram actually matches the route:
-  // avoids writing the stale/blank diagram while hydration or a "new" → real-id
-  // redirect is still in flight.
-  // Paused during a tab conflict so neither tab's version silently overwrites the other.
+  // With a file to write to, keep it current, like draw.io's autosave to device.
+  // Paused after a failed write (the toolbar says "Not saved") until a manual Save succeeds.
   useEffect(() => {
-    if (diagram.id !== diagramId || conflict || diagram.updatedAt === syncedAt.current) return;
-    const timeout = setTimeout(() => {
-      const saved = saveDiagram(diagram);
-      if (saved) {
-        syncedAt.current = diagram.updatedAt;
-        void requestPersistentStorage();
-      }
-      setSaveStatus(saved ? "saved" : "error");
-    }, 400);
+    if (!opened || !handle || !dirty || saving || saveFailed) return;
+    const timeout = setTimeout(() => void saveDiagramToFile(), AUTOSAVE_DELAY_MS);
     return () => clearTimeout(timeout);
-  }, [diagram, diagramId, conflict]);
+  }, [opened, handle, dirty, diagram, saving, saveFailed]);
 
-  // The same diagram open in another tab: follow its edits while this tab has none of its own.
+  // Closing or reloading the tab would lose whatever isn't in a file yet.
   useEffect(() => {
-    if (conflict) return;
-    return subscribeToOtherTabs(diagramId, (stored) => {
-      const current = useDiagramStore.getState().diagram;
-      if (current.id !== diagramId || stored?.updatedAt === current.updatedAt) return;
-      if (stored && current.updatedAt === syncedAt.current) {
-        loadDiagram(stored);
-        syncedAt.current = stored.updatedAt;
-        return;
-      }
-      setConflict(stored ? "changed" : "deleted");
-    });
-  }, [diagramId, conflict, loadDiagram]);
-
-  // Once per opened diagram: suggest a JSON backup when a week of work is only in this browser.
-  useEffect(() => {
-    if (diagram.id !== diagramId || nudgedFor.current === diagramId) return;
-    nudgedFor.current = diagramId;
-    if (!needsBackupNudge(diagram, getLastBackup(diagram.id))) return;
-    toast.info("Back up this diagram", {
-      details: [
-        "It's stored only in this browser. Clearing site data, or 7 days without visiting in Safari, deletes it.",
-        "A JSON backup can be re-imported any time.",
-      ],
-      action: { label: "Download JSON backup", onClick: () => downloadDiagramJson(useDiagramStore.getState().diagram) },
-      duration: 0,
-    });
-  }, [diagram, diagramId]);
-
-  function loadOtherTabVersion() {
-    const latest = loadDiagramFromStorage(diagramId);
-    if (latest) {
-      loadDiagram(latest);
-      syncedAt.current = latest.updatedAt;
+    if (!dirty) return;
+    function handleBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = "";
     }
-    setConflict(null);
-  }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [dirty]);
 
-  function keepThisVersion() {
-    // Forces the autosave to write this tab's version even if it has no edits since loading.
-    syncedAt.current = null;
-    setConflict(null);
-  }
-
-  if (missing) {
+  if (!opened) {
     return (
-      <div className="flex h-dvh w-full flex-col items-center justify-center gap-4 bg-zinc-50 p-6 text-center dark:bg-zinc-950">
-        <h1 className="text-xl font-semibold">Diagram not found</h1>
-        <p className="max-w-sm text-sm text-zinc-600 dark:text-zinc-400">
-          This diagram isn&apos;t saved in this browser. Diagrams are stored only on the device that created them,
-          so a link or bookmark won&apos;t work on another browser, or after the site data was cleared.
-        </p>
-        <div className="flex gap-3">
-          <Link href="/diagrams" className="rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900">
-            My diagrams
-          </Link>
-          <Link href="/editor/new" className="rounded border border-zinc-300 px-4 py-2 text-sm font-medium dark:border-zinc-700">
-            Start a new diagram
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  // The store still holds a placeholder (or the previous diagram) until the saved one has loaded.
-  if (diagram.id !== diagramId) {
-    return (
-      <div role="status" aria-label="Loading diagram" className="flex h-dvh w-full items-center justify-center bg-zinc-100 text-sm text-zinc-500 dark:bg-zinc-900">
-        Loading diagram…
+      <div role="status" aria-label="Loading" className="flex h-dvh w-full items-center justify-center bg-zinc-100 text-sm text-zinc-500 dark:bg-zinc-900">
+        <Link href="/diagrams" className="underline">
+          Go to the start page
+        </Link>
       </div>
     );
   }
 
   return (
     <ReactFlowProvider>
-      <div className="flex h-dvh w-full flex-col bg-zinc-100 dark:bg-zinc-900">
+      <div className="flex h-dvh w-full flex-col bg-zinc-100 pb-safe pt-safe px-safe dark:bg-zinc-900">
         <Toolbar />
-        {conflict && (
-          <TabConflictBanner
-            conflict={conflict}
-            diagram={diagram}
-            onLoadOther={loadOtherTabVersion}
-            onKeepThis={keepThisVersion}
-            onLeave={() => router.push("/diagrams")}
-          />
-        )}
         <SectionTabs />
-        <div className="flex flex-1 overflow-hidden">
-          <Sidebar />
-          <div className="relative flex-1">
+        <div className="relative flex min-h-0 flex-1 overflow-hidden">
+          {drawer && (
+            <button
+              type="button"
+              aria-label="Close panel"
+              tabIndex={-1}
+              className="absolute inset-0 z-20 min-h-0 cursor-default bg-black/30 lg:hidden"
+              onClick={() => setDrawer(null)}
+            />
+          )}
+          <Sidebar
+            onAdded={() => setDrawer(null)}
+            className={`${drawer === "palette" ? "flex" : "hidden"} absolute inset-y-0 left-0 z-30 w-72 max-w-[85%] pl-safe shadow-xl lg:static lg:z-auto lg:flex lg:w-56 lg:shrink-0 lg:shadow-none`}
+          />
+          <div className="relative min-w-0 flex-1">
             <Canvas />
+            <div className="absolute left-3 top-3 z-10 flex gap-2 lg:hidden">
+              <button
+                type="button"
+                aria-expanded={drawer === "palette"}
+                className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium shadow-sm dark:border-zinc-700 dark:bg-zinc-900"
+                onClick={() => setDrawer(drawer === "palette" ? null : "palette")}
+              >
+                + Add
+              </button>
+            </div>
+            <div className="absolute right-3 top-3 z-10 lg:hidden">
+              <button
+                type="button"
+                aria-expanded={drawer === "properties"}
+                className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium shadow-sm dark:border-zinc-700 dark:bg-zinc-900"
+                onClick={() => setDrawer(drawer === "properties" ? null : "properties")}
+              >
+                Details &amp; legend
+              </button>
+            </div>
             <button
               type="button"
               title="Keyboard shortcuts (?)"
               aria-label="Keyboard shortcuts"
-              className="absolute bottom-3 right-3 z-10 h-7 w-7 rounded-full border border-zinc-300 bg-white text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+              className="absolute bottom-3 right-3 z-10 hidden h-7 min-h-0 w-7 rounded-full border border-zinc-300 bg-white text-sm font-medium text-zinc-600 hover:bg-zinc-50 pointer-fine:block dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
               onClick={() => setHelpOpen(true)}
             >
               ?
             </button>
           </div>
-          <aside className="flex w-64 shrink-0 flex-col overflow-y-auto border-l border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+          <aside
+            className={`${drawer === "properties" ? "flex" : "hidden"} absolute inset-y-0 right-0 z-30 w-80 max-w-[85%] flex-col overflow-y-auto border-l border-zinc-200 bg-white pr-safe shadow-xl lg:static lg:z-auto lg:flex lg:w-64 lg:shrink-0 lg:shadow-none dark:border-zinc-800 dark:bg-zinc-950`}
+          >
             <PropertiesPanel />
             <LegendPanel />
           </aside>
@@ -275,58 +193,5 @@ export default function EditorApp({ diagramId }: EditorAppProps) {
       </div>
       {helpOpen && <ShortcutsHelp onClose={() => setHelpOpen(false)} />}
     </ReactFlowProvider>
-  );
-}
-
-function TabConflictBanner({
-  conflict,
-  diagram,
-  onLoadOther,
-  onKeepThis,
-  onLeave,
-}: {
-  conflict: TabConflict;
-  diagram: Diagram;
-  onLoadOther: () => void;
-  onKeepThis: () => void;
-  onLeave: () => void;
-}) {
-  const button =
-    "rounded border border-amber-400 bg-white px-2.5 py-1 text-xs font-medium hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950 dark:hover:bg-amber-900";
-  return (
-    <div
-      role="alert"
-      className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-100"
-    >
-      <p className="min-w-0 flex-1">
-        {conflict === "changed"
-          ? "This diagram was changed in another tab. Saving is paused here so neither version overwrites the other."
-          : "This diagram was deleted in another tab. Your edits here aren't saved."}
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {conflict === "changed" ? (
-          <>
-            <button type="button" className={button} onClick={onLoadOther}>
-              Use the other tab&apos;s version
-            </button>
-            <button type="button" className={button} onClick={onKeepThis}>
-              Keep this version
-            </button>
-          </>
-        ) : (
-          <>
-            <button type="button" className={button} onClick={onKeepThis}>
-              Keep it
-            </button>
-            <button type="button" className={button} onClick={onLeave}>
-              Close
-            </button>
-          </>
-        )}
-        <button type="button" className={button} onClick={() => downloadDiagramJson(diagram)}>
-          Download this version (JSON)
-        </button>
-      </div>
-    </div>
   );
 }

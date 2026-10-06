@@ -1,14 +1,21 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { useTheme } from "next-themes";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
-import { useSaveStatus } from "@/lib/diagram/saveStatus";
-import { downloadDiagramJson } from "@/lib/diagram/persistence";
-import { backupState, formatAge, hasContent, useLastBackup } from "@/lib/diagram/backup";
-import type { Diagram } from "@/lib/diagram/types";
+import {
+  downloadDiagramJson,
+  isDirty,
+  openDiagramFromDevice,
+  saveDiagramToFile,
+  startDiagram,
+  supportsFilePicker,
+  useFileStore,
+  useIsDirty,
+} from "@/lib/diagram/file";
+import { createBlankDiagram } from "@/lib/diagram/factory";
 import {
   downloadCanvasPng,
   exportComponentsCsv,
@@ -22,14 +29,12 @@ import {
   type RenderedComposite,
 } from "@/lib/diagram/export";
 import { nextSlotInContainer } from "@/lib/diagram/layout";
-import { saveUserTemplate } from "@/templates/userTemplates";
 import { toast } from "@/lib/toast";
-import TemplateNameDialog from "./TemplateNameDialog";
+import UnsavedChangesDialog from "./UnsavedChangesDialog";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { ImportDiagramButton } from "@/components/ImportDiagramButton";
 
 const SECONDARY_BUTTON =
-  "rounded border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900";
+  "rounded border border-zinc-300 px-2.5 py-1.5 text-sm font-medium hover:bg-zinc-50 sm:px-3 dark:border-zinc-700 dark:hover:bg-zinc-900";
 
 type ExportTheme = "light" | "dark";
 const EXPORT_THEME_KEY = "bb:exportTheme";
@@ -51,7 +56,7 @@ const EXPORT_OPTIONS: { format: ExportFormat; label: string; hint: string }[] = 
   { format: "png-all", label: "PNG images (all tabs)", hint: "One file per tab, with legend" },
   { format: "pdf-all", label: "PDF document (all tabs)", hint: "One page per tab, with legend" },
   { format: "csv", label: "Component list (CSV)", hint: "All tabs, with details" },
-  { format: "json", label: "Diagram file (JSON)", hint: "Re-importable backup" },
+  { format: "json", label: "Diagram file (JSON)", hint: "A copy you can re-open with Open" },
 ];
 
 function ExportMenu({
@@ -91,7 +96,7 @@ function ExportMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-50 mt-1 w-56 overflow-hidden rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+          className="absolute right-0 z-50 mt-1 max-h-[70dvh] w-56 max-w-[calc(100vw-1rem)] overflow-y-auto overflow-x-hidden rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
         >
           <div className="border-b border-zinc-200 px-3 pb-2 pt-1.5 dark:border-zinc-700">
             <p id="export-style-label" className="mb-1 text-[11px] font-medium text-zinc-500">
@@ -137,7 +142,95 @@ function ExportMenu({
   );
 }
 
+const MENU_ITEM =
+  "flex w-full items-center justify-between gap-4 px-3 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800";
+
+function FileMenu({
+  onNew,
+  onOpen,
+  onSave,
+  onSaveAs,
+}: {
+  onNew: () => void;
+  onOpen: () => void;
+  onSave: () => void;
+  onSaveAs: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const mod = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+";
+  const items = [
+    { label: "New diagram", run: onNew, keys: "" },
+    { label: "Open…", run: onOpen, keys: "" },
+    { label: "Save", run: onSave, keys: `${mod}S` },
+    { label: supportsFilePicker() ? "Save as…" : "Download a copy", run: onSaveAs, keys: supportsFilePicker() ? `${mod}⇧S` : "" },
+  ];
+  return (
+    <div
+      className="relative"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") setOpen(false);
+      }}
+    >
+      <button type="button" aria-haspopup="menu" aria-expanded={open} className={SECONDARY_BUTTON} onClick={() => setOpen((value) => !value)}>
+        File ▾
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute left-0 z-50 mt-1 w-56 max-w-[calc(100vw-1rem)] overflow-hidden rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+        >
+          {items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              role="menuitem"
+              className={MENU_ITEM}
+              onClick={() => {
+                setOpen(false);
+                item.run();
+              }}
+            >
+              <span className="font-medium">{item.label}</span>
+              <span className="text-[11px] text-zinc-500">{item.keys}</span>
+            </button>
+          ))}
+          {!supportsFilePicker() && (
+            <p className="border-t border-zinc-200 px-3 pb-1.5 pt-2 text-[11px] leading-snug text-zinc-500 dark:border-zinc-700">
+              This browser can&apos;t save over a file, so Save downloads a new copy each time. Chrome or Edge can save in place.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** What has happened to the diagram since it was last written to a file. */
+function SaveStatus() {
+  const dirty = useIsDirty();
+  const { fileName, handle, saving, error } = useFileStore();
+  const base = "hidden max-w-48 truncate text-xs md:inline";
+  if (error) return <span role="alert" className="rounded bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950 dark:text-red-300">Not saved</span>;
+  if (saving) return <span className={`${base} text-zinc-400`}>Saving…</span>;
+  if (dirty) {
+    return (
+      <span
+        className="rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+        title={handle ? "Saving to the file in a moment." : "Not in a file yet. Save to keep it: Building Block doesn't store diagrams."}
+      >
+        {handle ? "Unsaved changes" : "Not saved to a file"}
+      </span>
+    );
+  }
+  if (fileName) return <span className={`${base} text-zinc-400`} title={fileName}>Saved · {fileName}</span>;
+  return null;
+}
+
 export default function Toolbar() {
+  const router = useRouter();
   const { getNodes, getNodesBounds } = useReactFlow();
   const { theme, resolvedTheme, setTheme } = useTheme();
   const [exportTheme, setExportTheme] = useState<ExportTheme>(readExportTheme);
@@ -154,8 +247,11 @@ export default function Toolbar() {
   const canUndo = useDiagramStore((state) => state.past.length > 0);
   const canRedo = useDiagramStore((state) => state.future.length > 0);
   const [exporting, setExporting] = useState(false);
-  const [namingTemplate, setNamingTemplate] = useState(false);
-  const saveStatus = useSaveStatus();
+  // An action waiting on the unsaved-changes dialog.
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const hasFile = useFileStore((state) => state.handle !== null);
+  const saving = useFileStore((state) => state.saving);
+  const dirty = useIsDirty();
 
   const section = getActiveSection(diagram);
   const nodeCount = section.nodes.length;
@@ -176,13 +272,27 @@ export default function Toolbar() {
     else addBlock(nextPosition());
   }
 
-  function handleSaveTemplate(name: string) {
-    setNamingTemplate(false);
-    if (saveUserTemplate(diagram, name)) {
-      toast.success(`Saved template "${name}"`, { details: ["Find it under My templates on the Templates page."] });
-    } else {
-      toast.error("Couldn't save the template", { details: ["Browser storage is full or blocked."] });
-    }
+  /** Runs `action` now, or after the user has decided what to do with unsaved changes. */
+  function guardUnsaved(action: () => void) {
+    if (isDirty()) setPendingAction(() => action);
+    else action();
+  }
+
+  function handleNew() {
+    guardUnsaved(() => startDiagram(createBlankDiagram()));
+  }
+
+  function handleOpen() {
+    // The file picker has to start from the click, so ask about unsaved changes only if there are any.
+    guardUnsaved(() => void openDiagramFromDevice());
+  }
+
+  function handleLeave() {
+    guardUnsaved(() => {
+      // Leaving closes the diagram: it's in its file (or was deliberately discarded), not kept here.
+      useFileStore.setState({ opened: false });
+      router.push("/diagrams");
+    });
   }
 
   const nextFrames = () =>
@@ -276,7 +386,7 @@ export default function Toolbar() {
   async function runExport(format: ExportFormat) {
     if (format === "json") {
       downloadDiagramJson(diagram);
-      toast.success("Diagram file downloaded", { details: ["Re-import it any time from Import."] });
+      toast.success("Diagram file downloaded", { details: ["Re-open it any time with File → Open."] });
       return;
     }
     if (format === "csv") {
@@ -316,24 +426,33 @@ export default function Toolbar() {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-zinc-200 bg-white px-4 py-2 dark:border-zinc-800 dark:bg-zinc-950">
-      <Link
-        href="/diagrams"
-        className="text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-zinc-200 bg-white px-2 py-2 sm:gap-x-3 sm:px-4 dark:border-zinc-800 dark:bg-zinc-950">
+      <button
+        type="button"
+        aria-label="Back to the start page"
+        className="inline-flex min-h-8 items-center px-1 text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+        onClick={handleLeave}
       >
-        ← My diagrams
-      </Link>
-      <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-800" />
+        <span aria-hidden>←</span>
+        <span className="sr-only sm:not-sr-only"> Start</span>
+      </button>
+      <FileMenu
+        onNew={handleNew}
+        onOpen={handleOpen}
+        onSave={() => void saveDiagramToFile()}
+        onSaveAs={() => void saveDiagramToFile({ saveAs: true })}
+      />
+      <div className="hidden h-5 w-px bg-zinc-200 sm:block dark:bg-zinc-800" />
       <input
         aria-label="Diagram name"
         title="Click to rename this diagram"
         placeholder="Name this diagram"
         maxLength={80}
-        className="w-48 rounded border border-zinc-200 bg-transparent px-2 py-1 text-sm font-semibold outline-none placeholder:font-normal placeholder:text-zinc-400 hover:border-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-zinc-800 dark:hover:border-zinc-600"
+        className="w-36 min-w-0 rounded border sm:w-48 border-zinc-200 bg-transparent px-2 py-1 text-sm font-semibold outline-none placeholder:font-normal placeholder:text-zinc-400 hover:border-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-zinc-800 dark:hover:border-zinc-600"
         value={diagram.name}
         onChange={(event) => renameDiagram(event.target.value)}
         onFocus={(event) => event.target.select()}
-        // An empty name would leave a nameless entry in My diagrams and blank file names.
+        // An empty name would leave blank file names.
         onBlur={(event) => {
           if (!event.target.value.trim()) renameDiagram("Untitled Diagram");
         }}
@@ -341,21 +460,8 @@ export default function Toolbar() {
           if (event.key === "Enter") event.currentTarget.blur();
         }}
       />
-      {saveStatus === "error" ? (
-        <span
-          role="alert"
-          className="rounded bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950 dark:text-red-300"
-          title="The browser refused to store this diagram (storage full, blocked or private mode). Export it as JSON so you don't lose it."
-        >
-          Not saved — export JSON to keep your work
-        </span>
-      ) : saveStatus === "saved" ? (
-        <span className="text-xs text-zinc-400" title="Diagrams are stored only in this browser. Export JSON to back up or move one.">
-          Saved in this browser
-        </span>
-      ) : null}
-      <BackupStatus diagram={diagram} />
-      <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-800" />
+      <SaveStatus />
+      <div className="hidden h-5 w-px bg-zinc-200 sm:block dark:bg-zinc-800" />
       <div className="flex items-center gap-0.5">
         <button
           type="button"
@@ -363,7 +469,7 @@ export default function Toolbar() {
           aria-label="Undo"
           disabled={!canUndo}
           onClick={undo}
-          className="rounded p-1.5 text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent dark:text-zinc-300 dark:hover:bg-zinc-800"
+          className="rounded p-1.5 pointer-coarse:p-2.5 text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M9 14 4 9l5-5" />
@@ -376,7 +482,7 @@ export default function Toolbar() {
           aria-label="Redo"
           disabled={!canRedo}
           onClick={redo}
-          className="rounded p-1.5 text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent dark:text-zinc-300 dark:hover:bg-zinc-800"
+          className="rounded p-1.5 pointer-coarse:p-2.5 text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="m15 14 5-5-5-5" />
@@ -384,7 +490,7 @@ export default function Toolbar() {
           </svg>
         </button>
       </div>
-      <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-800" />
+      <div className="hidden h-5 w-px bg-zinc-200 sm:block dark:bg-zinc-800" />
       <button
         type="button"
         className={SECONDARY_BUTTON}
@@ -410,7 +516,7 @@ export default function Toolbar() {
         </button>
       )}
 
-      <div className="ml-auto flex flex-wrap items-center gap-2">
+      <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
         <label
           className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300"
           title="Show each component's technology under its name"
@@ -421,55 +527,41 @@ export default function Toolbar() {
             onChange={(event) => setShowTechnology(event.target.checked)}
             className="accent-zinc-900 dark:accent-zinc-100"
           />
-          Show technology
+          <span className="hidden sm:inline">Show technology</span>
+          <span className="sm:hidden">Tech</span>
         </label>
         <ThemeToggle />
-        <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-800" />
-        <button type="button" className={SECONDARY_BUTTON} onClick={() => setNamingTemplate(true)}>
-          Save as template
+        <div className="hidden h-5 w-px bg-zinc-200 sm:block dark:bg-zinc-800" />
+        <button
+          type="button"
+          className={`${SECONDARY_BUTTON} ${dirty && !hasFile ? "border-amber-400 bg-amber-50 dark:border-amber-700 dark:bg-amber-950" : ""}`}
+          disabled={saving}
+          title={hasFile ? "Saves to the open file (Ctrl/⌘+S)" : "Choose where to save the file (Ctrl/⌘+S)"}
+          onClick={() => void saveDiagramToFile()}
+        >
+          Save
         </button>
-        <ImportDiagramButton className={SECONDARY_BUTTON} />
         <ExportMenu imageTheme={exportTheme} onImageThemeChange={changeExportTheme} multiTab={diagram.sections.length > 1} busy={exporting} onSelect={handleExport} />
       </div>
-      {namingTemplate && (
-        <TemplateNameDialog
-          initialName={diagram.name}
-          onSave={handleSaveTemplate}
-          onCancel={() => setNamingTemplate(false)}
+      {pendingAction && (
+        <UnsavedChangesDialog
+          name={diagram.name}
+          needsLocation={!hasFile}
+          onCancel={() => setPendingAction(null)}
+          onDiscard={() => {
+            const action = pendingAction;
+            setPendingAction(null);
+            action();
+          }}
+          onSave={async () => {
+            const action = pendingAction;
+            if (await saveDiagramToFile()) {
+              setPendingAction(null);
+              action();
+            }
+          }}
         />
       )}
     </div>
-  );
-}
-
-const BACKUP_HELP =
-  "Diagrams live only in this browser. Clearing site data, or 7 days without visiting in Safari, deletes them. A JSON backup can be re-imported any time.";
-
-/** Whether the latest changes are covered by a downloaded JSON backup; one click makes one. */
-function BackupStatus({ diagram }: { diagram: Diagram }) {
-  const lastBackup = useLastBackup(diagram.id);
-  const state = backupState(diagram, lastBackup);
-
-  if (state === "current") {
-    return (
-      <span className="text-xs text-zinc-400" title={`Backup downloaded ${formatAge(lastBackup!)}.`}>
-        · Backed up
-      </span>
-    );
-  }
-  if (!hasContent(diagram)) return null;
-
-  return (
-    <button
-      type="button"
-      title={`${BACKUP_HELP}${lastBackup ? ` Last backup: ${formatAge(lastBackup)}.` : ""} Click to download one now.`}
-      className="rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-300 dark:hover:bg-amber-900"
-      onClick={() => {
-        downloadDiagramJson(diagram);
-        toast.success("Backup downloaded", { details: ["Re-import it any time from Import."] });
-      }}
-    >
-      {state === "never" ? "Not backed up" : "Changed since backup"}
-    </button>
   );
 }

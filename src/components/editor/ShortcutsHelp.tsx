@@ -1,6 +1,8 @@
 "use client";
 
 const SHORTCUTS: { keys: string; action: string }[] = [
+  { keys: "Ctrl/⌘ + S", action: "Save to the open file (asks where the first time)" },
+  { keys: "Ctrl/⌘ + Shift + S", action: "Save as a new file" },
   { keys: "B", action: "Add a component (inside the selected container)" },
   { keys: "C", action: "Add a container" },
   { keys: "Arrow keys", action: "Nudge the selection by 8 px (hold Shift for 32 px)" },
@@ -25,7 +27,7 @@ export default function ShortcutsHelp({ onClose }: { onClose: () => void }) {
         role="dialog"
         aria-modal="true"
         aria-label="Keyboard shortcuts"
-        className="w-full max-w-md rounded-lg border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-lg border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">

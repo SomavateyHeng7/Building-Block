@@ -7,7 +7,7 @@ import WaitlistForm from "@/components/landing/WaitlistForm";
 export const metadata: Metadata = {
   title: "Building Block — L0 architecture diagrams for solution architects",
   description:
-    "Build consistent L0 architecture diagrams from containers, components and a legend you define. Free, no account, and nothing leaves your browser.",
+    "Build consistent L0 architecture diagrams from containers, components and a legend you define. Free, no account, and your diagrams stay in files on your device.",
 };
 
 const FEATURES = [
@@ -33,12 +33,12 @@ const FEATURES = [
   },
   {
     title: "Export for your documents",
-    body: "PNG and PDF with the title and legend included, a CSV component list for your solution document, and JSON for backups.",
+    body: "PNG and PDF with the title and legend included, a CSV component list for your solution document, and a JSON file you can re-open any time.",
     icon: "M12 4v11M7 10l5 5 5-5M5 20h14",
   },
   {
     title: "Private by default",
-    body: "No account and no server. Diagrams are saved in your browser, so you can draw internal systems without asking security first. Clearing browser data deletes them, so download a JSON backup of anything you need to keep.",
+    body: "No account, no server and no copy kept in the browser. A diagram is a file on your device that you open and save, like draw.io's device storage, so you can draw internal systems without asking security first.",
     icon: "M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3",
   },
 ];
@@ -126,7 +126,7 @@ export default function LandingPage() {
               href="/diagrams"
               className="hidden text-sm text-zinc-600 hover:text-zinc-900 sm:block dark:text-zinc-400 dark:hover:text-zinc-100"
             >
-              My diagrams
+              Start
             </Link>
             <ThemeToggle />
           </div>
@@ -147,14 +147,14 @@ export default function LandingPage() {
               your time on the architecture, not on nudging boxes.
             </p>
             <div className="flex flex-wrap justify-center gap-3">
-              <Link href="/editor/new" className={primaryButton}>
+              <Link href="/diagrams" className={primaryButton}>
                 Start drawing — it&apos;s free
               </Link>
               <Link href="/templates" className={secondaryButton}>
                 Browse templates
               </Link>
             </div>
-            <p className="text-sm text-zinc-500">No sign-up · Saved in your browser · Export to PNG, PDF and CSV</p>
+            <p className="text-sm text-zinc-500">No sign-up · Saved as files on your device · Export to PNG, PDF and CSV</p>
           </div>
           <div className="w-full max-w-5xl">
             <HeroDiagram />
@@ -278,9 +278,9 @@ export default function LandingPage() {
         <section className="bg-zinc-950 text-zinc-50 dark:bg-zinc-900">
           <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 px-4 py-20 text-center sm:px-6">
             <h2 className="text-3xl font-semibold tracking-tight text-balance">Draw your next L0 in minutes</h2>
-            <p className="max-w-xl text-zinc-400">Free, no account, and your diagrams never leave your browser.</p>
+            <p className="max-w-xl text-zinc-400">Free, no account, and your diagrams are files on your device.</p>
             <Link
-              href="/editor/new"
+              href="/diagrams"
               className="rounded-full bg-white px-6 py-3 text-sm font-medium text-zinc-950 transition-colors hover:bg-zinc-200"
             >
               Start drawing
@@ -291,10 +291,10 @@ export default function LandingPage() {
 
       <footer className="border-t border-zinc-200 dark:border-zinc-800">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-8 text-sm text-zinc-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <span>Building Block · Diagrams stay in your browser</span>
+          <span>Building Block · Your diagrams are your files</span>
           <div className="flex gap-5">
             <Link href="/templates" className="hover:text-zinc-900 dark:hover:text-zinc-100">Templates</Link>
-            <Link href="/diagrams" className="hover:text-zinc-900 dark:hover:text-zinc-100">My diagrams</Link>
+            <Link href="/diagrams" className="hover:text-zinc-900 dark:hover:text-zinc-100">Start</Link>
           </div>
         </div>
       </footer>
