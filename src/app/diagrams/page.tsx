@@ -112,6 +112,10 @@ export default function DiagramsPage() {
               </li>
             ))}
           </ul>
+          <p className="mt-3 text-xs text-zinc-500">
+            Diagrams are stored only in this browser. Clearing site data deletes them, and Safari removes them
+            after 7 days without a visit. Open a diagram and use Export → Diagram file (JSON) to keep a backup.
+          </p>
         </div>
       )}
 

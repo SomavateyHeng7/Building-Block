@@ -1,3 +1,4 @@
+import { forgetBackup, markBackedUp } from "./backup";
 import { createId } from "./factory";
 import type { Diagram } from "./types";
 import { DiagramFileError, parseDiagram, type ParsedDiagram } from "./validate";
@@ -53,6 +54,13 @@ function emitIndexChange() {
   indexListeners.forEach((listener) => listener());
 }
 
+// Another tab created, renamed or deleted a diagram (key is null when it cleared all storage).
+if (isBrowser()) {
+  window.addEventListener("storage", (event) => {
+    if (event.key === INDEX_KEY || event.key === null) emitIndexChange();
+  });
+}
+
 export function subscribeDiagramIndex(listener: IndexListener): () => void {
   indexListeners.add(listener);
   return () => indexListeners.delete(listener);
@@ -89,6 +97,29 @@ export function loadDiagramFromStorage(id: string): Diagram | null {
   }
 }
 
+/**
+ * Calls back when another tab saves or deletes this diagram (null when deleted).
+ * Browsers fire this only in the other tabs, never in the one that wrote.
+ */
+export function subscribeToOtherTabs(id: string, listener: (diagram: Diagram | null) => void): () => void {
+  if (!isBrowser()) return () => {};
+  const key = DIAGRAM_KEY_PREFIX + id;
+  function handleStorage(event: StorageEvent) {
+    if (event.key !== key && event.key !== null) return;
+    if (event.key === null || event.newValue === null) {
+      listener(loadDiagramFromStorage(id));
+      return;
+    }
+    try {
+      listener(parseDiagram(JSON.parse(event.newValue)).diagram);
+    } catch {
+      // Unreadable write from another tab: keep what this tab has.
+    }
+  }
+  window.addEventListener("storage", handleStorage);
+  return () => window.removeEventListener("storage", handleStorage);
+}
+
 export function listDiagrams(): DiagramSummary[] {
   return sortByRecency(readIndex());
 }
@@ -97,6 +128,7 @@ export function deleteDiagram(id: string): void {
   if (!isBrowser()) return;
   window.localStorage.removeItem(DIAGRAM_KEY_PREFIX + id);
   writeIndex(readIndex().filter((entry) => entry.id !== id));
+  forgetBackup(id);
   emitIndexChange();
 }
 
@@ -118,6 +150,7 @@ export function downloadBlob(blob: Blob, filename: string): void {
 export function downloadDiagramJson(diagram: Diagram): void {
   const blob = new Blob([JSON.stringify(diagram, null, 2)], { type: "application/json" });
   downloadBlob(blob, `${fileBaseName(diagram.name)}.json`);
+  markBackedUp(diagram.id);
 }
 
 /**
@@ -136,5 +169,7 @@ export async function importDiagramFile(file: File): Promise<ParsedDiagram> {
   if (!saveDiagram(imported)) {
     throw new DiagramFileError("Your browser wouldn't store it (storage may be full or blocked).");
   }
+  // The file it came from is a backup of exactly this version.
+  markBackedUp(imported.id, imported.updatedAt);
   return { diagram: imported, fixes };
 }

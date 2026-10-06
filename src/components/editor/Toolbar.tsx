@@ -7,6 +7,8 @@ import { useTheme } from "next-themes";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { useSaveStatus } from "@/lib/diagram/saveStatus";
 import { downloadDiagramJson } from "@/lib/diagram/persistence";
+import { backupState, formatAge, hasContent, useLastBackup } from "@/lib/diagram/backup";
+import type { Diagram } from "@/lib/diagram/types";
 import {
   downloadCanvasPng,
   exportComponentsCsv,
@@ -352,6 +354,7 @@ export default function Toolbar() {
           Saved in this browser
         </span>
       ) : null}
+      <BackupStatus diagram={diagram} />
       <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-800" />
       <div className="flex items-center gap-0.5">
         <button
@@ -436,5 +439,37 @@ export default function Toolbar() {
         />
       )}
     </div>
+  );
+}
+
+const BACKUP_HELP =
+  "Diagrams live only in this browser. Clearing site data, or 7 days without visiting in Safari, deletes them. A JSON backup can be re-imported any time.";
+
+/** Whether the latest changes are covered by a downloaded JSON backup; one click makes one. */
+function BackupStatus({ diagram }: { diagram: Diagram }) {
+  const lastBackup = useLastBackup(diagram.id);
+  const state = backupState(diagram, lastBackup);
+
+  if (state === "current") {
+    return (
+      <span className="text-xs text-zinc-400" title={`Backup downloaded ${formatAge(lastBackup!)}.`}>
+        · Backed up
+      </span>
+    );
+  }
+  if (!hasContent(diagram)) return null;
+
+  return (
+    <button
+      type="button"
+      title={`${BACKUP_HELP}${lastBackup ? ` Last backup: ${formatAge(lastBackup)}.` : ""} Click to download one now.`}
+      className="rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-300 dark:hover:bg-amber-900"
+      onClick={() => {
+        downloadDiagramJson(diagram);
+        toast.success("Backup downloaded", { details: ["Re-import it any time from Import."] });
+      }}
+    >
+      {state === "never" ? "Not backed up" : "Changed since backup"}
+    </button>
   );
 }

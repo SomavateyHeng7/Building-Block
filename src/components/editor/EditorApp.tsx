@@ -15,14 +15,22 @@ import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { nextSlotInContainer, nudgeNodes } from "@/lib/diagram/layout";
 import { createBlankDiagram } from "@/lib/diagram/factory";
 import {
+  downloadDiagramJson,
   getDiagramIndexServerSnapshot,
   getDiagramIndexSnapshot,
   loadDiagramFromStorage,
   saveDiagram,
   subscribeDiagramIndex,
+  subscribeToOtherTabs,
 } from "@/lib/diagram/persistence";
+import { getLastBackup, needsBackupNudge, requestPersistentStorage } from "@/lib/diagram/backup";
+import type { Diagram } from "@/lib/diagram/types";
+import { toast } from "@/lib/toast";
 import { useMounted } from "@/components/theme-toggle";
 import { setSaveStatus } from "@/lib/diagram/saveStatus";
+
+/** Another tab changed or deleted this diagram while this tab had unsaved edits. */
+type TabConflict = "changed" | "deleted";
 
 interface EditorAppProps {
   diagramId: string;
@@ -34,6 +42,10 @@ export default function EditorApp({ diagramId }: EditorAppProps) {
   const loadDiagram = useDiagramStore((state) => state.loadDiagram);
   const hydratedForId = useRef<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [conflict, setConflict] = useState<TabConflict | null>(null);
+  // updatedAt of the version this tab last loaded from or wrote to storage; anything else is unsaved here.
+  const syncedAt = useRef<string | null>(null);
+  const nudgedFor = useRef<string | null>(null);
   const mounted = useMounted();
   const savedDiagrams = useSyncExternalStore(
     subscribeDiagramIndex,
@@ -53,15 +65,25 @@ export default function EditorApp({ diagramId }: EditorAppProps) {
 
     if (diagramId !== "new") {
       // Just created and redirected here: it is already in the store, even if storage refused it.
-      if (useDiagramStore.getState().diagram.id === diagramId) return;
+      const current = useDiagramStore.getState().diagram;
+      if (current.id === diagramId) {
+        syncedAt.current = loadDiagramFromStorage(diagramId)?.updatedAt ?? null;
+        return;
+      }
       const existing = loadDiagramFromStorage(diagramId);
-      if (existing) loadDiagram(existing);
+      if (existing) {
+        loadDiagram(existing);
+        syncedAt.current = existing.updatedAt;
+        setSaveStatus("saved");
+      }
       return;
     }
 
     const blank = createBlankDiagram();
     loadDiagram(blank);
-    setSaveStatus(saveDiagram(blank) ? "saved" : "error");
+    const saved = saveDiagram(blank);
+    if (saved) syncedAt.current = blank.updatedAt;
+    setSaveStatus(saved ? "saved" : "error");
     router.replace(`/editor/${blank.id}`);
   }, [diagramId, loadDiagram, router]);
 
@@ -129,11 +151,64 @@ export default function EditorApp({ diagramId }: EditorAppProps) {
   // Only autosave once the store's active diagram actually matches the route:
   // avoids writing the stale/blank diagram while hydration or a "new" → real-id
   // redirect is still in flight.
+  // Paused during a tab conflict so neither tab's version silently overwrites the other.
   useEffect(() => {
-    if (diagram.id !== diagramId) return;
-    const timeout = setTimeout(() => setSaveStatus(saveDiagram(diagram) ? "saved" : "error"), 400);
+    if (diagram.id !== diagramId || conflict || diagram.updatedAt === syncedAt.current) return;
+    const timeout = setTimeout(() => {
+      const saved = saveDiagram(diagram);
+      if (saved) {
+        syncedAt.current = diagram.updatedAt;
+        void requestPersistentStorage();
+      }
+      setSaveStatus(saved ? "saved" : "error");
+    }, 400);
     return () => clearTimeout(timeout);
+  }, [diagram, diagramId, conflict]);
+
+  // The same diagram open in another tab: follow its edits while this tab has none of its own.
+  useEffect(() => {
+    if (conflict) return;
+    return subscribeToOtherTabs(diagramId, (stored) => {
+      const current = useDiagramStore.getState().diagram;
+      if (current.id !== diagramId || stored?.updatedAt === current.updatedAt) return;
+      if (stored && current.updatedAt === syncedAt.current) {
+        loadDiagram(stored);
+        syncedAt.current = stored.updatedAt;
+        return;
+      }
+      setConflict(stored ? "changed" : "deleted");
+    });
+  }, [diagramId, conflict, loadDiagram]);
+
+  // Once per opened diagram: suggest a JSON backup when a week of work is only in this browser.
+  useEffect(() => {
+    if (diagram.id !== diagramId || nudgedFor.current === diagramId) return;
+    nudgedFor.current = diagramId;
+    if (!needsBackupNudge(diagram, getLastBackup(diagram.id))) return;
+    toast.info("Back up this diagram", {
+      details: [
+        "It's stored only in this browser. Clearing site data, or 7 days without visiting in Safari, deletes it.",
+        "A JSON backup can be re-imported any time.",
+      ],
+      action: { label: "Download JSON backup", onClick: () => downloadDiagramJson(useDiagramStore.getState().diagram) },
+      duration: 0,
+    });
   }, [diagram, diagramId]);
+
+  function loadOtherTabVersion() {
+    const latest = loadDiagramFromStorage(diagramId);
+    if (latest) {
+      loadDiagram(latest);
+      syncedAt.current = latest.updatedAt;
+    }
+    setConflict(null);
+  }
+
+  function keepThisVersion() {
+    // Forces the autosave to write this tab's version even if it has no edits since loading.
+    syncedAt.current = null;
+    setConflict(null);
+  }
 
   if (missing) {
     return (
@@ -168,6 +243,15 @@ export default function EditorApp({ diagramId }: EditorAppProps) {
     <ReactFlowProvider>
       <div className="flex h-dvh w-full flex-col bg-zinc-100 dark:bg-zinc-900">
         <Toolbar />
+        {conflict && (
+          <TabConflictBanner
+            conflict={conflict}
+            diagram={diagram}
+            onLoadOther={loadOtherTabVersion}
+            onKeepThis={keepThisVersion}
+            onLeave={() => router.push("/diagrams")}
+          />
+        )}
         <SectionTabs />
         <div className="flex flex-1 overflow-hidden">
           <Sidebar />
@@ -191,5 +275,58 @@ export default function EditorApp({ diagramId }: EditorAppProps) {
       </div>
       {helpOpen && <ShortcutsHelp onClose={() => setHelpOpen(false)} />}
     </ReactFlowProvider>
+  );
+}
+
+function TabConflictBanner({
+  conflict,
+  diagram,
+  onLoadOther,
+  onKeepThis,
+  onLeave,
+}: {
+  conflict: TabConflict;
+  diagram: Diagram;
+  onLoadOther: () => void;
+  onKeepThis: () => void;
+  onLeave: () => void;
+}) {
+  const button =
+    "rounded border border-amber-400 bg-white px-2.5 py-1 text-xs font-medium hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950 dark:hover:bg-amber-900";
+  return (
+    <div
+      role="alert"
+      className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-100"
+    >
+      <p className="min-w-0 flex-1">
+        {conflict === "changed"
+          ? "This diagram was changed in another tab. Saving is paused here so neither version overwrites the other."
+          : "This diagram was deleted in another tab. Your edits here aren't saved."}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {conflict === "changed" ? (
+          <>
+            <button type="button" className={button} onClick={onLoadOther}>
+              Use the other tab&apos;s version
+            </button>
+            <button type="button" className={button} onClick={onKeepThis}>
+              Keep this version
+            </button>
+          </>
+        ) : (
+          <>
+            <button type="button" className={button} onClick={onKeepThis}>
+              Keep it
+            </button>
+            <button type="button" className={button} onClick={onLeave}>
+              Close
+            </button>
+          </>
+        )}
+        <button type="button" className={button} onClick={() => downloadDiagramJson(diagram)}>
+          Download this version (JSON)
+        </button>
+      </div>
+    </div>
   );
 }

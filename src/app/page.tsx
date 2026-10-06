@@ -38,7 +38,7 @@ const FEATURES = [
   },
   {
     title: "Private by default",
-    body: "No account and no server. Diagrams are saved in your browser, so you can draw internal systems without asking security first.",
+    body: "No account and no server. Diagrams are saved in your browser, so you can draw internal systems without asking security first. Clearing browser data deletes them, so download a JSON backup of anything you need to keep.",
     icon: "M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3",
   },
 ];
