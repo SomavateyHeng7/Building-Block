@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { LogoMark } from "@/components/Logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import HeroDiagram from "@/components/landing/HeroDiagram";
 import WaitlistForm from "@/components/landing/WaitlistForm";
@@ -107,12 +108,7 @@ export default function LandingPage() {
       <header className="sticky top-0 z-10 border-b border-zinc-200/70 bg-background/85 backdrop-blur dark:border-zinc-800/70">
         <nav className="mx-auto flex max-w-6xl items-center gap-6 px-4 py-3 sm:px-6">
           <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-            <span className="grid grid-cols-2 gap-0.5" aria-hidden>
-              <span className="h-2 w-2 rounded-sm bg-[#8fd19e]" />
-              <span className="h-2 w-2 rounded-sm bg-[#f6d860]" />
-              <span className="h-2 w-2 rounded-sm bg-[#7c3aed]" />
-              <span className="h-2 w-2 rounded-sm bg-[#1f7a4d]" />
-            </span>
+            <LogoMark className="h-6 w-6" />
             Building Block
           </Link>
           <div className="hidden items-center gap-5 text-sm text-zinc-600 md:flex dark:text-zinc-400">

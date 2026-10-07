@@ -8,11 +8,11 @@ export const metadata: Metadata = {
 export default function NotFound() {
   return (
     <main className="flex min-h-dvh w-full flex-col items-center justify-center gap-5 p-6 text-center">
-      <span className="grid grid-cols-2 gap-1" aria-hidden>
-        <span className="h-4 w-4 rounded bg-[#8fd19e]" />
-        <span className="h-4 w-4 rounded border-2 border-dashed border-zinc-300 dark:border-zinc-700" />
-        <span className="h-4 w-4 rounded bg-[#7c3aed]" />
-        <span className="h-4 w-4 rounded bg-[#1f7a4d]" />
+      <span className="grid grid-cols-2 gap-1.5 rounded-xl bg-[#176B4D] p-2.5" aria-hidden>
+        <span className="h-4 w-4 rounded bg-white" />
+        <span className="h-4 w-4 rounded border-2 border-dashed border-[#7BC8A0]" />
+        <span className="h-4 w-4 rounded bg-white" />
+        <span className="h-4 w-4 rounded bg-white" />
       </span>
       <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">This page is missing a block</h1>
       <p className="max-w-sm text-sm text-zinc-600 dark:text-zinc-400">
