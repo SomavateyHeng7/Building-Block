@@ -16,14 +16,14 @@ export default function NotFound() {
       </span>
       <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">This page is missing a block</h1>
       <p className="max-w-sm text-sm text-zinc-600 dark:text-zinc-400">
-        The link may be mistyped, or the page has moved. Your diagrams are safe in this browser.
+        The link may be mistyped, or the page has moved. Your saved diagram files are not affected.
       </p>
       <div className="flex flex-wrap justify-center gap-3">
         <Link
           href="/diagrams"
           className="rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc]"
         >
-          My diagrams
+          Start page
         </Link>
         <Link
           href="/"

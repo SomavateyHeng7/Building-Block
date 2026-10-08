@@ -12,7 +12,7 @@ export default function AppError({ error, retry }: { error: Error & { digest?: s
     <div className="flex min-h-dvh w-full flex-col items-center justify-center gap-4 p-6 text-center">
       <h1 className="text-xl font-semibold">Something went wrong</h1>
       <p className="max-w-sm text-sm text-zinc-600 dark:text-zinc-400">
-        Your saved diagrams are not affected; they&apos;re still in this browser.
+        Diagrams you saved to a file are not affected. Anything unsaved in this tab may be lost.
       </p>
       <div className="flex gap-3">
         <button
@@ -26,7 +26,7 @@ export default function AppError({ error, retry }: { error: Error & { digest?: s
           href="/diagrams"
           className="rounded border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900"
         >
-          My diagrams
+          Start page
         </Link>
       </div>
     </div>

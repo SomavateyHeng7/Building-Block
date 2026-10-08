@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 import {
   Background,
   Controls,
@@ -22,6 +22,17 @@ import ContainerNode from "./nodes/ContainerNode";
 import BlockNode from "./nodes/BlockNode";
 import { PALETTE_DATA_FORMAT, type PaletteDragPayload } from "./Sidebar";
 import type { BlockColorKey, ContainerNodeData } from "@/lib/diagram/types";
+
+function subscribeWide(callback: () => void) {
+  const query = window.matchMedia("(min-width: 768px)");
+  query.addEventListener("change", callback);
+  return () => query.removeEventListener("change", callback);
+}
+
+/** The minimap covers too much of a phone-sized canvas. */
+function useIsWide() {
+  return useSyncExternalStore(subscribeWide, () => window.matchMedia("(min-width: 768px)").matches, () => true);
+}
 
 const nodeTypes = { container: ContainerNode, block: BlockNode };
 
@@ -68,6 +79,7 @@ export default function Canvas() {
   const { getIntersectingNodes, screenToFlowPosition } = useReactFlow();
   const { resolvedTheme } = useTheme();
   const mounted = useMounted();
+  const wide = useIsWide();
   const colorMode = mounted && resolvedTheme === "dark" ? "dark" : "light";
 
   const section = getActiveSection(diagram);
@@ -206,14 +218,15 @@ export default function Canvas() {
     >
       <Background gap={16} />
       <Controls />
-      <MiniMap pannable zoomable />
+      {wide && <MiniMap pannable zoomable />}
       {section.nodes.length === 0 && (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
           <div className="max-w-xs rounded-lg border border-dashed border-zinc-300 bg-white/80 p-5 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-300">
             <p className="font-medium">This tab is empty</p>
             <p className="mt-1">
-              Drag a container or component from the left, or press <kbd className="font-mono">C</kbd> /{" "}
-              <kbd className="font-mono">B</kbd>. Press <kbd className="font-mono">?</kbd> for all shortcuts.
+              Tap <strong>+ Container</strong> or <strong>+ Add</strong>, or drag one in from the panel. With a
+              keyboard, press <kbd className="font-mono">C</kbd> / <kbd className="font-mono">B</kbd>, or{" "}
+              <kbd className="font-mono">?</kbd> for all shortcuts.
             </p>
           </div>
         </div>

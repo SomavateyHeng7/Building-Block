@@ -3,8 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { useDiagramStore } from "@/lib/diagram/store";
-import { downloadDiagramJson } from "@/lib/diagram/persistence";
-import { hasContent } from "@/lib/diagram/backup";
+import { downloadDiagramJson, hasContent } from "@/lib/diagram/file";
 
 /**
  * The editor crashed. The diagram is still in memory (the store lives outside React),
@@ -30,8 +29,8 @@ export default function EditorError({ error, retry }: { error: Error & { digest?
       <h1 className="text-xl font-semibold">The editor ran into a problem</h1>
       <p className="max-w-md text-sm text-zinc-600 dark:text-zinc-400">
         {recoverable
-          ? "Your diagram is still here. Download it as a JSON file first so nothing is lost, then try again. The last autosaved version is also still in this browser."
-          : "Try again, or go back to your diagrams. Anything autosaved is still in this browser."}
+          ? "Your diagram is still here. Download it as a JSON file first so nothing is lost, then try again. Nothing is kept in this browser, so a download is the only way to keep it."
+          : "Try again, or go back to the start page."}
       </p>
       <div className="flex flex-wrap justify-center gap-3">
         {recoverable && (
@@ -55,7 +54,7 @@ export default function EditorError({ error, retry }: { error: Error & { digest?
           Try again
         </button>
         <Link href="/diagrams" className={secondary}>
-          My diagrams
+          Start page
         </Link>
       </div>
     </div>

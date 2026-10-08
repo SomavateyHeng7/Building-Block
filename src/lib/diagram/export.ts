@@ -1,5 +1,5 @@
 import type { Rect } from "@xyflow/react";
-import { downloadBlob, fileBaseName } from "./persistence";
+import { downloadBlob, fileBaseName } from "./file";
 import type { Diagram, DiagramSection, LegendEntry } from "./types";
 
 const PADDING = 40;

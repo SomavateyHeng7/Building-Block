@@ -12,7 +12,7 @@ const STYLES: Record<ToastKind, { bar: string; icon: string; path: string }> = {
 export default function ToastViewport() {
   const toasts = useToasts();
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2">
+    <div className="pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-[100] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2">
       {toasts.map((item) => {
         const style = STYLES[item.kind];
         return (

@@ -1,39 +1,52 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useSyncExternalStore } from "react";
-import {
-  deleteDiagram,
-  loadDiagramFromStorage,
-  saveDiagram,
-  getDiagramIndexServerSnapshot,
-  getDiagramIndexSnapshot,
-  subscribeDiagramIndex,
-} from "@/lib/diagram/persistence";
+import { useRouter } from "next/navigation";
+import { useState, useSyncExternalStore } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { createBlankDiagram } from "@/lib/diagram/factory";
+import { openDiagramFromDevice, startDiagram, supportsFilePicker } from "@/lib/diagram/file";
+import { downloadLegacyItem, readLegacyItems, removeLegacyItems, type LegacyItem } from "@/lib/diagram/legacy";
 import { toast } from "@/lib/toast";
-import type { Diagram } from "@/lib/diagram/types";
-import { ImportDiagramButton } from "@/components/ImportDiagramButton";
 
-export default function DiagramsPage() {
-  const diagrams = useSyncExternalStore(
-    subscribeDiagramIndex,
-    getDiagramIndexSnapshot,
-    getDiagramIndexServerSnapshot,
-  );
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-  // The last deleted diagram is kept in memory briefly so the delete can be undone.
-  const [undoable, setUndoable] = useState<Diagram | null>(null);
+const noopSubscribe = () => () => {};
+const NO_ITEMS: LegacyItem[] = [];
+let legacySnapshot: LegacyItem[] | null = null;
 
-  useEffect(() => {
-    if (!undoable) return;
-    const timeout = setTimeout(() => setUndoable(null), 10000);
-    return () => clearTimeout(timeout);
-  }, [undoable]);
+/** Read once per page load; a stable reference keeps useSyncExternalStore from looping. */
+function getLegacySnapshot(): LegacyItem[] {
+  legacySnapshot ??= readLegacyItems();
+  return legacySnapshot;
+}
+
+export default function StartPage() {
+  const router = useRouter();
+  const found = useSyncExternalStore(noopSubscribe, getLegacySnapshot, () => NO_ITEMS);
+  const [removed, setRemoved] = useState(false);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const legacy = removed ? NO_ITEMS : found;
+
+  function startBlank() {
+    startDiagram(createBlankDiagram());
+    router.push("/editor");
+  }
+
+  async function openFile() {
+    setOpening(true);
+    try {
+      if (await openDiagramFromDevice()) router.push("/editor");
+    } finally {
+      setOpening(false);
+    }
+  }
+
+  const pill = "rounded-full px-6 py-3 text-sm font-medium transition-colors";
+  const outline = `${pill} border border-zinc-300 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:hover:bg-zinc-900`;
 
   return (
-    <div className="relative mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 py-16">
-      <div className="absolute right-6 top-6">
+    <div className="relative mx-auto flex w-full max-w-3xl flex-col gap-10 px-4 py-12 sm:px-6 sm:py-16">
+      <div className="absolute right-4 top-4 sm:right-6 sm:top-6">
         <ThemeToggle />
       </div>
       <div className="flex flex-col items-center gap-4 text-center">
@@ -45,97 +58,87 @@ export default function DiagramsPage() {
           export them as PNG or PDF.
         </p>
         <div className="flex flex-wrap justify-center gap-3">
-          <Link
-            href="/editor/new"
-            className="rounded-full bg-foreground px-6 py-3 text-sm font-medium text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc]"
-          >
-            Start blank
-          </Link>
-          <Link
-            href="/templates"
-            className="rounded-full border border-zinc-300 px-6 py-3 text-sm font-medium transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-          >
+          <button type="button" className={`${pill} bg-foreground text-background hover:bg-[#383838] dark:hover:bg-[#ccc]`} onClick={startBlank}>
+            New diagram
+          </button>
+          <button type="button" className={outline} disabled={opening} onClick={() => void openFile()}>
+            {opening ? "Opening…" : "Open file"}
+          </button>
+          <Link href="/templates" className={outline}>
             Browse templates
           </Link>
-          <ImportDiagramButton
-            label="Import file"
-            className="rounded-full border border-zinc-300 px-6 py-3 text-sm font-medium transition-colors hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:hover:bg-zinc-900"
-          />
         </div>
       </div>
 
-      {diagrams.length > 0 && (
-        <div>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">
-            My diagrams
-          </h2>
-          <ul className="flex flex-col divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-            {diagrams.map((diagram) => (
-              <li key={diagram.id} className="group relative">
-                <Link
-                  href={`/editor/${diagram.id}`}
-                  className="flex items-center justify-between px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900"
-                >
-                  <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                    {diagram.name}
-                  </span>
-                  <span className="pr-10 text-xs text-zinc-400">
-                    {new Date(diagram.updatedAt).toLocaleString()}
-                  </span>
-                </Link>
-                {pendingDeleteId === diagram.id ? (
-                  <button
-                    type="button"
-                    autoFocus
-                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded bg-red-600 px-2 py-0.5 text-xs text-white"
-                    onClick={() => {
-                      const full = loadDiagramFromStorage(diagram.id);
-                      deleteDiagram(diagram.id);
-                      setUndoable(full);
-                      setPendingDeleteId(null);
-                    }}
-                    onBlur={() => setPendingDeleteId(null)}
-                  >
-                    Delete?
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    title="Delete diagram"
-                    aria-label={`Delete ${diagram.name}`}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded px-1.5 text-zinc-400 opacity-0 [@media(hover:none)]:opacity-100 hover:text-red-600 focus:opacity-100 group-hover:opacity-100"
-                    onClick={() => setPendingDeleteId(diagram.id)}
-                  >
-                    ×
-                  </button>
-                )}
+      <div className="rounded-lg border border-zinc-200 p-4 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
+        <h2 className="font-semibold text-zinc-900 dark:text-zinc-100">Your diagrams are your files</h2>
+        <p className="mt-1">
+          Building Block keeps nothing: no account, no server, and no copy in this browser. A diagram is a{" "}
+          <code className="font-mono text-xs">.json</code> file on your device, so use <span className="font-medium">Save</span> to
+          keep your work and <span className="font-medium">Open file</span> to carry on.{" "}
+          {supportsFilePicker()
+            ? "This browser saves straight back to the file you chose."
+            : "This browser can't save over a file, so Save downloads a new copy each time. Chrome or Edge can save in place."}
+        </p>
+      </div>
+
+      {legacy.length > 0 && (
+        <div role="region" aria-label="Diagrams from an earlier version" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100">
+          <h2 className="font-semibold">Diagrams from an earlier version are still in this browser</h2>
+          <p className="mt-1">
+            Earlier versions stored diagrams here. They can no longer be opened from the app, so download each one as a file. Then remove
+            the browser copies, or leave them alone.
+          </p>
+          <ul className="mt-3 flex flex-col divide-y divide-amber-200 dark:divide-amber-900">
+            {legacy.map((item) => (
+              <li key={item.key} className="flex items-center justify-between gap-3 py-1.5">
+                <span className="min-w-0 truncate">
+                  {item.name} <span className="text-xs opacity-70">({item.kind})</span>
+                </span>
+                <button type="button" className="shrink-0 rounded border border-amber-400 px-2.5 py-1 text-xs font-medium hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900" onClick={() => downloadLegacyItem(item)}>
+                  Download
+                </button>
               </li>
             ))}
           </ul>
-          <p className="mt-3 text-xs text-zinc-500">
-            Diagrams are stored only in this browser. Clearing site data deletes them, and Safari removes them
-            after 7 days without a visit. Open a diagram and use Export → Diagram file (JSON) to keep a backup.
-          </p>
-        </div>
-      )}
-
-      {undoable && (
-        <div
-          role="status"
-          className="fixed bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-4 rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg dark:bg-zinc-100 dark:text-zinc-900"
-        >
-          <span>Deleted &ldquo;{undoable.name}&rdquo;</span>
-          <button
-            type="button"
-            className="font-medium underline"
-            onClick={() => {
-              if (saveDiagram(undoable)) toast.success(`Restored "${undoable.name}"`);
-              else toast.error("Couldn't restore the diagram", { details: ["Browser storage is full or blocked."] });
-              setUndoable(null);
-            }}
-          >
-            Undo
-          </button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded border border-amber-400 px-3 py-1.5 text-xs font-medium hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900"
+              onClick={async () => {
+                for (const item of legacy) {
+                  downloadLegacyItem(item);
+                  // Browsers drop downloads fired back to back.
+                  await new Promise((resolve) => setTimeout(resolve, 300));
+                }
+              }}
+            >
+              Download all
+            </button>
+            {confirmingRemove ? (
+              <button
+                type="button"
+                autoFocus
+                className="rounded bg-red-600 px-3 py-1.5 text-xs font-medium text-white"
+                onClick={() => {
+                  removeLegacyItems();
+                  setRemoved(true);
+                  toast.success("Removed the old copies from this browser");
+                }}
+                onBlur={() => setConfirmingRemove(false)}
+              >
+                Permanently remove them?
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="rounded border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"
+                onClick={() => setConfirmingRemove(true)}
+              >
+                Remove from this browser
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
