@@ -11,6 +11,7 @@ import PropertiesPanel from "./PropertiesPanel";
 import LegendPanel from "./LegendPanel";
 import SectionTabs from "./SectionTabs";
 import ShortcutsHelp from "./ShortcutsHelp";
+import { Icon } from "./Icon";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { nextSlotInContainer, nudgeNodes } from "@/lib/diagram/layout";
 import { saveDiagramToFile, useFileStore, useIsDirty } from "@/lib/diagram/file";
@@ -135,7 +136,7 @@ export default function EditorApp() {
   return (
     <ReactFlowProvider>
       <div className="flex h-dvh w-full flex-col bg-zinc-100 pb-safe pt-safe px-safe dark:bg-zinc-900">
-        <Toolbar />
+        <Toolbar onShowShortcuts={() => setHelpOpen(true)} />
         <SectionTabs />
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
           {drawer && (
@@ -149,7 +150,7 @@ export default function EditorApp() {
           )}
           <Sidebar
             onAdded={() => setDrawer(null)}
-            className={`${drawer === "palette" ? "flex" : "hidden"} absolute inset-y-0 left-0 z-30 w-72 max-w-[85%] pl-safe shadow-xl lg:static lg:z-auto lg:flex lg:w-56 lg:shrink-0 lg:shadow-none`}
+            className={`${drawer === "palette" ? "flex" : "hidden"} absolute inset-y-0 left-0 z-30 w-72 max-w-[85%] shadow-xl lg:static lg:z-auto lg:flex lg:w-60 lg:shrink-0 lg:shadow-none`}
           />
           <div className="relative min-w-0 flex-1">
             <Canvas />
@@ -157,34 +158,27 @@ export default function EditorApp() {
               <button
                 type="button"
                 aria-expanded={drawer === "palette"}
-                className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium shadow-sm dark:border-zinc-700 dark:bg-zinc-900"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white/95 px-3 py-1.5 text-sm font-medium shadow-sm backdrop-blur aria-expanded:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950/95 dark:aria-expanded:bg-zinc-800"
                 onClick={() => setDrawer(drawer === "palette" ? null : "palette")}
               >
-                + Add
+                <Icon name="plus" />
+                Add
               </button>
             </div>
             <div className="absolute right-3 top-3 z-10 lg:hidden">
               <button
                 type="button"
                 aria-expanded={drawer === "properties"}
-                className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium shadow-sm dark:border-zinc-700 dark:bg-zinc-900"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white/95 px-3 py-1.5 text-sm font-medium shadow-sm backdrop-blur aria-expanded:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950/95 dark:aria-expanded:bg-zinc-800"
                 onClick={() => setDrawer(drawer === "properties" ? null : "properties")}
               >
+                <Icon name="panel" />
                 Details &amp; legend
               </button>
             </div>
-            <button
-              type="button"
-              title="Keyboard shortcuts (?)"
-              aria-label="Keyboard shortcuts"
-              className="absolute bottom-3 right-3 z-10 hidden h-7 min-h-0 w-7 rounded-full border border-zinc-300 bg-white text-sm font-medium text-zinc-600 hover:bg-zinc-50 pointer-fine:block dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
-              onClick={() => setHelpOpen(true)}
-            >
-              ?
-            </button>
           </div>
           <aside
-            className={`${drawer === "properties" ? "flex" : "hidden"} absolute inset-y-0 right-0 z-30 w-80 max-w-[85%] flex-col overflow-y-auto border-l border-zinc-200 bg-white pr-safe shadow-xl lg:static lg:z-auto lg:flex lg:w-64 lg:shrink-0 lg:shadow-none dark:border-zinc-800 dark:bg-zinc-950`}
+            className={`${drawer === "properties" ? "flex" : "hidden"} absolute inset-y-0 right-0 z-30 w-80 max-w-[85%] flex-col overflow-y-auto border-l border-zinc-200 bg-white pr-safe shadow-xl lg:static lg:z-auto lg:flex lg:w-72 lg:shrink-0 lg:shadow-none dark:border-zinc-800 dark:bg-zinc-950`}
           >
             <PropertiesPanel />
             <LegendPanel />

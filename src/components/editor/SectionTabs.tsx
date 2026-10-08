@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 import { useDiagramStore } from "@/lib/diagram/store";
+import { Icon } from "./Icon";
+
+const TAB_ACTION =
+  "inline-flex min-h-0 items-center justify-center rounded p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-900 pointer-coarse:p-2 dark:hover:bg-zinc-800 dark:hover:text-zinc-100";
 
 export default function SectionTabs() {
   const sections = useDiagramStore((state) => state.diagram.sections);
@@ -22,24 +26,26 @@ export default function SectionTabs() {
   }
 
   return (
-    <div className="flex items-center gap-1 overflow-x-auto overscroll-x-contain border-b border-zinc-200 bg-zinc-50 px-2 pt-1.5 sm:px-3 dark:border-zinc-800 dark:bg-zinc-950">
+    <div role="tablist"
+      aria-label="Diagram tabs"
+      className="flex items-end gap-0.5 overflow-x-auto overscroll-x-contain border-b border-zinc-200 bg-zinc-50 px-2 pt-1.5 sm:px-3 dark:border-zinc-800 dark:bg-zinc-900/60">
       {sections.map((section) => {
         const active = section.id === activeSectionId;
         const confirming = pendingDeleteId === section.id;
         return (
           <div
             key={section.id}
-            className={`group flex shrink-0 items-center gap-1 whitespace-nowrap rounded-t border border-b-0 px-3 py-1.5 text-sm ${
+            className={`relative -mb-px flex h-9 shrink-0 items-center gap-0.5 whitespace-nowrap rounded-t-lg border border-b-0 pl-3 text-sm transition-colors ${
               active
-                ? "border-zinc-200 bg-white font-medium text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
-                : "border-transparent text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                ? "border-zinc-200 bg-white pr-1 font-medium text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+                : "border-transparent pr-3 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
             }`}
           >
             {editingId === section.id ? (
               <input
                 autoFocus
                 defaultValue={section.name}
-                className="w-28 rounded border border-zinc-400 bg-transparent px-1 text-sm outline-none"
+                className="mr-1 w-32 rounded border border-blue-500 bg-transparent px-1.5 py-0.5 text-sm outline-none ring-2 ring-blue-500/20"
                 onBlur={(event) => commitRename(section.id, event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") commitRename(section.id, event.currentTarget.value);
@@ -54,8 +60,10 @@ export default function SectionTabs() {
                   setActiveSection(section.id);
                 }}
                 onDoubleClick={() => setEditingId(section.id)}
+                role="tab"
+                aria-selected={active}
                 title="Double-click to rename"
-                className="min-h-0"
+                className="min-h-0 pr-1"
               >
                 {section.name}
               </button>
@@ -64,27 +72,27 @@ export default function SectionTabs() {
               <>
                 <button
                   type="button"
-                  title="Rename section"
-                  aria-label="Rename section"
-                  className="min-h-0 px-1 text-zinc-400 hover:text-zinc-900 pointer-coarse:px-2 dark:hover:text-zinc-100"
+                  title="Rename tab"
+                  aria-label="Rename tab"
+                  className={TAB_ACTION}
                   onClick={() => setEditingId(section.id)}
                 >
-                  ✎
+                  <Icon name="pencil" className="h-3.5 w-3.5" />
                 </button>
                 <button
                   type="button"
-                  title="Duplicate section"
-                  aria-label="Duplicate section"
-                  className="min-h-0 px-0.5 pointer-coarse:px-2 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                  title="Duplicate tab"
+                  aria-label="Duplicate tab"
+                  className={TAB_ACTION}
                   onClick={() => duplicateSection(section.id)}
                 >
-                  ⧉
+                  <Icon name="copy" className="h-3.5 w-3.5" />
                 </button>
                 {sections.length > 1 &&
                   (confirming ? (
                     <button
                       type="button"
-                      className="min-h-0 rounded bg-red-600 px-1.5 text-xs text-white pointer-coarse:px-2.5 pointer-coarse:py-1"
+                      className="min-h-0 rounded bg-red-600 px-2 py-0.5 text-xs font-medium text-white pointer-coarse:px-2.5 pointer-coarse:py-1"
                       onClick={() => {
                         deleteSection(section.id);
                         setPendingDeleteId(null);
@@ -97,12 +105,12 @@ export default function SectionTabs() {
                   ) : (
                     <button
                       type="button"
-                      title="Delete section"
-                      aria-label="Delete section"
-                      className="min-h-0 px-0.5 pointer-coarse:px-2 text-zinc-400 hover:text-red-600"
+                      title="Delete tab"
+                      aria-label="Delete tab"
+                      className={`${TAB_ACTION} hover:text-red-600 dark:hover:text-red-400`}
                       onClick={() => setPendingDeleteId(section.id)}
                     >
-                      ×
+                      <Icon name="x" className="h-3.5 w-3.5" />
                     </button>
                   ))}
               </>
@@ -112,11 +120,13 @@ export default function SectionTabs() {
       })}
       <button
         type="button"
-        title="Add section"
-        className="ml-1 shrink-0 rounded px-3 py-1 text-sm text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+        title="Add a tab"
+        aria-label="Add a tab"
+        className="mb-1 ml-1 inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-sm text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
         onClick={() => addSection()}
       >
-        +
+        <Icon name="plus" className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">Add tab</span>
       </button>
     </div>
   );

@@ -28,13 +28,21 @@ import {
   renderComposite,
   type RenderedComposite,
 } from "@/lib/diagram/export";
-import { nextSlotInContainer } from "@/lib/diagram/layout";
 import { toast } from "@/lib/toast";
 import UnsavedChangesDialog from "./UnsavedChangesDialog";
+import { Icon } from "./Icon";
+import { LogoMark } from "@/components/Logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const SECONDARY_BUTTON =
-  "rounded border border-zinc-300 px-2.5 py-1.5 text-sm font-medium hover:bg-zinc-50 sm:px-3 dark:border-zinc-700 dark:hover:bg-zinc-900";
+  "inline-flex h-8 items-center gap-1.5 rounded-md border border-zinc-300 px-2.5 text-sm font-medium transition-colors hover:bg-zinc-50 disabled:opacity-60 sm:px-3 dark:border-zinc-700 dark:hover:bg-zinc-900";
+const GHOST_BUTTON =
+  "inline-flex h-8 items-center gap-1 rounded-md px-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 aria-expanded:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:aria-expanded:bg-zinc-800";
+const ICON_BUTTON =
+  "inline-flex h-8 w-8 items-center justify-center rounded-md text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100";
+const MENU =
+  "absolute z-50 mt-1.5 w-60 max-w-[calc(100vw-1rem)] rounded-lg border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900";
+const DIVIDER = "mx-1 hidden h-5 w-px bg-zinc-200 sm:block dark:bg-zinc-800";
 
 type ExportTheme = "light" | "dark";
 const EXPORT_THEME_KEY = "bb:exportTheme";
@@ -88,17 +96,19 @@ function ExportMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         disabled={busy}
-        className="rounded bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+        className="inline-flex h-8 items-center gap-1.5 rounded-md bg-zinc-900 px-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
         onClick={() => setOpen((value) => !value)}
       >
-        {busy ? "Exporting…" : "Export ▾"}
+        <Icon name="download" />
+        {busy ? "Exporting…" : "Export"}
+        <Icon name="chevronDown" className="h-3.5 w-3.5 opacity-70" />
       </button>
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-50 mt-1 max-h-[70dvh] w-56 max-w-[calc(100vw-1rem)] overflow-y-auto overflow-x-hidden rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+          className={`${MENU} right-0 max-h-[70dvh] overflow-y-auto overflow-x-hidden`}
         >
-          <div className="border-b border-zinc-200 px-3 pb-2 pt-1.5 dark:border-zinc-700">
+          <div className="mb-1 border-b border-zinc-200 px-2 pb-2 pt-1.5 dark:border-zinc-700">
             <p id="export-style-label" className="mb-1 text-[11px] font-medium text-zinc-500">
               Image style (PNG, PDF, SVG)
             </p>
@@ -126,7 +136,7 @@ function ExportMenu({
               key={option.format}
               type="button"
               role="menuitem"
-              className="flex w-full flex-col items-start px-3 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="flex w-full flex-col items-start rounded-md px-2 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
               onClick={() => {
                 setOpen(false);
                 onSelect(option.format);
@@ -143,7 +153,7 @@ function ExportMenu({
 }
 
 const MENU_ITEM =
-  "flex w-full items-center justify-between gap-4 px-3 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800";
+  "flex w-full items-center justify-between gap-4 rounded-md px-2 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800";
 
 function FileMenu({
   onNew,
@@ -174,14 +184,12 @@ function FileMenu({
         if (event.key === "Escape") setOpen(false);
       }}
     >
-      <button type="button" aria-haspopup="menu" aria-expanded={open} className={SECONDARY_BUTTON} onClick={() => setOpen((value) => !value)}>
-        File ▾
+      <button type="button" aria-haspopup="menu" aria-expanded={open} className={GHOST_BUTTON} onClick={() => setOpen((value) => !value)}>
+        File
+        <Icon name="chevronDown" className="h-3.5 w-3.5 opacity-60" />
       </button>
       {open && (
-        <div
-          role="menu"
-          className="absolute left-0 z-50 mt-1 w-56 max-w-[calc(100vw-1rem)] overflow-hidden rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
-        >
+        <div role="menu" className={`${MENU} left-0`}>
           {items.map((item) => (
             <button
               key={item.label}
@@ -198,7 +206,7 @@ function FileMenu({
             </button>
           ))}
           {!supportsFilePicker() && (
-            <p className="border-t border-zinc-200 px-3 pb-1.5 pt-2 text-[11px] leading-snug text-zinc-500 dark:border-zinc-700">
+            <p className="mt-1 border-t border-zinc-200 px-2 pb-1 pt-2 text-[11px] leading-snug text-zinc-500 dark:border-zinc-700">
               This browser can&apos;t save over a file, so Save downloads a new copy each time. Chrome or Edge can save in place.
             </p>
           )}
@@ -212,36 +220,48 @@ function FileMenu({
 function SaveStatus() {
   const dirty = useIsDirty();
   const { fileName, handle, saving, error } = useFileStore();
-  const base = "hidden max-w-48 truncate text-xs md:inline";
-  if (error) return <span role="alert" className="rounded bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950 dark:text-red-300">Not saved</span>;
-  if (saving) return <span className={`${base} text-zinc-400`}>Saving…</span>;
-  if (dirty) {
+  const pill = "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium";
+  const dot = (color: string) => <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${color}`} />;
+  if (error) {
     return (
-      <span
-        className="rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-        title={handle ? "Saving to the file in a moment." : "Not in a file yet. Save to keep it: Building Block doesn't store diagrams."}
-      >
-        {handle ? "Unsaved changes" : "Not saved to a file"}
+      <span role="alert" className={`${pill} bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300`}>
+        {dot("bg-red-500")}Not saved
       </span>
     );
   }
-  if (fileName) return <span className={`${base} text-zinc-400`} title={fileName}>Saved · {fileName}</span>;
+  if (saving) return <span className={`${pill} text-zinc-500`}>{dot("animate-pulse bg-zinc-400")}Saving…</span>;
+  if (dirty) {
+    return (
+      <span
+        className={`${pill} bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300`}
+        title={handle ? "Saving to the file in a moment." : "Not in a file yet. Save to keep it: Building Block doesn't store diagrams."}
+      >
+        {dot("bg-amber-500")}
+        <span className="hidden sm:inline">{handle ? "Unsaved changes" : "Not saved to a file"}</span>
+        <span className="sm:hidden">Unsaved</span>
+      </span>
+    );
+  }
+  if (fileName) {
+    return (
+      <span className={`${pill} min-w-0 text-zinc-500`} title={`Saved to ${fileName}`}>
+        {dot("bg-emerald-500")}
+        <span className="hidden max-w-48 truncate md:inline">{fileName}</span>
+        <span className="md:hidden">Saved</span>
+      </span>
+    );
+  }
   return null;
 }
 
-export default function Toolbar() {
+export default function Toolbar({ onShowShortcuts }: { onShowShortcuts: () => void }) {
   const router = useRouter();
   const { getNodes, getNodesBounds } = useReactFlow();
   const { theme, resolvedTheme, setTheme } = useTheme();
   const [exportTheme, setExportTheme] = useState<ExportTheme>(readExportTheme);
   const diagram = useDiagramStore((state) => state.diagram);
-  const selectedNodeIds = useDiagramStore((state) => state.selectedNodeIds);
   const renameDiagram = useDiagramStore((state) => state.renameDiagram);
-  const addContainer = useDiagramStore((state) => state.addContainer);
-  const addBlock = useDiagramStore((state) => state.addBlock);
-  const deleteNodes = useDiagramStore((state) => state.deleteNodes);
   const setSelection = useDiagramStore((state) => state.setSelection);
-  const setShowTechnology = useDiagramStore((state) => state.setShowTechnology);
   const undo = useDiagramStore((state) => state.undo);
   const redo = useDiagramStore((state) => state.redo);
   const canUndo = useDiagramStore((state) => state.past.length > 0);
@@ -254,23 +274,6 @@ export default function Toolbar() {
   const dirty = useIsDirty();
 
   const section = getActiveSection(diagram);
-  const nodeCount = section.nodes.length;
-  const showTechnology = diagram.showTechnology !== false;
-  const singleSelected =
-    selectedNodeIds.length === 1 ? section.nodes.find((node) => node.id === selectedNodeIds[0]) : undefined;
-
-  const nextPosition = () => ({
-    x: 80 + (nodeCount % 5) * 48,
-    y: 80 + Math.floor(nodeCount / 5) * 48,
-  });
-
-  // With a container (or a block inside one) selected, "+ Block" adds below that container's last block.
-  function handleAddBlock() {
-    const containerId =
-      singleSelected?.type === "container" ? singleSelected.id : singleSelected?.parentId;
-    if (containerId) addBlock(nextSlotInContainer(section.nodes, containerId), containerId);
-    else addBlock(nextPosition());
-  }
 
   /** Runs `action` now, or after the user has decided what to do with unsaved changes. */
   function guardUnsaved(action: () => void) {
@@ -426,120 +429,72 @@ export default function Toolbar() {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-zinc-200 bg-white px-2 py-2 sm:gap-x-3 sm:px-4 dark:border-zinc-800 dark:bg-zinc-950">
+    <div className="flex flex-wrap items-center gap-x-1 gap-y-2 border-b border-zinc-200 bg-white px-2 py-1.5 sm:gap-x-1.5 sm:px-3 dark:border-zinc-800 dark:bg-zinc-950">
       <button
         type="button"
+        title="Back to the start page"
         aria-label="Back to the start page"
-        className="inline-flex min-h-8 items-center px-1 text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+        className="group inline-flex h-8 shrink-0 items-center gap-1 rounded-md pl-1 pr-1.5 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
         onClick={handleLeave}
       >
-        <span aria-hidden>←</span>
-        <span className="sr-only sm:not-sr-only"> Start</span>
+        <Icon name="arrowLeft" className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
+        <LogoMark className="h-6 w-6" />
       </button>
+      <div className={DIVIDER} />
+      <div className="flex min-w-0 items-center gap-1.5">
+        <input
+          aria-label="Diagram name"
+          title="Click to rename this diagram"
+          placeholder="Name this diagram"
+          maxLength={80}
+          size={Math.min(Math.max(diagram.name.length, 8), 32)}
+          className="h-8 min-w-0 max-w-[45vw] rounded-md border border-transparent bg-transparent px-2 text-sm font-semibold outline-none transition-colors placeholder:font-normal placeholder:text-zinc-400 hover:border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 sm:max-w-none dark:hover:border-zinc-700"
+          value={diagram.name}
+          onChange={(event) => renameDiagram(event.target.value)}
+          onFocus={(event) => event.target.select()}
+          // An empty name would leave blank file names.
+          onBlur={(event) => {
+            if (!event.target.value.trim()) renameDiagram("Untitled Diagram");
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+          }}
+        />
+        <SaveStatus />
+      </div>
       <FileMenu
         onNew={handleNew}
         onOpen={handleOpen}
         onSave={() => void saveDiagramToFile()}
         onSaveAs={() => void saveDiagramToFile({ saveAs: true })}
       />
-      <div className="hidden h-5 w-px bg-zinc-200 sm:block dark:bg-zinc-800" />
-      <input
-        aria-label="Diagram name"
-        title="Click to rename this diagram"
-        placeholder="Name this diagram"
-        maxLength={80}
-        className="w-36 min-w-0 rounded border sm:w-48 border-zinc-200 bg-transparent px-2 py-1 text-sm font-semibold outline-none placeholder:font-normal placeholder:text-zinc-400 hover:border-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-zinc-800 dark:hover:border-zinc-600"
-        value={diagram.name}
-        onChange={(event) => renameDiagram(event.target.value)}
-        onFocus={(event) => event.target.select()}
-        // An empty name would leave blank file names.
-        onBlur={(event) => {
-          if (!event.target.value.trim()) renameDiagram("Untitled Diagram");
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") event.currentTarget.blur();
-        }}
-      />
-      <SaveStatus />
-      <div className="hidden h-5 w-px bg-zinc-200 sm:block dark:bg-zinc-800" />
-      <div className="flex items-center gap-0.5">
-        <button
-          type="button"
-          title="Undo (Ctrl/⌘+Z)"
-          aria-label="Undo"
-          disabled={!canUndo}
-          onClick={undo}
-          className="rounded p-1.5 pointer-coarse:p-2.5 text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent dark:text-zinc-300 dark:hover:bg-zinc-800"
-        >
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M9 14 4 9l5-5" />
-            <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          title="Redo (Ctrl/⌘+Shift+Z)"
-          aria-label="Redo"
-          disabled={!canRedo}
-          onClick={redo}
-          className="rounded p-1.5 pointer-coarse:p-2.5 text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent dark:text-zinc-300 dark:hover:bg-zinc-800"
-        >
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="m15 14 5-5-5-5" />
-            <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />
-          </svg>
-        </button>
-      </div>
-      <div className="hidden h-5 w-px bg-zinc-200 sm:block dark:bg-zinc-800" />
-      <button
-        type="button"
-        className={SECONDARY_BUTTON}
-        onClick={() => addContainer(nextPosition())}
-      >
-        + Container
-      </button>
-      <button
-        type="button"
-        className={SECONDARY_BUTTON}
-        title="With a container selected, the block is added inside it"
-        onClick={handleAddBlock}
-      >
-        + Block
-      </button>
-      {selectedNodeIds.length > 0 && (
-        <button
-          type="button"
-          className="rounded border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950"
-          onClick={() => deleteNodes(selectedNodeIds)}
-        >
-          Delete{selectedNodeIds.length > 1 ? ` ${selectedNodeIds.length}` : ""}
-        </button>
-      )}
 
-      <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
-        <label
-          className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300"
-          title="Show each component's technology under its name"
-        >
-          <input
-            type="checkbox"
-            checked={showTechnology}
-            onChange={(event) => setShowTechnology(event.target.checked)}
-            className="accent-zinc-900 dark:accent-zinc-100"
-          />
-          <span className="hidden sm:inline">Show technology</span>
-          <span className="sm:hidden">Tech</span>
-        </label>
-        <ThemeToggle />
-        <div className="hidden h-5 w-px bg-zinc-200 sm:block dark:bg-zinc-800" />
+      <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
+        <button type="button" title="Undo (Ctrl/⌘+Z)" aria-label="Undo" disabled={!canUndo} onClick={undo} className={ICON_BUTTON}>
+          <Icon name="undo" />
+        </button>
+        <button type="button" title="Redo (Ctrl/⌘+Shift+Z)" aria-label="Redo" disabled={!canRedo} onClick={redo} className={ICON_BUTTON}>
+          <Icon name="redo" />
+        </button>
+        <span className="hidden pointer-fine:contents">
+          <button type="button" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" onClick={onShowShortcuts} className={ICON_BUTTON}>
+            <Icon name="keyboard" />
+          </button>
+        </span>
+        <div className={DIVIDER} />
+        <div className="hidden sm:block">
+          <ThemeToggle />
+        </div>
+        <div className={DIVIDER} />
         <button
           type="button"
-          className={`${SECONDARY_BUTTON} ${dirty && !hasFile ? "border-amber-400 bg-amber-50 dark:border-amber-700 dark:bg-amber-950" : ""}`}
+          className={`${SECONDARY_BUTTON} ${dirty && !hasFile ? "border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200 dark:hover:bg-amber-900" : ""}`}
           disabled={saving}
           title={hasFile ? "Saves to the open file (Ctrl/⌘+S)" : "Choose where to save the file (Ctrl/⌘+S)"}
           onClick={() => void saveDiagramToFile()}
         >
-          Save
+          <Icon name="save" />
+          <span className="hidden sm:inline">Save</span>
         </button>
         <ExportMenu imageTheme={exportTheme} onImageThemeChange={changeExportTheme} multiTab={diagram.sections.length > 1} busy={exporting} onSelect={handleExport} />
       </div>

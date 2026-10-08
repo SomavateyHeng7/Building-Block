@@ -20,6 +20,7 @@ import { fromFlowNodes, toFlowNodes, type FlowNode } from "@/lib/diagram/flowAda
 import { containerInsets, growContainerToFit } from "@/lib/diagram/layout";
 import ContainerNode from "./nodes/ContainerNode";
 import BlockNode from "./nodes/BlockNode";
+import { Icon } from "./Icon";
 import { PALETTE_DATA_FORMAT, type PaletteDragPayload } from "./Sidebar";
 import type { BlockColorKey, ContainerNodeData } from "@/lib/diagram/types";
 
@@ -83,6 +84,16 @@ export default function Canvas() {
   const colorMode = mounted && resolvedTheme === "dark" ? "dark" : "light";
 
   const section = getActiveSection(diagram);
+
+  /** The middle of what's on screen, in diagram coordinates. */
+  function paneCenter() {
+    const pane = document.querySelector(".react-flow")?.getBoundingClientRect();
+    return screenToFlowPosition({
+      x: pane ? pane.left + pane.width / 2 : window.innerWidth / 2,
+      y: pane ? pane.top + pane.height / 2 : window.innerHeight / 2,
+    });
+  }
+
   const flowNodes = useMemo(
     () => toFlowNodes(section.nodes, new Set(selectedNodeIds)),
     [section.nodes, selectedNodeIds],
@@ -220,13 +231,43 @@ export default function Canvas() {
       <Controls />
       {wide && <MiniMap pannable zoomable />}
       {section.nodes.length === 0 && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-          <div className="max-w-xs rounded-lg border border-dashed border-zinc-300 bg-white/80 p-5 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-300">
-            <p className="font-medium">This tab is empty</p>
-            <p className="mt-1">
-              Tap <strong>+ Container</strong> or <strong>+ Add</strong>, or drag one in from the panel. With a
-              keyboard, press <kbd className="font-mono">C</kbd> / <kbd className="font-mono">B</kbd>, or{" "}
-              <kbd className="font-mono">?</kbd> for all shortcuts.
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-4">
+          <div className="pointer-events-auto flex max-w-sm flex-col items-center gap-3 rounded-xl border border-zinc-200 bg-white/90 p-6 text-center text-sm text-zinc-600 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90 dark:text-zinc-400">
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">
+              <Icon name="layers" className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="font-semibold text-zinc-900 dark:text-zinc-100">This tab is empty</p>
+              <p className="mt-1">Start with a container to group your components, or drag items in from the panel.</p>
+            </div>
+            <div className="flex flex-wrap justify-center gap-2">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                onClick={() => {
+                  const center = paneCenter();
+                  addContainer({ x: center.x - 160, y: center.y - 32 });
+                }}
+              >
+                <Icon name="plus" />
+                Container
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+                onClick={() => {
+                  const center = paneCenter();
+                  addBlock({ x: center.x - 70, y: center.y - 28 });
+                }}
+              >
+                <Icon name="plus" />
+                Component
+              </button>
+            </div>
+            <p className="hidden text-xs text-zinc-400 pointer-fine:block">
+              Or press <kbd className="rounded border border-zinc-300 px-1 font-mono dark:border-zinc-700">C</kbd> /{" "}
+              <kbd className="rounded border border-zinc-300 px-1 font-mono dark:border-zinc-700">B</kbd>, and{" "}
+              <kbd className="rounded border border-zinc-300 px-1 font-mono dark:border-zinc-700">?</kbd> for all shortcuts
             </p>
           </div>
         </div>

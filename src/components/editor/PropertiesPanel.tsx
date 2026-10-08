@@ -12,6 +12,7 @@ import type {
   NodeDetails,
   OutlineStyle,
 } from "@/lib/diagram/types";
+import { Icon } from "./Icon";
 
 const DETAIL_FIELDS: {
   key: keyof NodeDetails;
@@ -50,8 +51,14 @@ const ARRANGE_GROUPS: { title: string; ops: { op: ArrangeOp; label: string; icon
 ];
 
 const SECTION_TITLE = "text-xs font-semibold uppercase tracking-wide text-zinc-500";
+const PANEL = "flex flex-col gap-4 border-b border-zinc-200 p-4 dark:border-zinc-800";
+const FIELD_LABEL = "flex flex-col gap-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300";
+const FIELD =
+  "rounded-md border border-zinc-300 bg-white px-2.5 py-1.5 text-sm font-normal outline-none transition-colors placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900";
 const ACTION_BUTTON =
-  "rounded border border-zinc-300 px-2 py-1 text-xs font-medium hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:hover:bg-zinc-900";
+  "rounded-md border border-zinc-300 px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:hover:bg-zinc-900";
+const DELETE_BUTTON =
+  "inline-flex items-center justify-center gap-1.5 rounded-md border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950";
 
 const HEADER_POSITIONS: { value: HeaderPosition; label: string; icon: string }[] = [
   { value: "top", label: "Top", icon: "M4 4h16v16H4zM4 9h16" },
@@ -78,7 +85,7 @@ function Segmented<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className="flex rounded border border-zinc-300 p-0.5 dark:border-zinc-700">
+    <div role="radiogroup" aria-label={label} className="flex rounded-md border border-zinc-300 p-0.5 dark:border-zinc-700">
       {options.map((option) => {
         const active = option.value === value;
         return (
@@ -139,7 +146,7 @@ function ContainerStyleControls({
 
   return (
     <>
-      <div className="flex flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+      <div className={FIELD_LABEL}>
         Header
         <Segmented
           label="Header position"
@@ -155,7 +162,7 @@ function ContainerStyleControls({
         />
       </div>
 
-      <div className="flex flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+      <div className={FIELD_LABEL}>
         Outline
         <div className="flex items-center gap-2">
           <input
@@ -163,7 +170,7 @@ function ContainerStyleControls({
             aria-label="Outline color"
             value={outlineColor}
             onChange={(event) => onChange(id, { outlineColor: event.target.value })}
-            className="h-7 w-9 cursor-pointer rounded border border-zinc-300 bg-transparent p-0.5 dark:border-zinc-700"
+            className="h-8 w-10 cursor-pointer rounded-md border border-zinc-300 bg-transparent p-0.5 dark:border-zinc-700"
           />
           <div className="flex-1">
             <Segmented
@@ -201,18 +208,19 @@ function ColorSwatches({
     return <p className="text-[11px] font-normal text-zinc-400">Add a legend entry below to color items.</p>;
   }
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-2">
       {legend.map((entry) => (
         <button
           type="button"
           key={entry.key}
           title={entry.label}
+          aria-label={entry.label}
+          aria-pressed={activeKey === entry.key}
           onClick={() => onPick(entry.key)}
-          className="h-6 w-6 rounded-sm border-2"
-          style={{
-            backgroundColor: entry.color,
-            borderColor: activeKey === entry.key ? "#2563eb" : "rgba(0,0,0,0.2)",
-          }}
+          className={`h-7 w-7 rounded-md border border-black/15 transition-transform hover:scale-110 dark:border-white/15 ${
+            activeKey === entry.key ? "ring-2 ring-blue-500 ring-offset-2 ring-offset-white dark:ring-offset-zinc-950" : ""
+          }`}
+          style={{ backgroundColor: entry.color }}
         />
       ))}
     </div>
@@ -227,10 +235,10 @@ function MultiSelectionPanel({ ids }: { ids: string[] }) {
   const deleteNodes = useDiagramStore((state) => state.deleteNodes);
 
   return (
-    <div className="flex flex-col gap-3 border-b border-zinc-200 p-3 dark:border-zinc-800">
+    <div className={PANEL}>
       <h2 className={SECTION_TITLE}>{ids.length} items selected</h2>
       {ARRANGE_GROUPS.map((group) => (
-        <div key={group.title} className="flex flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+        <div key={group.title} className={FIELD_LABEL}>
           {group.title}
           <div className="flex flex-wrap gap-1">
             {group.ops.map(({ op, label, icon }) => (
@@ -240,7 +248,7 @@ function MultiSelectionPanel({ ids }: { ids: string[] }) {
                 title={label}
                 aria-label={label}
                 onClick={() => arrangeSelection(op)}
-                className="rounded border border-zinc-300 p-1 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                className="rounded-md border border-zinc-300 p-1.5 text-zinc-600 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
                 <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
                   <path d={icon} />
@@ -250,7 +258,7 @@ function MultiSelectionPanel({ ids }: { ids: string[] }) {
           </div>
         </div>
       ))}
-      <div className="flex flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+      <div className={FIELD_LABEL}>
         Color all
         <ColorSwatches legend={legend} onPick={(key) => updateNodesColor(ids, key)} />
       </div>
@@ -258,11 +266,8 @@ function MultiSelectionPanel({ ids }: { ids: string[] }) {
         <button type="button" className={ACTION_BUTTON} onClick={duplicateSelection}>
           Duplicate
         </button>
-        <button
-          type="button"
-          onClick={() => deleteNodes(ids)}
-          className="rounded border border-red-300 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950"
-        >
+        <button type="button" onClick={() => deleteNodes(ids)} className={DELETE_BUTTON}>
+          <Icon name="trash" className="h-3.5 w-3.5" />
           Delete all
         </button>
       </div>
@@ -283,6 +288,8 @@ export default function PropertiesPanel() {
   const fitAllContainers = useDiagramStore((state) => state.fitAllContainers);
   const setSelection = useDiagramStore((state) => state.setSelection);
   const updateContainerStyle = useDiagramStore((state) => state.updateContainerStyle);
+  const setShowTechnology = useDiagramStore((state) => state.setShowTechnology);
+  const showTechnology = diagram.showTechnology !== false;
 
   const section = getActiveSection(diagram);
 
@@ -291,10 +298,28 @@ export default function PropertiesPanel() {
   const node = section.nodes.find((candidate) => candidate.id === selectedNodeIds[0]);
 
   if (!node) {
+    const hasNested = section.nodes.some((candidate) => candidate.parentId);
     return (
-      <div className="flex flex-col gap-2 border-b border-zinc-200 p-3 text-xs text-zinc-400 dark:border-zinc-800">
-        <p>Select a container or component to edit its properties.</p>
-        {section.nodes.some((candidate) => candidate.parentId) && (
+      <div className={PANEL}>
+        <h2 className={SECTION_TITLE}>Diagram</h2>
+        <label className="flex cursor-pointer items-center justify-between gap-3 text-sm text-zinc-700 dark:text-zinc-200">
+          <span>
+            Show technology
+            <span className="block text-xs text-zinc-500">Under each component&apos;s name</span>
+          </span>
+          <input
+            type="checkbox"
+            role="switch"
+            checked={showTechnology}
+            onChange={(event) => setShowTechnology(event.target.checked)}
+            className="peer sr-only"
+          />
+          <span
+            aria-hidden
+            className="relative h-5 w-9 shrink-0 rounded-full bg-zinc-300 transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:bg-zinc-900 peer-checked:after:translate-x-4 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500/40 dark:bg-zinc-700 dark:peer-checked:bg-zinc-100 dark:after:bg-zinc-950"
+          />
+        </label>
+        {hasNested && (
           <button
             type="button"
             className={`${ACTION_BUTTON} self-start`}
@@ -304,15 +329,12 @@ export default function PropertiesPanel() {
             Fit all containers
           </button>
         )}
-        <p className="text-[11px] leading-snug">
-          Drag a container&apos;s edge or corner to resize it, or select it and use Fit to contents.
-        </p>
-        <ul className="flex flex-col gap-0.5 text-[11px] leading-snug">
-          <li>Shift-click or Shift-drag to select several</li>
-          <li>⌘/Ctrl + C, V, D to copy, paste, duplicate</li>
-          <li>⌘/Ctrl + Z / Shift+Z to undo / redo</li>
-          <li>Delete or Backspace to remove</li>
-        </ul>
+        <div className="flex gap-2.5 rounded-lg bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+          <Icon name="cursor" className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>
+            Select a container or component to edit its details. Shift-click or drag a box to select several and line them up.
+          </p>
+        </div>
       </div>
     );
   }
@@ -326,12 +348,12 @@ export default function PropertiesPanel() {
   const showColor = node.type === "block" || node.type === "container";
 
   return (
-    <div className="flex flex-col gap-3 border-b border-zinc-200 p-3 dark:border-zinc-800">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+    <div className={PANEL}>
+      <h2 className={SECTION_TITLE}>
         {node.type === "container" ? "Container" : "Component"}
       </h2>
       {parentContainer && (
-        <p className="-mt-2 text-xs text-zinc-500">
+        <p className="-mt-3 text-xs text-zinc-500">
           In{" "}
           <button
             type="button"
@@ -344,17 +366,17 @@ export default function PropertiesPanel() {
         </p>
       )}
 
-      <label className="flex flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+      <label className={FIELD_LABEL}>
         Label
         <input
-          className="rounded border border-zinc-300 px-2 py-1 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+          className={FIELD}
           value={node.data.label}
           onChange={(event) => updateNodeLabel(node.id, event.target.value)}
         />
       </label>
 
       {showColor && (
-        <div className="flex flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+        <div className={FIELD_LABEL}>
           Color
           <ColorSwatches
             legend={legend}
@@ -367,15 +389,12 @@ export default function PropertiesPanel() {
       {DETAIL_FIELDS.filter((field) => node.type === "block" || !field.blockOnly).map((field) => {
         const Input = field.multiline ? "textarea" : "input";
         return (
-          <label
-            key={field.key}
-            className="flex flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-300"
-          >
+          <label key={field.key} className={FIELD_LABEL}>
             {field.label}
             <Input
               rows={field.multiline ? 3 : undefined}
               placeholder={field.placeholder}
-              className="resize-y rounded border border-zinc-300 px-2 py-1 text-sm font-normal outline-none placeholder:text-zinc-400 focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+              className={`${FIELD} resize-y`}
               value={node.data[field.key] ?? ""}
               onChange={(event) => updateNodeDetails(node.id, { [field.key]: event.target.value })}
             />
@@ -393,7 +412,7 @@ export default function PropertiesPanel() {
       )}
 
       {node.type === "container" && (
-        <div className="flex flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+        <div className={FIELD_LABEL}>
           Layout
           <div className="flex flex-wrap gap-1.5">
             <button
@@ -418,12 +437,9 @@ export default function PropertiesPanel() {
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={() => deleteNodes([node.id])}
-        className="self-start rounded border border-red-300 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950"
-      >
-        Delete
+      <button type="button" onClick={() => deleteNodes([node.id])} className={`${DELETE_BUTTON} self-start`}>
+        <Icon name="trash" className="h-3.5 w-3.5" />
+        Delete {node.type === "container" ? "container" : "component"}
       </button>
     </div>
   );

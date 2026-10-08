@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
 import { ThemeToggle } from "@/components/theme-toggle";
+import Footer from "@/components/landing/Footer";
 import HeroDiagram from "@/components/landing/HeroDiagram";
 import WaitlistForm from "@/components/landing/WaitlistForm";
 
@@ -285,15 +286,7 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <footer className="border-t border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-8 text-sm text-zinc-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <span>Building Block · Your diagrams are your files</span>
-          <div className="flex gap-5">
-            <Link href="/templates" className="hover:text-zinc-900 dark:hover:text-zinc-100">Templates</Link>
-            <Link href="/diagrams" className="hover:text-zinc-900 dark:hover:text-zinc-100">Start</Link>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

@@ -183,7 +183,30 @@ export async function openDiagramFromDevice(): Promise<Diagram | null> {
     return null;
   }
   if (!file) return null;
+  return openDiagramFile(file, handle);
+}
 
+/**
+ * Opens a diagram dropped onto the page. Call it synchronously from the drop event: the browser
+ * only hands over the file handle (so Save writes back in place) during the event itself.
+ */
+export async function openDroppedDiagram(dataTransfer: DataTransfer): Promise<Diagram | null> {
+  const item = [...dataTransfer.items].find((candidate) => candidate.kind === "file");
+  if (!item) return null;
+  const file = item.getAsFile();
+  const handlePromise = supportsFilePicker() && item.getAsFileSystemHandle ? item.getAsFileSystemHandle() : null;
+  if (!file) return null;
+  let handle: FileSystemFileHandle | null = null;
+  try {
+    const dropped = await handlePromise;
+    if (dropped?.kind === "file") handle = dropped as FileSystemFileHandle;
+  } catch {
+    // No handle: the diagram still opens, and Save asks where to write.
+  }
+  return openDiagramFile(file, handle);
+}
+
+async function openDiagramFile(file: File, handle: FileSystemFileHandle | null): Promise<Diagram | null> {
   try {
     const { diagram, fixes } = await parseDiagramFile(file);
     startDiagram(diagram, { handle, fileName: file.name });

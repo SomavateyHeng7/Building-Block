@@ -4,8 +4,16 @@ import { useReactFlow } from "@xyflow/react";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { nextSlotInContainer } from "@/lib/diagram/layout";
 import type { BlockColorKey } from "@/lib/diagram/types";
+import { Icon } from "./Icon";
 
 export const PALETTE_DATA_FORMAT = "application/building-block-node";
+
+const HEADING = "mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-zinc-500";
+const KBD =
+  "rounded border border-zinc-200 px-1.5 font-mono text-[10px] font-medium normal-case text-zinc-400 dark:border-zinc-700";
+const ITEM =
+  "group flex cursor-grab items-center gap-2.5 rounded-lg border border-transparent px-2 py-1.5 text-sm text-zinc-700 transition-colors hover:border-zinc-200 hover:bg-zinc-50 focus-visible:border-zinc-300 focus-visible:outline-none active:cursor-grabbing pointer-coarse:py-2.5 dark:text-zinc-200 dark:hover:border-zinc-800 dark:hover:bg-zinc-900";
+const GRIP = "h-4 w-4 shrink-0 text-zinc-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-zinc-600";
 
 export type PaletteDragPayload =
   | { kind: "container" }
@@ -57,69 +65,63 @@ export default function Sidebar({ className = "", onAdded }: SidebarProps) {
     onAdded?.();
   }
 
-  return (
-    <aside className={`flex flex-col gap-4 overflow-y-auto border-r border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950 ${className}`}>
-      <div>
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-          Containers
-        </h2>
-        <div
-          role="button"
-          tabIndex={0}
-          draggable
-          onDragStart={(event) => startDrag(event, { kind: "container" })}
-          onClick={tapAddContainer}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              tapAddContainer();
-            }
-          }}
-          className="cursor-grab rounded border-2 border-dashed border-zinc-400 bg-zinc-50 px-3 py-2 text-sm font-medium text-zinc-700 active:cursor-grabbing pointer-coarse:py-3 dark:bg-zinc-900 dark:text-zinc-200"
-        >
-          Container
-        </div>
-      </div>
+  function itemProps(add: () => void, payload: PaletteDragPayload) {
+    return {
+      role: "button",
+      tabIndex: 0,
+      draggable: true,
+      onDragStart: (event: React.DragEvent) => startDrag(event, payload),
+      onClick: add,
+      onKeyDown: (event: React.KeyboardEvent) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          add();
+        }
+      },
+    } as const;
+  }
 
-      <div>
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-          Components
+  return (
+    <aside className={`flex flex-col gap-5 overflow-y-auto border-r border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950 ${className}`}>
+      <section>
+        <h2 className={HEADING}>
+          Containers
+          <kbd className={KBD} title="Keyboard shortcut">C</kbd>
         </h2>
-        <div className="flex flex-col gap-1.5">
+        <div {...itemProps(tapAddContainer, { kind: "container" })} className={ITEM}>
+          <span aria-hidden className="h-5 w-7 shrink-0 rounded border-2 border-dashed border-zinc-400 dark:border-zinc-500" />
+          <span className="flex-1 truncate">Container</span>
+          <Icon name="grip" className={GRIP} />
+        </div>
+      </section>
+
+      <section>
+        <h2 className={HEADING}>
+          Components
+          <kbd className={KBD} title="Keyboard shortcut">B</kbd>
+        </h2>
+        <div className="flex flex-col gap-1">
           {legend.length === 0 && (
-            <p className="text-[11px] leading-snug text-zinc-400">
-              Add a legend entry to get a draggable component for it.
+            <p className="rounded-lg border border-dashed border-zinc-300 p-3 text-xs leading-snug text-zinc-500 dark:border-zinc-700">
+              Add a legend entry to get a component for it.
             </p>
           )}
           {legend.map((entry) => (
-            <div
-              key={entry.key}
-              role="button"
-              tabIndex={0}
-              draggable
-              onDragStart={(event) => startDrag(event, { kind: "block", colorKey: entry.key })}
-              onClick={() => tapAddBlock(entry.key)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  tapAddBlock(entry.key);
-                }
-              }}
-              className="flex cursor-grab items-center gap-2 rounded border border-zinc-200 px-2 py-1.5 text-xs font-medium text-zinc-700 active:cursor-grabbing pointer-coarse:py-2.5 pointer-coarse:text-sm dark:border-zinc-700 dark:text-zinc-200"
-            >
+            <div key={entry.key} {...itemProps(() => tapAddBlock(entry.key), { kind: "block", colorKey: entry.key })} className={ITEM}>
               <span
-                className="h-3 w-3 shrink-0 rounded-sm border border-black/20"
+                aria-hidden
+                className="h-5 w-7 shrink-0 rounded border border-black/15 dark:border-white/15"
                 style={{ backgroundColor: entry.color }}
               />
-              <span className="truncate">{entry.label}</span>
+              <span className="flex-1 truncate" title={entry.label}>{entry.label}</span>
+              <Icon name="grip" className={GRIP} />
             </div>
           ))}
         </div>
-      </div>
+      </section>
 
-      <p className="text-[11px] leading-snug text-zinc-400">
-        Drag an item onto the canvas, or tap it to add it. Drop a component on top of a container to nest it inside.
-        Select a container first and tapping a component adds it inside.
+      <p className="mt-auto rounded-lg bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+        Drag onto the canvas or click to add. Drop a component on a container, or select the container first, to put it inside.
       </p>
     </aside>
   );

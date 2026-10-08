@@ -4,6 +4,10 @@ interface FilePickerAcceptType {
   accept: Record<string, string[]>;
 }
 
+interface DataTransferItem {
+  getAsFileSystemHandle?: () => Promise<FileSystemHandle | null>;
+}
+
 interface Window {
   showOpenFilePicker?: (options?: {
     types?: FilePickerAcceptType[];
