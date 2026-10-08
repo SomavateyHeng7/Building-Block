@@ -68,7 +68,10 @@ export default function EditorApp() {
           const step = event.shiftKey ? 32 : 8;
           const nodes = nudgeNodes(section.nodes, store.selectedNodeIds, nudge[0] * step, nudge[1] * step);
           store.setActiveSectionNodes(nodes, { coalesceKey: `nudge:${store.selectedNodeIds.join(",")}` });
-        } else if (event.key === "Escape") store.setSelection([]);
+        } else if (event.key === "Escape") {
+          store.setSelection([]);
+          store.setSelectedEdge(null);
+        }
         else if (event.key === "?") setHelpOpen((open) => !open);
         else if (event.key.toLowerCase() === "c" && !event.shiftKey) {
           const count = section.nodes.length;

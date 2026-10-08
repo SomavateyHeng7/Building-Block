@@ -19,6 +19,7 @@ import { createBlankDiagram } from "@/lib/diagram/factory";
 import {
   downloadCanvasPng,
   exportComponentsCsv,
+  exportConnectionsCsv,
   exportPdf,
   exportPdfPages,
   exportPng,
@@ -55,7 +56,7 @@ function readExportTheme(): ExportTheme {
   }
 }
 
-type ExportFormat = "png" | "pdf" | "svg" | "png-all" | "pdf-all" | "csv" | "json";
+type ExportFormat = "png" | "pdf" | "svg" | "png-all" | "pdf-all" | "csv" | "connections-csv" | "json";
 
 const EXPORT_OPTIONS: { format: ExportFormat; label: string; hint: string }[] = [
   { format: "png", label: "PNG image", hint: "Current tab, with legend" },
@@ -64,6 +65,7 @@ const EXPORT_OPTIONS: { format: ExportFormat; label: string; hint: string }[] = 
   { format: "png-all", label: "PNG images (all tabs)", hint: "One file per tab, with legend" },
   { format: "pdf-all", label: "PDF document (all tabs)", hint: "One page per tab, with legend" },
   { format: "csv", label: "Component list (CSV)", hint: "All tabs, with details" },
+  { format: "connections-csv", label: "Connection list (CSV)", hint: "All tabs: from, to, protocol, what flows" },
   { format: "json", label: "Diagram file (JSON)", hint: "A copy you can re-open with Open" },
 ];
 
@@ -316,6 +318,7 @@ export default function Toolbar({ onShowShortcuts }: { onShowShortcuts: () => vo
     const { setActiveSection } = useDiagramStore.getState();
     setExporting(true);
     setSelection([]);
+    useDiagramStore.getState().setSelectedEdge(null);
     try {
       const pages: { name: string; page: RenderedComposite }[] = [];
       for (const target of diagram.sections) {
@@ -371,7 +374,7 @@ export default function Toolbar({ onShowShortcuts }: { onShowShortcuts: () => vo
    * they render. Switch the theme, export, then put the user's theme back.
    */
   async function handleExport(format: ExportFormat) {
-    if (format === "json" || format === "csv" || resolvedTheme === exportTheme) return runExport(format);
+    if (format === "json" || format === "csv" || format === "connections-csv" || resolvedTheme === exportTheme) return runExport(format);
     const previous = theme;
     setTheme(exportTheme);
     for (let attempt = 0; attempt < 40; attempt++) {
@@ -397,6 +400,11 @@ export default function Toolbar({ onShowShortcuts }: { onShowShortcuts: () => vo
       toast.success("Component list downloaded");
       return;
     }
+    if (format === "connections-csv") {
+      exportConnectionsCsv(diagram);
+      toast.success("Connection list downloaded");
+      return;
+    }
     if (format === "png-all" || format === "pdf-all") return handleExportAll(format);
 
     const viewport = document.querySelector<HTMLElement>(".react-flow__viewport");
@@ -408,6 +416,7 @@ export default function Toolbar({ onShowShortcuts }: { onShowShortcuts: () => vo
     setExporting(true);
     // Clear the selection first so handles and highlight outlines aren't in the picture.
     setSelection([]);
+    useDiagramStore.getState().setSelectedEdge(null);
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     try {
       const options = {

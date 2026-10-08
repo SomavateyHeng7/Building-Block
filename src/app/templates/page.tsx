@@ -7,7 +7,7 @@ import { startDiagram } from "@/lib/diagram/file";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const CARD =
-  "rounded-lg border border-zinc-200 p-4 text-left transition-colors hover:border-zinc-400 dark:border-zinc-800 dark:hover:border-zinc-600";
+  "flex h-full flex-col items-start justify-start rounded-lg border border-zinc-200 p-4 text-left transition-colors hover:border-zinc-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 dark:border-zinc-800 dark:hover:border-zinc-600 dark:focus-visible:outline-zinc-100";
 
 export default function TemplatesPage() {
   const router = useRouter();
@@ -38,7 +38,7 @@ export default function TemplatesPage() {
       </div>
 
       <p className="text-sm text-zinc-500">
-        To reuse your own layout and legend, save a diagram as a file and open it as the starting point next time.
+        To reuse your own layout and legend, save a diagram as a file, then use <strong>Open file</strong> on the start page next time.
       </p>
     </div>
   );

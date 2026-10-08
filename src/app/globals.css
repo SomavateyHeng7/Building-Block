@@ -72,6 +72,26 @@ button, a, summary, [role="button"], [role="tab"], [role="menuitem"], label {
   }
 }
 
+/* Connection handles: out of the way until you hover, select, or drag a connection. */
+.react-flow__handle.bb-handle {
+  width: 10px;
+  height: 10px;
+  border: 2px solid #ffffff;
+  background: #2563eb;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.react-flow__node:hover .react-flow__handle.bb-handle,
+.react-flow__node.selected .react-flow__handle.bb-handle,
+.react-flow:has(.react-flow__handle.connectingfrom) .react-flow__handle.bb-handle {
+  opacity: 1;
+}
+@media (pointer: coarse) {
+  .react-flow__handle.bb-handle {
+    opacity: 0.85;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

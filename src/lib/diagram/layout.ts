@@ -1,4 +1,4 @@
-import type { ContainerStyle, DiagramNode, Position, Size } from "./types";
+import type { ConnectionSide, ContainerStyle, DiagramNode, Position, Size } from "./types";
 
 /** Inner spacing of a container; the side with the header leaves room for it. */
 export const CONTAINER_PADDING = 16;
@@ -43,6 +43,28 @@ export function absolutePosition(node: DiagramNode, nodes: DiagramNode[]): Posit
   return parent
     ? { x: node.position.x + parent.position.x, y: node.position.y + parent.position.y }
     : node.position;
+}
+
+/**
+ * Which sides a connection from one component to another should use: the sides facing each other,
+ * horizontally when they are further apart across than down.
+ */
+export function suggestConnectionSides(
+  nodes: DiagramNode[],
+  sourceId: string,
+  targetId: string,
+): { sourceSide: ConnectionSide; targetSide: ConnectionSide } {
+  const source = nodes.find((node) => node.id === sourceId);
+  const target = nodes.find((node) => node.id === targetId);
+  if (!source || !target) return { sourceSide: "right", targetSide: "left" };
+  const from = absolutePosition(source, nodes);
+  const to = absolutePosition(target, nodes);
+  const dx = to.x + target.size.width / 2 - (from.x + source.size.width / 2);
+  const dy = to.y + target.size.height / 2 - (from.y + source.size.height / 2);
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return dx >= 0 ? { sourceSide: "right", targetSide: "left" } : { sourceSide: "left", targetSide: "right" };
+  }
+  return dy >= 0 ? { sourceSide: "bottom", targetSide: "top" } : { sourceSide: "top", targetSide: "bottom" };
 }
 
 /** Aligns, distributes or matches the size of the given nodes, working in canvas coordinates. */

@@ -9,7 +9,18 @@ import {
   tidyContainer,
   type ArrangeOp,
 } from "./layout";
-import type { BlockColorKey, ContainerStyle, Diagram, DiagramNode, LegendEntry, NodeDetails, Position } from "./types";
+import type {
+  BlockColorKey,
+  ConnectionSide,
+  ContainerStyle,
+  Diagram,
+  DiagramEdge,
+  DiagramNode,
+  DiagramSection,
+  LegendEntry,
+  NodeDetails,
+  Position,
+} from "./types";
 
 function touch(diagram: Diagram): Diagram {
   return { ...diagram, updatedAt: new Date().toISOString() };
@@ -23,6 +34,27 @@ function mapActiveSection(
     section.id === diagram.activeSectionId ? { ...section, nodes: fn(section.nodes) } : section,
   );
   return touch({ ...diagram, sections });
+}
+
+/** Applies a change to the active section as a whole (nodes and connections together). */
+function mapActiveSectionFull(diagram: Diagram, fn: (section: DiagramSection) => DiagramSection): Diagram {
+  const sections = diagram.sections.map((section) => (section.id === diagram.activeSectionId ? fn(section) : section));
+  return touch({ ...diagram, sections });
+}
+
+/** Connections are dropped with the components they join. */
+function withoutDanglingEdges(section: DiagramSection): DiagramSection {
+  if (!section.edges?.length) return section;
+  const ids = new Set(section.nodes.map((node) => node.id));
+  const edges = section.edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target));
+  return edges.length === section.edges.length ? section : { ...section, edges };
+}
+
+/** Connections whose two ends are both in `idMap`, copied onto the new ids. */
+function copyEdges(edges: DiagramEdge[] | undefined, idMap: Map<string, string>): DiagramEdge[] {
+  return (edges ?? [])
+    .filter((edge) => idMap.has(edge.source) && idMap.has(edge.target))
+    .map((edge) => ({ ...edge, id: createId("edge"), source: idMap.get(edge.source)!, target: idMap.get(edge.target)! }));
 }
 
 const HISTORY_LIMIT = 100;
@@ -56,7 +88,12 @@ function keepExisting(diagram: Diagram, ids: string[]): string[] {
 function restore(state: DiagramState, diagram: Diagram) {
   lastCommit = { key: null, at: 0 };
   const restored = touch(diagram);
-  return { diagram: restored, selectedNodeIds: keepExisting(restored, state.selectedNodeIds) };
+  const edgeStillThere = (getActiveSection(restored).edges ?? []).some((edge) => edge.id === state.selectedEdgeId);
+  return {
+    diagram: restored,
+    selectedNodeIds: keepExisting(restored, state.selectedNodeIds),
+    selectedEdgeId: edgeStillThere ? state.selectedEdgeId : null,
+  };
 }
 
 /** Selected nodes plus the children of selected containers. */
@@ -73,6 +110,7 @@ interface ClipboardEntry {
 }
 
 let clipboard: ClipboardEntry[] = [];
+let clipboardEdges: DiagramEdge[] = [];
 let pasteCount = 0;
 const PASTE_OFFSET = 24;
 
@@ -81,9 +119,13 @@ function toClipboard(nodes: DiagramNode[], ids: string[]): ClipboardEntry[] {
 }
 
 /** Gives clipboard nodes fresh ids, offsets them, and re-attaches them to a parent where possible. */
-function materialize(entries: ClipboardEntry[], current: DiagramNode[], offset: number): DiagramNode[] {
+function materialize(
+  entries: ClipboardEntry[],
+  current: DiagramNode[],
+  offset: number,
+): { nodes: DiagramNode[]; idMap: Map<string, string> } {
   const idMap = new Map(entries.map(({ node }) => [node.id, createId(node.type)]));
-  return entries.map(({ node, absolute }) => {
+  const nodes = entries.map(({ node, absolute }) => {
     const copiedParent = node.parentId ? idMap.get(node.parentId) : undefined;
     const existingParent =
       !copiedParent && node.parentId && current.some((candidate) => candidate.id === node.parentId)
@@ -103,7 +145,17 @@ function materialize(entries: ClipboardEntry[], current: DiagramNode[], offset: 
       data: node.data.kind === "block" ? { ...node.data, containerId: parentId ?? null } : { ...node.data },
     };
   });
+  return { nodes, idMap };
 }
+
+export interface NewConnection {
+  source: string;
+  target: string;
+  sourceSide?: ConnectionSide;
+  targetSide?: ConnectionSide;
+}
+
+export type ConnectionPatch = Partial<Omit<DiagramEdge, "id" | "source" | "target">>;
 
 export interface NodesChangeOptions {
   coalesceKey?: string;
@@ -112,6 +164,8 @@ export interface NodesChangeOptions {
 interface DiagramState {
   diagram: Diagram;
   selectedNodeIds: string[];
+  /** A selected connection; never set together with selected nodes. */
+  selectedEdgeId: string | null;
   past: Diagram[];
   future: Diagram[];
   undo: () => void;
@@ -119,6 +173,12 @@ interface DiagramState {
   loadDiagram: (diagram: Diagram) => void;
   renameDiagram: (name: string) => void;
   setSelection: (ids: string[]) => void;
+  setSelectedEdge: (id: string | null) => void;
+  /** Joins two components; returns the new connection's id, or null when it isn't allowed or already exists. */
+  addConnection: (connection: NewConnection) => string | null;
+  updateConnection: (id: string, patch: ConnectionPatch) => void;
+  reverseConnection: (id: string) => void;
+  deleteConnections: (ids: string[]) => void;
   selectAll: () => void;
   copySelection: () => void;
   paste: () => void;
@@ -151,6 +211,7 @@ interface DiagramState {
 export const useDiagramStore = create<DiagramState>((set) => ({
   diagram: createBlankDiagram(),
   selectedNodeIds: [],
+  selectedEdgeId: null,
   past: [],
   future: [],
 
@@ -178,13 +239,96 @@ export const useDiagramStore = create<DiagramState>((set) => ({
 
   loadDiagram: (diagram) => {
     lastCommit = { key: null, at: 0 };
-    set({ diagram, selectedNodeIds: [], past: [], future: [] });
+    set({ diagram, selectedNodeIds: [], selectedEdgeId: null, past: [], future: [] });
   },
 
   renameDiagram: (name) =>
     set((state) => commit(state, touch({ ...state.diagram, name }), "rename-diagram")),
 
-  setSelection: (ids) => set({ selectedNodeIds: ids }),
+  setSelection: (ids) =>
+    set((state) => ({ selectedNodeIds: ids, selectedEdgeId: ids.length ? null : state.selectedEdgeId })),
+
+  setSelectedEdge: (id) => set((state) => ({ selectedEdgeId: id, selectedNodeIds: id ? [] : state.selectedNodeIds })),
+
+  addConnection: ({ source, target, sourceSide, targetSide }) => {
+    const { diagram } = useDiagramStore.getState();
+    const section = getActiveSection(diagram);
+    const isBlock = (id: string) => section.nodes.some((node) => node.id === id && node.type === "block");
+    if (source === target || !isBlock(source) || !isBlock(target)) return null;
+    const exists = (section.edges ?? []).some(
+      (edge) =>
+        edge.source === source &&
+        edge.target === target &&
+        edge.sourceSide === sourceSide &&
+        edge.targetSide === targetSide,
+    );
+    if (exists) return null;
+    const id = createId("edge");
+    const edge: DiagramEdge = { id, source, target, ...(sourceSide ? { sourceSide } : {}), ...(targetSide ? { targetSide } : {}) };
+    set((state) => ({
+      ...commit(
+        state,
+        mapActiveSectionFull(state.diagram, (current) => ({ ...current, edges: [...(current.edges ?? []), edge] })),
+      ),
+      selectedEdgeId: id,
+      selectedNodeIds: [],
+    }));
+    return id;
+  },
+
+  // Blank text is stored as undefined so it drops out of saved JSON.
+  updateConnection: (id, patch) =>
+    set((state) => {
+      const cleaned = Object.fromEntries(
+        Object.entries(patch).map(([field, value]) => [field, typeof value === "string" && !value.trim() ? undefined : value]),
+      ) as ConnectionPatch;
+      return commit(
+        state,
+        mapActiveSectionFull(state.diagram, (section) => ({
+          ...section,
+          edges: (section.edges ?? []).map((edge) => (edge.id === id ? { ...edge, ...cleaned } : edge)),
+        })),
+        `edge:${id}:${Object.keys(patch).join(",")}`,
+      );
+    }),
+
+  reverseConnection: (id) =>
+    set((state) =>
+      commit(
+        state,
+        mapActiveSectionFull(state.diagram, (section) => ({
+          ...section,
+          edges: (section.edges ?? []).map((edge) =>
+            edge.id === id
+              ? {
+                  ...edge,
+                  source: edge.target,
+                  target: edge.source,
+                  sourceSide: edge.targetSide,
+                  targetSide: edge.sourceSide,
+                }
+              : edge,
+          ),
+        })),
+      ),
+    ),
+
+  deleteConnections: (ids) =>
+    set((state) => {
+      const doomed = new Set(ids);
+      const present = (getActiveSection(state.diagram).edges ?? []).some((edge) => doomed.has(edge.id));
+      if (!present) return state;
+      return {
+        ...commit(
+          state,
+          mapActiveSectionFull(state.diagram, (section) => ({
+            ...section,
+            edges: (section.edges ?? []).filter((edge) => !doomed.has(edge.id)),
+          })),
+        ),
+        selectedEdgeId: state.selectedEdgeId && doomed.has(state.selectedEdgeId) ? null : state.selectedEdgeId,
+      };
+    }),
 
   selectAll: () =>
     set((state) => ({ selectedNodeIds: getActiveSection(state.diagram).nodes.map((node) => node.id) })),
@@ -192,7 +336,10 @@ export const useDiagramStore = create<DiagramState>((set) => ({
   copySelection: () => {
     const { diagram, selectedNodeIds } = useDiagramStore.getState();
     if (!selectedNodeIds.length) return;
-    clipboard = toClipboard(getActiveSection(diagram).nodes, selectedNodeIds);
+    const section = getActiveSection(diagram);
+    clipboard = toClipboard(section.nodes, selectedNodeIds);
+    const copied = new Set(clipboard.map(({ node }) => node.id));
+    clipboardEdges = (section.edges ?? []).filter((edge) => copied.has(edge.source) && copied.has(edge.target));
     pasteCount = 0;
   },
 
@@ -201,10 +348,19 @@ export const useDiagramStore = create<DiagramState>((set) => ({
       if (!clipboard.length) return state;
       pasteCount += 1;
       const current = getActiveSection(state.diagram).nodes;
-      const pasted = materialize(clipboard, current, PASTE_OFFSET * pasteCount);
+      const { nodes: pasted, idMap } = materialize(clipboard, current, PASTE_OFFSET * pasteCount);
+      const edges = copyEdges(clipboardEdges, idMap);
       return {
-        ...commit(state, mapActiveSection(state.diagram, (nodes) => [...nodes, ...pasted])),
+        ...commit(
+          state,
+          mapActiveSectionFull(state.diagram, (section) => ({
+            ...section,
+            nodes: [...section.nodes, ...pasted],
+            ...(edges.length ? { edges: [...(section.edges ?? []), ...edges] } : {}),
+          })),
+        ),
         selectedNodeIds: pasted.map((node) => node.id),
+        selectedEdgeId: null,
       };
     }),
 
@@ -213,10 +369,19 @@ export const useDiagramStore = create<DiagramState>((set) => ({
     set((state) => {
       const current = getActiveSection(state.diagram).nodes;
       if (!state.selectedNodeIds.length) return state;
-      const copies = materialize(toClipboard(current, state.selectedNodeIds), current, PASTE_OFFSET);
+      const { nodes: copies, idMap } = materialize(toClipboard(current, state.selectedNodeIds), current, PASTE_OFFSET);
+      const edges = copyEdges(getActiveSection(state.diagram).edges, idMap);
       return {
-        ...commit(state, mapActiveSection(state.diagram, (nodes) => [...nodes, ...copies])),
+        ...commit(
+          state,
+          mapActiveSectionFull(state.diagram, (section) => ({
+            ...section,
+            nodes: [...section.nodes, ...copies],
+            ...(edges.length ? { edges: [...(section.edges ?? []), ...edges] } : {}),
+          })),
+        ),
         selectedNodeIds: copies.map((node) => node.id),
+        selectedEdgeId: null,
       };
     }),
 
@@ -227,7 +392,9 @@ export const useDiagramStore = create<DiagramState>((set) => ({
       return {
         ...commit(
           state,
-          mapActiveSection(state.diagram, (nodes) => nodes.filter((node) => !removed.has(node.id))),
+          mapActiveSectionFull(state.diagram, (section) =>
+            withoutDanglingEdges({ ...section, nodes: section.nodes.filter((node) => !removed.has(node.id)) }),
+          ),
         ),
         selectedNodeIds: state.selectedNodeIds.filter((id) => !removed.has(id)),
       };
@@ -267,7 +434,13 @@ export const useDiagramStore = create<DiagramState>((set) => ({
     set((state) => commit(state, touch({ ...state.diagram, showTechnology: show }))),
 
   setActiveSectionNodes: (nodes, options) =>
-    set((state) => commit(state, mapActiveSection(state.diagram, () => nodes), options?.coalesceKey)),
+    set((state) =>
+      commit(
+        state,
+        mapActiveSectionFull(state.diagram, (section) => withoutDanglingEdges({ ...section, nodes })),
+        options?.coalesceKey,
+      ),
+    ),
 
   addContainer: (position) =>
     set((state) => {
@@ -371,7 +544,7 @@ export const useDiagramStore = create<DiagramState>((set) => ({
   setActiveSection: (id) =>
     set((state) =>
       state.diagram.sections.some((section) => section.id === id)
-        ? { diagram: { ...state.diagram, activeSectionId: id }, selectedNodeIds: [] }
+        ? { diagram: { ...state.diagram, activeSectionId: id }, selectedNodeIds: [], selectedEdgeId: null }
         : state,
     ),
 
@@ -388,6 +561,7 @@ export const useDiagramStore = create<DiagramState>((set) => ({
           }),
         ),
         selectedNodeIds: [],
+        selectedEdgeId: null,
       };
     }),
 
@@ -416,6 +590,7 @@ export const useDiagramStore = create<DiagramState>((set) => ({
       return {
         ...commit(state, touch({ ...state.diagram, sections: remaining, activeSectionId: nextActive })),
         selectedNodeIds: activeSectionId === id ? [] : state.selectedNodeIds,
+        selectedEdgeId: activeSectionId === id ? null : state.selectedEdgeId,
       };
     }),
 
@@ -436,6 +611,7 @@ export const useDiagramStore = create<DiagramState>((set) => ({
               ? { ...node.data, containerId: node.data.containerId ? (idMap.get(node.data.containerId) ?? null) : null }
               : { ...node.data },
         })),
+        ...(source.edges?.length ? { edges: copyEdges(source.edges, idMap) } : {}),
       };
       const index = state.diagram.sections.findIndex((section) => section.id === id);
       const sections = [...state.diagram.sections];
@@ -443,6 +619,7 @@ export const useDiagramStore = create<DiagramState>((set) => ({
       return {
         ...commit(state, touch({ ...state.diagram, sections, activeSectionId: copy.id })),
         selectedNodeIds: [],
+        selectedEdgeId: null,
       };
     }),
 

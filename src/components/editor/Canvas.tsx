@@ -5,10 +5,14 @@ import {
   Background,
   Controls,
   MiniMap,
+  ConnectionMode,
   ReactFlow,
   SelectionMode,
   applyNodeChanges,
   useReactFlow,
+  type Connection,
+  type EdgeChange,
+  type OnBeforeDelete,
   type NodeChange,
   type OnNodeDrag,
 } from "@xyflow/react";
@@ -16,13 +20,13 @@ import "@xyflow/react/dist/style.css";
 import { useTheme } from "next-themes";
 import { useMounted } from "@/components/theme-toggle";
 import { getActiveSection, useDiagramStore, type NodesChangeOptions } from "@/lib/diagram/store";
-import { fromFlowNodes, toFlowNodes, type FlowNode } from "@/lib/diagram/flowAdapter";
+import { fromFlowNodes, toFlowEdges, toFlowNodes, type FlowNode } from "@/lib/diagram/flowAdapter";
 import { containerInsets, growContainerToFit } from "@/lib/diagram/layout";
 import ContainerNode from "./nodes/ContainerNode";
 import BlockNode from "./nodes/BlockNode";
 import { Icon } from "./Icon";
 import { PALETTE_DATA_FORMAT, type PaletteDragPayload } from "./Sidebar";
-import type { BlockColorKey, ContainerNodeData } from "@/lib/diagram/types";
+import type { BlockColorKey, ConnectionSide, ContainerNodeData } from "@/lib/diagram/types";
 
 function subscribeWide(callback: () => void) {
   const query = window.matchMedia("(min-width: 768px)");
@@ -75,6 +79,10 @@ export default function Canvas() {
   const selectedNodeIds = useDiagramStore((state) => state.selectedNodeIds);
   const setActiveSectionNodes = useDiagramStore((state) => state.setActiveSectionNodes);
   const setSelection = useDiagramStore((state) => state.setSelection);
+  const selectedEdgeId = useDiagramStore((state) => state.selectedEdgeId);
+  const setSelectedEdge = useDiagramStore((state) => state.setSelectedEdge);
+  const addConnection = useDiagramStore((state) => state.addConnection);
+  const deleteConnections = useDiagramStore((state) => state.deleteConnections);
   const addContainer = useDiagramStore((state) => state.addContainer);
   const addBlock = useDiagramStore((state) => state.addBlock);
   const { getIntersectingNodes, screenToFlowPosition } = useReactFlow();
@@ -98,6 +106,46 @@ export default function Canvas() {
     () => toFlowNodes(section.nodes, new Set(selectedNodeIds)),
     [section.nodes, selectedNodeIds],
   );
+
+  const flowEdges = useMemo(
+    () => toFlowEdges(section.edges ?? [], selectedEdgeId, colorMode === "dark"),
+    [section.edges, selectedEdgeId, colorMode],
+  );
+
+  const handleConnect = useCallback(
+    (connection: Connection) => {
+      addConnection({
+        source: connection.source,
+        target: connection.target,
+        sourceSide: (connection.sourceHandle as ConnectionSide | null) ?? undefined,
+        targetSide: (connection.targetHandle as ConnectionSide | null) ?? undefined,
+      });
+    },
+    [addConnection],
+  );
+
+  // Connections live in the store; React Flow reports clicks and the Delete key here.
+  const handleEdgesChange = useCallback(
+    (changes: EdgeChange[]) => {
+      const removed = changes.flatMap((change) => (change.type === "remove" ? [change.id] : []));
+      if (removed.length) deleteConnections(removed);
+      const picked = changes.find((change) => change.type === "select" && change.selected);
+      if (picked && picked.type === "select") setSelectedEdge(picked.id);
+    },
+    [deleteConnections, setSelectedEdge],
+  );
+
+  // Connections attached to a deleted component go with it (the store prunes them), so React Flow
+  // shouldn't also report them as separate deletions, which would add a second undo step.
+  const handleBeforeDelete: OnBeforeDelete = useCallback(async ({ nodes, edges }) => {
+    const gone = new Set(nodes.map((node) => node.id));
+    return { nodes, edges: edges.filter((edge) => !gone.has(edge.source) && !gone.has(edge.target)) };
+  }, []);
+
+  const handlePaneClick = useCallback(() => {
+    setSelection([]);
+    setSelectedEdge(null);
+  }, [setSelection, setSelectedEdge]);
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -212,8 +260,14 @@ export default function Canvas() {
     <ReactFlow
       key={section.id}
       nodes={flowNodes}
-      edges={[]}
+      edges={flowEdges}
       nodeTypes={nodeTypes}
+      connectionMode={ConnectionMode.Loose}
+      isValidConnection={(connection) => connection.source !== connection.target}
+      onConnect={handleConnect}
+      onEdgesChange={handleEdgesChange}
+      onBeforeDelete={handleBeforeDelete}
+      onPaneClick={handlePaneClick}
       colorMode={colorMode}
       onNodesChange={handleNodesChange}
       onNodeDragStop={handleNodeDragStop}

@@ -1,10 +1,14 @@
 "use client";
 
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
-import type { ArrangeOp } from "@/lib/diagram/layout";
+import { suggestConnectionSides, type ArrangeOp } from "@/lib/diagram/layout";
+import { connectionCaption } from "@/lib/diagram/flowAdapter";
 import type {
   BlockColorKey,
+  ConnectionDirection,
+  ConnectionLineStyle,
   ContainerNodeData,
+  DiagramEdge,
   ContainerStyle,
   HeaderAlign,
   HeaderPosition,
@@ -227,6 +231,163 @@ function ColorSwatches({
   );
 }
 
+/** The connections touching one component, plus a picker to add another without dragging. */
+function ConnectionsSection({ nodeId }: { nodeId: string }) {
+  const section = useDiagramStore((state) => getActiveSection(state.diagram));
+  const addConnection = useDiagramStore((state) => state.addConnection);
+  const setSelectedEdge = useDiagramStore((state) => state.setSelectedEdge);
+
+  const labelOf = (id: string) => section.nodes.find((node) => node.id === id)?.data.label ?? "?";
+  const mine = (section.edges ?? []).filter((edge) => edge.source === nodeId || edge.target === nodeId);
+  const others = section.nodes.filter((node) => node.type === "block" && node.id !== nodeId);
+
+  function connectTo(targetId: string) {
+    if (!targetId) return;
+    addConnection({ source: nodeId, target: targetId, ...suggestConnectionSides(section.nodes, nodeId, targetId) });
+  }
+
+  return (
+    <div className={FIELD_LABEL}>
+      Connections
+      {mine.length > 0 && (
+        <ul className="flex flex-col gap-1">
+          {mine.map((edge) => {
+            const outgoing = edge.source === nodeId;
+            const caption = connectionCaption(edge);
+            return (
+              <li key={edge.id}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedEdge(edge.id)}
+                  className="flex w-full items-baseline gap-1.5 rounded-md border border-zinc-200 px-2 py-1.5 text-left text-xs font-normal hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
+                >
+                  <span aria-hidden>{edge.direction === "both" ? "↔" : edge.direction === "none" ? "—" : outgoing ? "→" : "←"}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium">{labelOf(outgoing ? edge.target : edge.source)}</span>
+                  {caption && <span className="shrink-0 text-zinc-500">{caption}</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <select
+        aria-label="Connect to another component"
+        className={FIELD}
+        value=""
+        disabled={!others.length}
+        onChange={(event) => connectTo(event.target.value)}
+      >
+        <option value="">{others.length ? "Connect to…" : "Add another component to connect"}</option>
+        {others.map((node) => (
+          <option key={node.id} value={node.id}>
+            {node.data.label}
+          </option>
+        ))}
+      </select>
+      <span className="text-[11px] font-normal text-zinc-400">
+        Or drag from a dot on the edge of this component to another one.
+      </span>
+    </div>
+  );
+}
+
+const DIRECTION_OPTIONS: { value: ConnectionDirection; label: string }[] = [
+  { value: "forward", label: "One way" },
+  { value: "both", label: "Both ways" },
+  { value: "none", label: "No arrow" },
+];
+
+const LINE_OPTIONS: { value: ConnectionLineStyle; label: string }[] = [
+  { value: "solid", label: "Solid" },
+  { value: "dashed", label: "Dashed" },
+];
+
+function ConnectionPanel({ edge }: { edge: DiagramEdge }) {
+  const section = useDiagramStore((state) => getActiveSection(state.diagram));
+  const updateConnection = useDiagramStore((state) => state.updateConnection);
+  const reverseConnection = useDiagramStore((state) => state.reverseConnection);
+  const deleteConnections = useDiagramStore((state) => state.deleteConnections);
+  const setSelection = useDiagramStore((state) => state.setSelection);
+
+  const end = (id: string) => (
+    <button
+      type="button"
+      className="font-medium text-blue-600 hover:underline dark:text-blue-400"
+      onClick={() => setSelection([id])}
+    >
+      {section.nodes.find((node) => node.id === id)?.data.label ?? "?"}
+    </button>
+  );
+
+  return (
+    <div className={PANEL}>
+      <h2 className={SECTION_TITLE}>Connection</h2>
+      <p className="-mt-3 text-xs text-zinc-500">
+        {end(edge.source)} → {end(edge.target)}
+      </p>
+
+      <label className={FIELD_LABEL}>
+        What flows
+        <input
+          className={FIELD}
+          placeholder="e.g. Orders, customer data"
+          value={edge.label ?? ""}
+          onChange={(event) => updateConnection(edge.id, { label: event.target.value })}
+        />
+      </label>
+      <label className={FIELD_LABEL}>
+        Protocol or technology
+        <input
+          className={FIELD}
+          placeholder="e.g. REST, gRPC, Kafka, SFTP"
+          value={edge.protocol ?? ""}
+          onChange={(event) => updateConnection(edge.id, { protocol: event.target.value })}
+        />
+      </label>
+      <label className={FIELD_LABEL}>
+        Description
+        <textarea
+          rows={3}
+          className={`${FIELD} resize-y`}
+          placeholder="Frequency, volume, security, failure handling"
+          value={edge.description ?? ""}
+          onChange={(event) => updateConnection(edge.id, { description: event.target.value })}
+        />
+      </label>
+
+      <div className={FIELD_LABEL}>
+        Arrows
+        <Segmented
+          label="Arrows"
+          options={DIRECTION_OPTIONS}
+          value={edge.direction ?? "forward"}
+          onChange={(direction) => updateConnection(edge.id, { direction })}
+        />
+      </div>
+      <div className={FIELD_LABEL}>
+        Line
+        <Segmented
+          label="Line"
+          options={LINE_OPTIONS}
+          value={edge.style ?? "solid"}
+          onChange={(style) => updateConnection(edge.id, { style })}
+        />
+        <span className="text-[11px] font-normal text-zinc-400">Dashed is the usual way to show asynchronous calls.</span>
+      </div>
+
+      <div className="flex gap-2">
+        <button type="button" className={ACTION_BUTTON} onClick={() => reverseConnection(edge.id)}>
+          Reverse direction
+        </button>
+        <button type="button" onClick={() => deleteConnections([edge.id])} className={DELETE_BUTTON}>
+          <Icon name="trash" className="h-3.5 w-3.5" />
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function MultiSelectionPanel({ ids }: { ids: string[] }) {
   const legend = useDiagramStore((state) => state.diagram.legend);
   const arrangeSelection = useDiagramStore((state) => state.arrangeSelection);
@@ -278,6 +439,7 @@ function MultiSelectionPanel({ ids }: { ids: string[] }) {
 export default function PropertiesPanel() {
   const diagram = useDiagramStore((state) => state.diagram);
   const selectedNodeIds = useDiagramStore((state) => state.selectedNodeIds);
+  const selectedEdgeId = useDiagramStore((state) => state.selectedEdgeId);
   const legend = useDiagramStore((state) => state.diagram.legend);
   const updateNodeLabel = useDiagramStore((state) => state.updateNodeLabel);
   const updateNodeColor = useDiagramStore((state) => state.updateNodeColor);
@@ -292,6 +454,9 @@ export default function PropertiesPanel() {
   const showTechnology = diagram.showTechnology !== false;
 
   const section = getActiveSection(diagram);
+
+  const selectedEdge = selectedEdgeId ? section.edges?.find((edge) => edge.id === selectedEdgeId) : undefined;
+  if (selectedEdge) return <ConnectionPanel edge={selectedEdge} />;
 
   if (selectedNodeIds.length > 1) return <MultiSelectionPanel ids={selectedNodeIds} />;
 
@@ -332,7 +497,7 @@ export default function PropertiesPanel() {
         <div className="flex gap-2.5 rounded-lg bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
           <Icon name="cursor" className="mt-0.5 h-4 w-4 shrink-0" />
           <p>
-            Select a container or component to edit its details. Shift-click or drag a box to select several and line them up.
+            Select a container, component or connection to edit its details. Shift-click or drag a box to select several and line them up. Drag from a dot on a component to connect it to another.
           </p>
         </div>
       </div>
@@ -401,6 +566,8 @@ export default function PropertiesPanel() {
           </label>
         );
       })}
+
+      {node.type === "block" && <ConnectionsSection nodeId={node.id} />}
 
       {node.data.kind === "container" && (
         <ContainerStyleControls

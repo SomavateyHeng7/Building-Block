@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore, type DragEvent, type ReactNode } from "react";
 import { LogoMark } from "@/components/Logo";
+import Footer from "@/components/landing/Footer";
 import { ThemeToggle, useMounted } from "@/components/theme-toggle";
 import { createBlankDiagram } from "@/lib/diagram/factory";
 import { openDiagramFromDevice, openDroppedDiagram, startDiagram, supportsFilePicker } from "@/lib/diagram/file";
@@ -42,9 +43,9 @@ function hasFiles(event: DragEvent): boolean {
 }
 
 const CARD =
-  "group flex flex-col gap-3 rounded-xl border p-5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:cursor-wait disabled:opacity-60 dark:focus-visible:outline-zinc-100";
+  "group flex flex-col gap-3 rounded-2xl border p-6 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:cursor-wait disabled:opacity-60 dark:focus-visible:outline-zinc-100";
 const CARD_PLAIN = `${CARD} border-zinc-200 hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:border-zinc-600 dark:hover:bg-zinc-900`;
-const ICON_BOX = "flex h-9 w-9 items-center justify-center rounded-lg";
+const ICON_BOX = "flex h-10 w-10 items-center justify-center rounded-xl";
 
 function ActionCard({
   icon,
@@ -79,6 +80,60 @@ function ActionCard({
       </span>
       <span className={`text-sm ${primary ? "opacity-75" : "text-zinc-600 dark:text-zinc-400"}`}>{body}</span>
       {children}
+    </button>
+  );
+}
+
+/** A small picture of what a template looks like: columns of coloured components with a few connections. */
+function TemplatePreview() {
+  const columns = [
+    { x: 8, colors: ["#8fd19e", "#8fd19e", "#7c3aed"] },
+    { x: 68, colors: ["#1f7a4f", "#e0556f", "#f4d35e"] },
+    { x: 128, colors: ["#b8860b", "#b8860b", "#ffffff"] },
+    { x: 188, colors: ["#8fd19e", "#d4d4d8", "#1f7a4f"] },
+  ];
+  return (
+    <svg viewBox="0 0 244 112" className="h-full w-full text-zinc-400" aria-hidden>
+      <defs>
+        <marker id="preview-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0 0l8 4-8 4z" fill="currentColor" />
+        </marker>
+      </defs>
+      {columns.map((column) => (
+        <g key={column.x}>
+          <rect x={column.x} y={8} width={48} height={96} rx={4} fill="none" stroke="currentColor" strokeWidth={1.25} />
+          <rect x={column.x} y={8} width={48} height={10} rx={4} fill="currentColor" opacity={0.18} />
+          {column.colors.map((color, row) => (
+            <rect key={row} x={column.x + 6} y={24 + row * 26} width={36} height={19} rx={2.5} fill={color} stroke="rgba(0,0,0,0.2)" strokeWidth={0.75} />
+          ))}
+        </g>
+      ))}
+      <g fill="none" stroke="currentColor" strokeWidth={1.5} markerEnd="url(#preview-arrow)">
+        <path d="M48 33.5H74" />
+        <path d="M48 59.5H58V85.5H74" />
+        <path d="M108 85.5H118V59.5H134" strokeDasharray="4 3" />
+      </g>
+    </svg>
+  );
+}
+
+function TemplateCard({ name, body, wide, onClick }: { name: string; body: string; wide: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`${CARD_PLAIN} ${wide ? "sm:col-span-2 sm:flex-row sm:items-center sm:gap-6" : ""}`}
+    >
+      <span className={`block shrink-0 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900 ${wide ? "h-32 sm:w-64" : "h-32 w-full"}`}>
+        <TemplatePreview />
+      </span>
+      <span className="flex flex-col gap-1.5">
+        <span className="flex items-center gap-1.5 font-semibold">
+          {name}
+          <Icon path={ICONS.arrow} className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
+        </span>
+        <span className="text-sm text-zinc-600 dark:text-zinc-400">{body}</span>
+      </span>
     </button>
   );
 }
@@ -131,11 +186,16 @@ export default function StartPage() {
 
   return (
     <div
-      className="flex min-h-full w-full flex-1 flex-col"
+      className="relative flex min-h-full w-full flex-1 flex-col overflow-x-clip"
       onDragEnter={(event) => {
         if (hasFiles(event)) setDragging(true);
       }}
     >
+      {/* A faint dot grid, like the editor canvas, that fades out downward. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-96 bg-[radial-gradient(circle,rgb(113_113_122/0.28)_1px,transparent_1px)] bg-[length:22px_22px] [mask-image:linear-gradient(to_bottom,black,transparent)]"
+      />
       <header className="border-b border-zinc-200/70 dark:border-zinc-800/70">
         <nav className="mx-auto flex max-w-4xl items-center gap-6 px-4 py-3 sm:px-6">
           <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
@@ -148,11 +208,14 @@ export default function StartPage() {
         </nav>
       </header>
 
-      <main className="mx-auto flex w-full max-w-4xl flex-col gap-12 px-4 py-12 sm:px-6 sm:py-16">
-        <section className="flex flex-col gap-6">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Start a diagram</h1>
-            <p className="mt-2 text-zinc-600 dark:text-zinc-400">Begin with an empty canvas, or pick up where you left off.</p>
+      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-12 px-4 pb-16 pt-10 sm:px-6 sm:pt-14">
+        <section className="flex flex-col gap-8">
+          <div className="flex max-w-2xl flex-col gap-3">
+            <span className="w-fit rounded-full border border-zinc-200 bg-white/70 px-3 py-1 text-xs font-medium text-zinc-600 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/70 dark:text-zinc-400">
+              Free, no account
+            </span>
+            <h1 className="text-4xl font-semibold tracking-tight text-balance text-zinc-950 sm:text-5xl dark:text-zinc-50">Start a diagram</h1>
+            <p className="text-lg text-pretty text-zinc-600 dark:text-zinc-400">Begin with an empty canvas, or pick up where you left off.</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <ActionCard primary icon={ICONS.plus} title="New blank diagram" body="An empty canvas with the default colour legend." onClick={startBlank} />
@@ -172,20 +235,27 @@ export default function StartPage() {
           <section className="flex flex-col gap-4">
             <div className="flex items-baseline justify-between gap-4">
               <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Start from a template</h2>
-              <Link href="/templates" className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
-                All templates
+              <Link href="/templates" className="text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
+                All templates →
               </Link>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              {starterTemplates.map((template) => (
-                <ActionCard key={template.id} icon={ICONS.template} title={template.name} body={template.description} onClick={() => startTemplate(template.id)} />
+              {starterTemplates.map((template, index) => (
+                <TemplateCard
+                  key={template.id}
+                  name={template.name}
+                  body={template.description}
+                  // A lone last card fills the row instead of leaving a gap.
+                  wide={index === starterTemplates.length - 1 && starterTemplates.length % 2 === 1}
+                  onClick={() => startTemplate(template.id)}
+                />
               ))}
             </div>
           </section>
         )}
 
-        <section className="flex gap-3 rounded-xl bg-zinc-50 p-4 text-sm text-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-400">
-          <span className={`${ICON_BOX} shrink-0 bg-white text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300`}>
+        <section className="flex gap-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-5 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
+          <span className={`${ICON_BOX} shrink-0 border border-zinc-200 bg-white text-emerald-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-emerald-400`}>
             <Icon path={ICONS.lock} />
           </span>
           <div>
@@ -261,6 +331,8 @@ export default function StartPage() {
           </div>
         )}
       </main>
+
+      <Footer />
 
       {dragging && (
         // Covers the page while a file is dragged over it, so leaving it means the drag left the window.

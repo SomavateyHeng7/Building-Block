@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
+import CurrentYear from "./CurrentYear";
 
 // Anchors are absolute ("/#…") so the footer works on pages other than the landing page.
 const COLUMNS = [
@@ -53,8 +54,10 @@ export default function Footer() {
       </div>
 
       <div className="border-t border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 pb-safe text-sm text-zinc-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <span>Building Block</span>
+        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-sm text-zinc-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <span>
+            &copy; <CurrentYear /> Building Block. Built by Somatech.
+          </span>
           <span className="flex items-center gap-2">
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3" />

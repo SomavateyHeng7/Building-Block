@@ -10,6 +10,12 @@ const SWATCH = 14;
 const MAX_CANVAS_SIDE = 12000;
 const FONT_FAMILY = "Arial, Helvetica, sans-serif";
 
+/** Leaves editing handles (resize and connection dots) out of the picture. */
+function keepInPicture(node: HTMLElement): boolean {
+  const classes = node.classList;
+  return !classes?.contains("react-flow__resize-control") && !classes?.contains("react-flow__handle");
+}
+
 export interface ImageExportOptions {
   /** React Flow's `.react-flow__viewport` element. */
   viewport: HTMLElement;
@@ -88,7 +94,7 @@ export async function renderComposite(
       transform: `translate(${PADDING - bounds.x}px, ${PADDING - bounds.y}px) scale(1)`,
     },
     // Leave resize handles out of the picture.
-    filter: (node) => !node.classList?.contains("react-flow__resize-control"),
+    filter: keepInPicture,
   });
 
   const canvas = document.createElement("canvas");
@@ -168,6 +174,31 @@ export async function downloadCanvasPng(canvas: HTMLCanvasElement, filename: str
   downloadBlob(blob, `${fileBaseName(filename)}.png`);
 }
 
+/** Every connection in every section: who talks to whom, how, and what flows. */
+export function exportConnectionsCsv(diagram: Diagram): void {
+  const rows: string[][] = [
+    ["Section", "From", "To", "Direction", "Line", "What flows", "Protocol or technology", "Description"],
+  ];
+  const directions = { forward: "One way", both: "Both ways", none: "No arrow" };
+  for (const section of diagram.sections) {
+    const nameOf = (id: string) => section.nodes.find((node) => node.id === id)?.data.label ?? "";
+    for (const edge of section.edges ?? []) {
+      rows.push([
+        section.name,
+        nameOf(edge.source),
+        nameOf(edge.target),
+        directions[edge.direction ?? "forward"],
+        edge.style === "dashed" ? "Dashed" : "Solid",
+        edge.label ?? "",
+        edge.protocol ?? "",
+        edge.description ?? "",
+      ]);
+    }
+  }
+  const csv = rows.map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")).join("\r\n");
+  downloadBlob(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }), `${fileBaseName(diagram.name)}-connections.csv`);
+}
+
 /** Every container and component in every section, for the solution document's component catalogue. */
 export function exportComponentsCsv(diagram: Diagram): void {
   const categories = new Map(diagram.legend.map((entry) => [entry.key, entry.label]));
@@ -221,7 +252,7 @@ export async function exportSvg(options: ImageExportOptions): Promise<void> {
       height: `${height}px`,
       transform: `translate(${PADDING - bounds.x}px, ${PADDING - bounds.y}px) scale(1)`,
     },
-    filter: (node) => !node.classList?.contains("react-flow__resize-control"),
+    filter: keepInPicture,
   });
 
   const legendTop = HEADER_HEIGHT + height;

@@ -1,6 +1,6 @@
 import { createId } from "@/lib/diagram/factory";
 import { DEFAULT_LEGEND } from "@/lib/diagram/defaultLegend";
-import type { BlockColorKey, Diagram, DiagramNode } from "@/lib/diagram/types";
+import type { BlockColorKey, Diagram, DiagramEdge, DiagramNode } from "@/lib/diagram/types";
 import type { TemplateDefinition } from "./types";
 
 interface BlockSpec {
@@ -51,7 +51,8 @@ const LAYOUT: ContainerSpec[] = [
 ];
 
 const CONTAINER_WIDTH = 300;
-const CONTAINER_GAP_X = 40;
+// Wide enough for a connection label to sit between two columns.
+const CONTAINER_GAP_X = 150;
 const CONTAINER_TOP = 60;
 const BLOCK_WIDTH = 260;
 const BLOCK_HEIGHT = 48;
@@ -95,7 +96,36 @@ function buildNodes(): DiagramNode[] {
   return nodes;
 }
 
+/** A few example connections between neighbouring layers, so the template shows what L1 looks like. */
+const CONNECTIONS: { from: string; to: string; label: string; protocol: string; dashed?: boolean }[] = [
+  { from: "Customer Portal", to: "Customer Profile Service", label: "Profile data", protocol: "REST" },
+  { from: "Mobile App", to: "Order Management", label: "Orders", protocol: "REST" },
+  { from: "Order Management", to: "Event Bus", label: "Order events", protocol: "Kafka", dashed: true },
+];
+
+function buildEdges(nodes: DiagramNode[]): DiagramEdge[] {
+  const idOf = (label: string) => nodes.find((node) => node.type === "block" && node.data.label === label)?.id;
+  return CONNECTIONS.flatMap((connection) => {
+    const source = idOf(connection.from);
+    const target = idOf(connection.to);
+    if (!source || !target) return [];
+    return [
+      {
+        id: createId("edge"),
+        source,
+        target,
+        sourceSide: "right" as const,
+        targetSide: "left" as const,
+        label: connection.label,
+        protocol: connection.protocol,
+        ...(connection.dashed ? { style: "dashed" as const } : {}),
+      },
+    ];
+  });
+}
+
 function build(): Diagram {
+  const nodes = buildNodes();
   const now = new Date().toISOString();
   const sectionId = createId("section");
   return {
@@ -103,7 +133,7 @@ function build(): Diagram {
     id: createId("diagram"),
     name: "L0 Architecture",
     legend: DEFAULT_LEGEND.map((entry) => ({ ...entry })),
-    sections: [{ id: sectionId, name: "Overview", nodes: buildNodes() }],
+    sections: [{ id: sectionId, name: "Overview", nodes, edges: buildEdges(nodes) }],
     activeSectionId: sectionId,
     createdAt: now,
     updatedAt: now,
@@ -114,6 +144,6 @@ export const l0ArchitectureTemplate: TemplateDefinition = {
   id: "l0-architecture",
   name: "L0 Architecture",
   description:
-    "A generic multi-layer system architecture: engagement channels, core systems, integration layer, and infrastructure, color-coded by component type.",
+    "A generic multi-layer system architecture: engagement channels, core systems, integration layer, and infrastructure, color-coded by component type, with a few example connections.",
   build,
 };

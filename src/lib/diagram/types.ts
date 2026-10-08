@@ -70,10 +70,37 @@ export interface DiagramNode {
   zIndex?: number;
 }
 
+/** Which side of a component a connection attaches to. */
+export type ConnectionSide = "top" | "right" | "bottom" | "left";
+/** Where the arrowheads go: at the target, at both ends, or nowhere. */
+export type ConnectionDirection = "forward" | "both" | "none";
+export type ConnectionLineStyle = "solid" | "dashed";
+
+/** A line between two components: how they interact (L1). */
+export interface DiagramEdge {
+  id: string;
+  /** Component ids in the same section. */
+  source: string;
+  target: string;
+  sourceSide?: ConnectionSide;
+  targetSide?: ConnectionSide;
+  /** What flows, e.g. "Orders". */
+  label?: string;
+  /** How it flows, e.g. "REST", "Kafka". */
+  protocol?: string;
+  description?: string;
+  /** Defaults to "forward". */
+  direction?: ConnectionDirection;
+  /** Defaults to "solid"; dashed is the usual convention for asynchronous calls. */
+  style?: ConnectionLineStyle;
+}
+
 export interface DiagramSection {
   id: string;
   name: string;
   nodes: DiagramNode[];
+  /** Connections between components. Absent in files made before connections existed. */
+  edges?: DiagramEdge[];
 }
 
 export interface Diagram {

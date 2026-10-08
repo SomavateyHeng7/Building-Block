@@ -5,6 +5,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import Footer from "@/components/landing/Footer";
 import HeroDiagram from "@/components/landing/HeroDiagram";
 import WaitlistForm from "@/components/landing/WaitlistForm";
+import { getLevels, roadmapHeading } from "@/lib/levels";
 
 export const metadata: Metadata = {
   title: "Building Block — L0 architecture diagrams for solution architects",
@@ -60,26 +61,8 @@ const STEPS = [
   },
 ];
 
-const LEVELS = [
-  {
-    level: "L0",
-    title: "Landscape",
-    body: "Systems and components grouped into domains, coloured by change type.",
-    status: "Available now",
-  },
-  {
-    level: "L1",
-    title: "Interactions",
-    body: "How the components talk to each other: connections, protocols and data flows.",
-    status: "Coming next",
-  },
-  {
-    level: "L2",
-    title: "Component detail",
-    body: "Drill down from any L1 component into its internal design, kept linked to the level above.",
-    status: "Planned",
-  },
-];
+// Worked out from what the editor can do, so it stays current without editing this page.
+const LEVELS = getLevels();
 
 function Icon({ path }: { path: string }) {
   return (
@@ -220,18 +203,18 @@ export default function LandingPage() {
         <section id="roadmap" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-20 sm:px-6">
           <div className="max-w-2xl">
             <h2 className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-              L0 today, L1 and L2 next
+              {roadmapHeading(LEVELS)}
             </h2>
             <p className="mt-3 text-zinc-600 dark:text-zinc-400">
-              We&apos;re starting with the landscape view and building towards linked levels you can drill into.
+              Each level builds on the one before it and stays linked to it.
             </p>
           </div>
           <div className="mt-12 grid gap-6 md:grid-cols-3">
-            {LEVELS.map((level, index) => (
+            {LEVELS.map((level) => (
               <div
                 key={level.level}
                 className={`rounded-xl border p-6 ${
-                  index === 0
+                  level.status === "Available now"
                     ? "border-zinc-900 dark:border-zinc-100"
                     : "border-dashed border-zinc-300 dark:border-zinc-700"
                 }`}
@@ -240,7 +223,7 @@ export default function LandingPage() {
                   <span className="font-mono text-2xl font-semibold text-zinc-950 dark:text-zinc-50">{level.level}</span>
                   <span
                     className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      index === 0
+                      level.status === "Available now"
                         ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
                         : "bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400"
                     }`}

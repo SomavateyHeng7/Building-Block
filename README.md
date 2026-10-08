@@ -10,15 +10,18 @@ device, like draw.io's device storage. The app holds the diagram in memory only 
 
 - Containers and components with drag-in nesting, resize, snap-to-grid and a minimap
 - A user-defined legend; exports include only the categories used
+- Connections between components (L1): drag from the dot on a component's edge to another, or pick one in
+  the details panel. Each has a label (what flows), a protocol, a description, arrows (one way, both ways,
+  none) and a solid or dashed line
 - Details per component: technology, owner, description, notes
 - Align, distribute, match size, fit container, tidy layout
 - Several tabs per diagram (e.g. current vs target) with copy/paste between them
 - Built-in templates; to reuse your own layout, save it as a file and open that
-- Export: PNG, PDF, SVG, component list (CSV), JSON; PNG/PDF can cover all tabs
+- Export: PNG, PDF, SVG, component list (CSV), connection list (CSV), JSON; PNG/PDF can cover all tabs
 - Works on desktop, tablet and phone (see [Devices](#devices))
 - Keyboard shortcuts (press `?` in the editor)
 
-L1 (interactions) and L2 (component detail) are planned, not built.
+The landing page's roadmap works out which levels exist from the editor's code (`src/lib/levels.ts`), so it stays current: L0 (landscape) and L1 (connections) are built; L2 (drilling into a component's internal design) is not yet.
 
 ## Where your diagrams live
 
@@ -68,7 +71,7 @@ Browser behaviour for saving is in the table above; everything else is the same 
 ```bash
 pnpm install
 pnpm dev        # http://localhost:3000
-pnpm test       # unit tests: validation, layout, and file save / dirty tracking
+pnpm test       # unit tests: validation, layout, connections, and file save / dirty tracking
 pnpm lint
 pnpm build
 ```

@@ -17,7 +17,7 @@ export default async function MaintenancePage() {
   const until = upcomingEnd(config);
 
   return (
-    <main className="flex min-h-dvh w-full flex-1 flex-col items-center justify-center px-4 py-16 pb-safe pt-safe sm:px-6">
+    <main className="flex min-h-dvh w-full flex-1 flex-col items-center justify-center px-4 pt-[max(4rem,env(safe-area-inset-top))] pb-[max(4rem,env(safe-area-inset-bottom))] sm:px-6">
       <div className="flex w-full max-w-lg flex-col items-center gap-8 text-center">
         <div className="relative" aria-hidden>
           <LogoMark className="h-16 w-16 motion-safe:animate-pulse" />

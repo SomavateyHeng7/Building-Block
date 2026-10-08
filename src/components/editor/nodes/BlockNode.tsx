@@ -1,11 +1,18 @@
 "use client";
 
 import { memo, useState } from "react";
-import { NodeResizer, type Node, type NodeProps } from "@xyflow/react";
+import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
 import { useDiagramStore } from "@/lib/diagram/store";
 import type { BlockNodeData } from "@/lib/diagram/types";
 
 export type BlockFlowNode = Node<BlockNodeData, "block">;
+
+const SIDES = [
+  { id: "top", position: Position.Top },
+  { id: "right", position: Position.Right },
+  { id: "bottom", position: Position.Bottom },
+  { id: "left", position: Position.Left },
+] as const;
 
 function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
   const updateNodeLabel = useDiagramStore((state) => state.updateNodeLabel);
@@ -29,6 +36,10 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
       onDoubleClick={() => setEditing(true)}
     >
       <NodeResizer minWidth={80} minHeight={32} isVisible={selected} />
+      {/* Every side starts and ends connections (the canvas uses loose connection mode). */}
+      {SIDES.map((side) => (
+        <Handle key={side.id} id={side.id} type="source" position={side.position} className="bb-handle" />
+      ))}
       {data.notes && <NotesMarker notes={data.notes} />}
       {editing ? (
         <input

@@ -1,8 +1,10 @@
 import { DEFAULT_LEGEND } from "./defaultLegend";
 import { createBlankSection, createId } from "./factory";
 import type {
+  ConnectionSide,
   ContainerStyle,
   Diagram,
+  DiagramEdge,
   DiagramNode,
   DiagramSection,
   LegendEntry,
@@ -139,6 +141,47 @@ function parseNode(raw: unknown, legendKeys: Set<string>): { node: DiagramNode; 
   return { node, repaired };
 }
 
+const SIDES = ["top", "right", "bottom", "left"] as const satisfies readonly ConnectionSide[];
+
+/** Keeps connections between two different components that exist; reports what was dropped. */
+function parseEdges(raw: unknown, nodes: DiagramNode[], name: string, fixes: string[]): DiagramEdge[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) {
+    fixes.push(`"${name}": skipped connections that couldn't be read.`);
+    return [];
+  }
+  const blockIds = new Set(nodes.filter((node) => node.type === "block").map((node) => node.id));
+  const ids = new Set<string>();
+  const edges: DiagramEdge[] = [];
+  let dropped = 0;
+  for (const item of raw) {
+    const id = isObject(item) ? text(item.id) : undefined;
+    const source = isObject(item) ? text(item.source) : undefined;
+    const target = isObject(item) ? text(item.target) : undefined;
+    if (!isObject(item) || !id || ids.has(id) || !source || !target || source === target || !blockIds.has(source) || !blockIds.has(target)) {
+      dropped += 1;
+      continue;
+    }
+    ids.add(id);
+    const edge: DiagramEdge = { id, source, target };
+    const sourceSide = oneOf(item.sourceSide, SIDES);
+    const targetSide = oneOf(item.targetSide, SIDES);
+    const direction = oneOf(item.direction, ["forward", "both", "none"] as const);
+    const style = oneOf(item.style, ["solid", "dashed"] as const);
+    if (sourceSide) edge.sourceSide = sourceSide;
+    if (targetSide) edge.targetSide = targetSide;
+    if (direction) edge.direction = direction;
+    if (style) edge.style = style;
+    for (const key of ["label", "protocol", "description"] as const) {
+      const value = text(item[key])?.trim();
+      if (value) edge[key] = value;
+    }
+    edges.push(edge);
+  }
+  if (dropped) fixes.push(`"${name}": skipped ${plural(dropped, "connection")} that didn't join two components.`);
+  return edges;
+}
+
 function parseSection(raw: unknown, index: number, legendKeys: Set<string>, fixes: string[]): DiagramSection {
   const section = isObject(raw) ? raw : {};
   const name = text(section.name) || `Section ${index + 1}`;
@@ -186,7 +229,8 @@ function parseSection(raw: unknown, index: number, legendKeys: Set<string>, fixe
     fixes.push(`"${name}": took ${plural(detached, "item")} out of a container that is missing or isn't a container.`);
   }
 
-  return { id: text(section.id) || createId("section"), name, nodes: linked };
+  const edges = parseEdges(section.edges, linked, name, fixes);
+  return { id: text(section.id) || createId("section"), name, nodes: linked, ...(edges.length ? { edges } : {}) };
 }
 
 /**
