@@ -28,8 +28,8 @@ export default function ToastViewport() {
               <p className="font-medium text-zinc-900 dark:text-zinc-100">{item.title}</p>
               {item.details && (
                 <ul className="mt-1 list-disc pl-4 text-xs text-zinc-600 dark:text-zinc-400">
-                  {item.details.map((line) => (
-                    <li key={line}>{line}</li>
+                  {item.details.map((line, index) => (
+                    <li key={index}>{line}</li>
                   ))}
                 </ul>
               )}

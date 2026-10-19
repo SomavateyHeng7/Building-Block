@@ -16,6 +16,7 @@ import type {
   NodeDetails,
   OutlineStyle,
 } from "@/lib/diagram/types";
+import { defaultLabel } from "@/lib/diagram/factory";
 import { Icon } from "./Icon";
 
 const DETAIL_FIELDS: {
@@ -217,8 +218,8 @@ function ColorSwatches({
         <button
           type="button"
           key={entry.key}
-          title={entry.label}
-          aria-label={entry.label}
+          title={entry.label || "Unnamed category"}
+          aria-label={entry.label || "Unnamed category"}
           aria-pressed={activeKey === entry.key}
           onClick={() => onPick(entry.key)}
           className={`h-7 w-7 rounded-md border border-black/15 transition-transform hover:scale-110 dark:border-white/15 ${
@@ -537,6 +538,10 @@ export default function PropertiesPanel() {
           className={FIELD}
           value={node.data.label}
           onChange={(event) => updateNodeLabel(node.id, event.target.value)}
+          // A blank name would leave an empty box and an empty row in the component list.
+          onBlur={(event) => {
+            if (!event.target.value.trim()) updateNodeLabel(node.id, defaultLabel(node.type));
+          }}
         />
       </label>
 

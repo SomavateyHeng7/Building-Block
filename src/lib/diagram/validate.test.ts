@@ -125,3 +125,24 @@ describe("parseDiagram", () => {
     expect(data.owner).toBeUndefined();
   });
 });
+
+describe("parseDiagram limits and colours", () => {
+  it("accepts short #rgb colours, expanded so the colour picker can show them", () => {
+    const { diagram, fixes } = parseDiagram(
+      diagramWith([node({ data: { label: "API", colorKey: "k" } })], { legend: [{ key: "k", label: "K", color: "#F0a" }] }),
+    );
+    expect(fixes).toEqual([]);
+    expect(diagram.legend[0].color).toBe("#FF00aa");
+    expect(diagram.sections[0].nodes[0].data.colorKey).toBe("k");
+  });
+
+  it("caps absurd sizes and positions and says so", () => {
+    const { diagram, fixes } = parseDiagram(
+      diagramWith([node({ position: { x: 1e12, y: -1e12 }, size: { width: 1e9, height: 1e9 } })]),
+    );
+    const parsed = diagram.sections[0].nodes[0];
+    expect(parsed.size).toEqual({ width: 10_000, height: 10_000 });
+    expect(parsed.position).toEqual({ x: 100_000, y: -100_000 });
+    expect(fixes.join()).toMatch(/corrected/);
+  });
+});

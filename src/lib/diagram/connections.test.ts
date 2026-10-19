@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { suggestConnectionSides } from "./layout";
 import { getActiveSection, useDiagramStore } from "./store";
 import { parseDiagram } from "./validate";
-import { createBlankDiagram } from "./factory";
+import { createBlankDiagram, defaultLabel } from "./factory";
+import { historyKey } from "./flowAdapter";
 import { l0ArchitectureTemplate } from "@/templates/l0-architecture";
 import type { DiagramNode } from "./types";
 
@@ -210,5 +211,77 @@ describe("L0 template", () => {
     const section = diagram.sections[0];
     expect(section.edges?.length).toBeGreaterThan(0);
     expect(parseDiagram(JSON.parse(JSON.stringify(diagram))).fixes).toEqual([]);
+  });
+});
+
+describe("paste and duplicate inside a container", () => {
+  beforeEach(() => store().loadDiagram(createBlankDiagram()));
+
+  function fitsInside(containerId: string) {
+    const container = active().nodes.find((node) => node.id === containerId)!;
+    return active()
+      .nodes.filter((node) => node.parentId === containerId)
+      .every(
+        (node) =>
+          node.position.x + node.size.width <= container.size.width &&
+          node.position.y + node.size.height <= container.size.height,
+      );
+  }
+
+  it("grows the container so repeated pastes stay inside it", () => {
+    store().addContainer({ x: 0, y: 0 });
+    const containerId = store().selectedNodeIds[0];
+    store().setSelection([addBlock(16, 40, containerId)]);
+    store().copySelection();
+    for (let i = 0; i < 10; i++) store().paste();
+    expect(active().nodes.filter((node) => node.parentId === containerId)).toHaveLength(11);
+    expect(fitsInside(containerId)).toBe(true);
+  });
+
+  it("grows the container for duplicates too", () => {
+    store().addContainer({ x: 0, y: 0 });
+    const containerId = store().selectedNodeIds[0];
+    store().setSelection([addBlock(200, 160, containerId)]);
+    for (let i = 0; i < 5; i++) store().duplicateSelection();
+    expect(fitsInside(containerId)).toBe(true);
+  });
+});
+
+describe("no-op renames", () => {
+  beforeEach(() => store().loadDiagram(createBlankDiagram()));
+
+  it("doesn't record an undo step for renaming a tab or component to its current name", () => {
+    const section = store().diagram.sections[0];
+    store().renameSection(section.id, section.name);
+    const id = addBlock(0, 0);
+    const steps = store().past.length;
+    store().updateNodeLabel(id, "New Block");
+    expect(store().past.length).toBe(steps);
+    expect(store().past.length).toBe(1);
+  });
+});
+
+describe("historyKey", () => {
+  it("gives the same undo key whatever order the dragged ids come in", () => {
+    expect(historyKey("move", ["b", "a", "c"])).toBe(historyKey("move", ["c", "b", "a"]));
+    expect(historyKey("move", ["a"])).not.toBe(historyKey("resize", ["a"]));
+  });
+
+  it("makes a multi-drag and the re-parent at its end a single undo step", () => {
+    store().loadDiagram(createBlankDiagram());
+    const a = addBlock(0, 0);
+    const b = addBlock(200, 0);
+    const before = store().past.length;
+    const moved = active().nodes.map((node) => ({ ...node, position: { x: node.position.x + 8, y: 0 } }));
+    store().setActiveSectionNodes(moved, { coalesceKey: historyKey("move", [a, b]) });
+    store().setActiveSectionNodes(moved, { coalesceKey: historyKey("move", [b, a]) });
+    expect(store().past.length).toBe(before + 1);
+  });
+});
+
+describe("defaultLabel", () => {
+  it("names blank components and containers", () => {
+    expect(defaultLabel("block")).toBe("Untitled");
+    expect(defaultLabel("container")).toBe("Untitled Container");
   });
 });

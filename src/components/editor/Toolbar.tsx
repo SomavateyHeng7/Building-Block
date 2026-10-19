@@ -7,7 +7,6 @@ import { useTheme } from "next-themes";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import {
   downloadDiagramJson,
-  isDirty,
   openDiagramFromDevice,
   saveDiagramToFile,
   startDiagram,
@@ -30,7 +29,7 @@ import {
   type RenderedComposite,
 } from "@/lib/diagram/export";
 import { toast } from "@/lib/toast";
-import UnsavedChangesDialog from "./UnsavedChangesDialog";
+import { useUnsavedGuard } from "./useUnsavedGuard";
 import { Icon } from "./Icon";
 import { LogoMark } from "@/components/Logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -269,19 +268,12 @@ export default function Toolbar({ onShowShortcuts }: { onShowShortcuts: () => vo
   const canUndo = useDiagramStore((state) => state.past.length > 0);
   const canRedo = useDiagramStore((state) => state.future.length > 0);
   const [exporting, setExporting] = useState(false);
-  // An action waiting on the unsaved-changes dialog.
-  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const { guard: guardUnsaved, dialog: unsavedDialog } = useUnsavedGuard();
   const hasFile = useFileStore((state) => state.handle !== null);
   const saving = useFileStore((state) => state.saving);
   const dirty = useIsDirty();
 
   const section = getActiveSection(diagram);
-
-  /** Runs `action` now, or after the user has decided what to do with unsaved changes. */
-  function guardUnsaved(action: () => void) {
-    if (isDirty()) setPendingAction(() => action);
-    else action();
-  }
 
   function handleNew() {
     guardUnsaved(() => startDiagram(createBlankDiagram()));
@@ -289,7 +281,9 @@ export default function Toolbar({ onShowShortcuts }: { onShowShortcuts: () => vo
 
   function handleOpen() {
     // The file picker has to start from the click, so ask about unsaved changes only if there are any.
-    guardUnsaved(() => void openDiagramFromDevice());
+    guardUnsaved(() => void openDiagramFromDevice(), {
+      picker: { continueLabel: "Open…", next: "Now choose the diagram to open." },
+    });
   }
 
   function handleLeave() {
@@ -507,25 +501,7 @@ export default function Toolbar({ onShowShortcuts }: { onShowShortcuts: () => vo
         </button>
         <ExportMenu imageTheme={exportTheme} onImageThemeChange={changeExportTheme} multiTab={diagram.sections.length > 1} busy={exporting} onSelect={handleExport} />
       </div>
-      {pendingAction && (
-        <UnsavedChangesDialog
-          name={diagram.name}
-          needsLocation={!hasFile}
-          onCancel={() => setPendingAction(null)}
-          onDiscard={() => {
-            const action = pendingAction;
-            setPendingAction(null);
-            action();
-          }}
-          onSave={async () => {
-            const action = pendingAction;
-            if (await saveDiagramToFile()) {
-              setPendingAction(null);
-              action();
-            }
-          }}
-        />
-      )}
+      {unsavedDialog}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createBlankDiagram } from "./factory";
-import { isDirty, saveDiagramToFile, startDiagram, useFileStore } from "./file";
+import { fileBaseName, isDirty, saveDiagramToFile, startDiagram, useFileStore } from "./file";
 import { useDiagramStore } from "./store";
 
 function fakeHandle(name = "plan.json") {
@@ -41,6 +41,16 @@ describe("dirty tracking", () => {
     startDiagram(createBlankDiagram(), { handle: null, fileName: "a.json" });
     expect(isDirty()).toBe(false);
     useDiagramStore.getState().renameDiagram("Changed");
+    expect(isDirty()).toBe(true);
+  });
+
+  it("stays clean when only the open tab changes", () => {
+    const diagram = createBlankDiagram();
+    diagram.sections.push({ id: "second", name: "Target", nodes: [] });
+    startDiagram(diagram, { handle: null, fileName: "a.json" });
+    useDiagramStore.getState().setActiveSection("second");
+    expect(isDirty()).toBe(false);
+    useDiagramStore.getState().addContainer({ x: 0, y: 0 });
     expect(isDirty()).toBe(true);
   });
 });
@@ -96,5 +106,32 @@ describe("saveDiagramToFile", () => {
     expect(await saveDiagramToFile()).toBe(false);
     expect(useFileStore.getState().error).toBe(true);
     expect(isDirty()).toBe(true);
+  });
+});
+
+describe("undo and the saved state", () => {
+  it("is clean again after undoing back to what was saved", () => {
+    startDiagram(createBlankDiagram(), { handle: null, fileName: "a.json" });
+    useDiagramStore.getState().addContainer({ x: 0, y: 0 });
+    expect(isDirty()).toBe(true);
+    useDiagramStore.getState().undo();
+    expect(isDirty()).toBe(false);
+    useDiagramStore.getState().redo();
+    expect(isDirty()).toBe(true);
+  });
+});
+
+describe("fileBaseName", () => {
+  it.each([
+    ["L0 Architecture", "l0-architecture"],
+    ["Payments/Orders: v2?", "payments-orders-v2"],
+    ["Plan — Current", "plan-current"],
+    ['a<b>c|d*e"f\\g', "a-b-c-d-e-f-g"],
+    ["...hidden.", "hidden"],
+    ["CON", "con-diagram"],
+    ["  ", "diagram"],
+    ["Café Ü", "café-ü"],
+  ])("%j → %j", (name, expected) => {
+    expect(fileBaseName(name)).toBe(expected);
   });
 });

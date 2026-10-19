@@ -15,8 +15,8 @@ export function toFlowNodes(nodes: DiagramNode[], selectedIds: ReadonlySet<strin
     position: node.position,
     width: node.size.width,
     height: node.size.height,
+    // No `extent: "parent"`: components can be dragged out of their container (see dropIntoContainers).
     parentId: node.parentId,
-    extent: node.parentId ? "parent" : undefined,
     zIndex: node.zIndex,
     selected: selectedIds.has(node.id),
     data: node.data,
@@ -36,6 +36,14 @@ export function fromFlowNodes(flowNodes: FlowNode[]): DiagramNode[] {
     zIndex: node.zIndex,
     data: node.data,
   }));
+}
+
+/**
+ * Undo key for a burst of moves or resizes of the same nodes. Sorted, so the drag itself and the
+ * re-parenting at its end produce the same key (and one undo step) whatever order the ids come in.
+ */
+export function historyKey(kind: "move" | "resize", ids: string[]): string {
+  return `${kind}:${[...ids].sort().join(",")}`;
 }
 
 /** What a connection says on the canvas: "Orders · REST", or whichever half exists. */

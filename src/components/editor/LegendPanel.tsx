@@ -62,7 +62,7 @@ export default function LegendPanel() {
             <div key={entry.key} className="group flex items-center gap-2 rounded-md px-1 py-0.5 hover:bg-zinc-50 dark:hover:bg-zinc-900">
               <input
                 type="color"
-                aria-label={`Color for ${entry.label}`}
+                aria-label={`Color for ${entry.label || "unnamed category"}`}
                 value={entry.color}
                 onChange={(event) => updateLegendEntry(entry.key, { color: event.target.value })}
                 className="h-6 w-6 shrink-0 cursor-pointer rounded-md border border-zinc-300 bg-transparent p-0 dark:border-zinc-700"
@@ -73,6 +73,10 @@ export default function LegendPanel() {
                 aria-label="Legend entry name"
                 value={entry.label}
                 onChange={(event) => updateLegendEntry(entry.key, { label: event.target.value })}
+                // A blank name would leave the legend and the palette with an unlabelled colour.
+                onBlur={(event) => {
+                  if (!event.target.value.trim()) updateLegendEntry(entry.key, { label: "Untitled category" });
+                }}
                 className="w-full min-w-0 rounded border border-transparent bg-transparent px-1.5 py-1 text-sm outline-none hover:border-zinc-300 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20 dark:hover:border-zinc-700 dark:focus:bg-zinc-900"
               />
               {count > 0 && !confirming && (

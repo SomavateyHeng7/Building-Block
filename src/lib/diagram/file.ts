@@ -44,9 +44,21 @@ export function hasContent(diagram: Diagram): boolean {
   return diagram.sections.some((section) => section.nodes.length > 0);
 }
 
-/** File-name-safe version of a diagram name, e.g. "L0 Architecture" → "l0-architecture". */
+/**
+ * File-name-safe version of a diagram name, e.g. "L0 Architecture" → "l0-architecture". Drops characters
+ * Windows or macOS don't allow and avoids Windows' reserved names (CON, NUL, COM1…).
+ */
 export function fileBaseName(name: string): string {
-  return name.trim().replace(/\s+/g, "-").toLowerCase() || "diagram";
+  const base = name
+    .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, " ")
+    .trim()
+    .replace(/[\s\u2013\u2014]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^[-.]+|[-.]+$/g, "")
+    .toLowerCase()
+    .slice(0, 100);
+  if (!base) return "diagram";
+  return /^(con|prn|aux|nul|com\d|lpt\d)$/.test(base) ? `${base}-diagram` : base;
 }
 
 export function downloadBlob(blob: Blob, filename: string): void {
@@ -56,17 +68,26 @@ export function downloadBlob(blob: Blob, filename: string): void {
   link.href = url;
   link.download = filename;
   link.click();
-  URL.revokeObjectURL(url);
+  // Safari can still be starting the download after click() returns, so keep the URL alive a while.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export function downloadDiagramJson(diagram: Diagram): void {
   downloadBlob(new Blob([JSON.stringify(diagram, null, 2)], { type: "application/json" }), `${fileBaseName(diagram.name)}.json`);
 }
 
+/** Which tab is showing isn't an edit, so a diagram that differs from the saved one only by that is clean. */
+function differsFromSaved(saved: Diagram | null, diagram: Diagram): boolean {
+  if (saved === diagram) return false;
+  if (!saved) return hasContent(diagram);
+  const keys = new Set([...Object.keys(saved), ...Object.keys(diagram)] as (keyof Diagram)[]);
+  keys.delete("activeSectionId");
+  return [...keys].some((key) => saved[key] !== diagram[key]);
+}
+
 function isDirtyNow(): boolean {
   const { opened, saved } = useFileStore.getState();
-  const { diagram } = useDiagramStore.getState();
-  return opened && saved !== diagram && (saved !== null || hasContent(diagram));
+  return opened && differsFromSaved(saved, useDiagramStore.getState().diagram);
 }
 
 /** Changes that exist only in memory. An empty, never-saved diagram has nothing to lose. */
@@ -78,7 +99,7 @@ export function useIsDirty(): boolean {
   const opened = useFileStore((state) => state.opened);
   const saved = useFileStore((state) => state.saved);
   const diagram = useDiagramStore((state) => state.diagram);
-  return opened && saved !== diagram && (saved !== null || hasContent(diagram));
+  return opened && differsFromSaved(saved, diagram);
 }
 
 /** Makes `diagram` the open one. `file` is where it came from; omit it for a new, unsaved diagram. */
@@ -186,11 +207,16 @@ export async function openDiagramFromDevice(): Promise<Diagram | null> {
   return openDiagramFile(file, handle);
 }
 
+export interface DroppedFile {
+  file: File;
+  handle: FileSystemFileHandle | null;
+}
+
 /**
- * Opens a diagram dropped onto the page. Call it synchronously from the drop event: the browser
+ * Takes the file dropped onto the page. Call it synchronously from the drop event: the browser
  * only hands over the file handle (so Save writes back in place) during the event itself.
  */
-export async function openDroppedDiagram(dataTransfer: DataTransfer): Promise<Diagram | null> {
+export async function takeDroppedFile(dataTransfer: DataTransfer): Promise<DroppedFile | null> {
   const item = [...dataTransfer.items].find((candidate) => candidate.kind === "file");
   if (!item) return null;
   const file = item.getAsFile();
@@ -203,7 +229,12 @@ export async function openDroppedDiagram(dataTransfer: DataTransfer): Promise<Di
   } catch {
     // No handle: the diagram still opens, and Save asks where to write.
   }
-  return openDiagramFile(file, handle);
+  return { file, handle };
+}
+
+/** Opens a file taken with takeDroppedFile. Resolves null if it couldn't be read (the user has been told why). */
+export async function openDroppedDiagram(dropped: DroppedFile | null): Promise<Diagram | null> {
+  return dropped ? openDiagramFile(dropped.file, dropped.handle) : null;
 }
 
 async function openDiagramFile(file: File, handle: FileSystemFileHandle | null): Promise<Diagram | null> {

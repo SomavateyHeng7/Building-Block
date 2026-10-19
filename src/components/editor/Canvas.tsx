@@ -20,8 +20,8 @@ import "@xyflow/react/dist/style.css";
 import { useTheme } from "next-themes";
 import { useMounted } from "@/components/theme-toggle";
 import { getActiveSection, useDiagramStore, type NodesChangeOptions } from "@/lib/diagram/store";
-import { fromFlowNodes, toFlowEdges, toFlowNodes, type FlowNode } from "@/lib/diagram/flowAdapter";
-import { containerInsets, growContainerToFit } from "@/lib/diagram/layout";
+import { fromFlowNodes, historyKey, toFlowEdges, toFlowNodes, type FlowNode } from "@/lib/diagram/flowAdapter";
+import { containerInsets, dropIntoContainers, growContainerToFit } from "@/lib/diagram/layout";
 import ContainerNode from "./nodes/ContainerNode";
 import BlockNode from "./nodes/BlockNode";
 import { Icon } from "./Icon";
@@ -62,11 +62,11 @@ function findContainerAtPoint(containers: FlowNode[], point: { x: number; y: num
 function historyOptionsFor(changes: NodeChange[]): NodesChangeOptions | null {
   const resized = changes.filter((change) => change.type === "dimensions" && change.resizing !== undefined);
   if (resized.length) {
-    return { coalesceKey: `resize:${resized.map((change) => ("id" in change ? change.id : "")).join(",")}` };
+    return { coalesceKey: historyKey("resize", resized.map((change) => ("id" in change ? change.id : ""))) };
   }
   const moved = changes.filter((change) => change.type === "position");
   if (moved.length) {
-    return { coalesceKey: `move:${moved.map((change) => ("id" in change ? change.id : "")).join(",")}` };
+    return { coalesceKey: historyKey("move", moved.map((change) => ("id" in change ? change.id : ""))) };
   }
   if (changes.some((change) => change.type === "remove" || change.type === "add" || change.type === "replace")) {
     return {};
@@ -85,7 +85,7 @@ export default function Canvas() {
   const deleteConnections = useDiagramStore((state) => state.deleteConnections);
   const addContainer = useDiagramStore((state) => state.addContainer);
   const addBlock = useDiagramStore((state) => state.addBlock);
-  const { getIntersectingNodes, screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition } = useReactFlow();
   const { resolvedTheme } = useTheme();
   const mounted = useMounted();
   const wide = useIsWide();
@@ -166,59 +166,31 @@ export default function Canvas() {
 
       const options = historyOptionsFor(changes);
       if (!options) return;
-      const updated = applyNodeChanges(changes, flowNodes) as FlowNode[];
-      setActiveSectionNodes(fromFlowNodes(updated), options);
+      const updated = fromFlowNodes(applyNodeChanges(changes, flowNodes) as FlowNode[]);
+      // A component resized past its container's edge makes the container grow, as when dragging.
+      const parents = new Set(
+        changes.flatMap((change) =>
+          change.type === "dimensions" ? (updated.find((node) => node.id === change.id)?.parentId ?? []) : [],
+        ),
+      );
+      setActiveSectionNodes([...parents].reduce((nodes, id) => growContainerToFit(nodes, id), updated), options);
     },
     [flowNodes, selectedNodeIds, setActiveSectionNodes, setSelection],
   );
 
+  // Dropping decides which container each dragged component is in: into one, out of one, or across.
   const handleNodeDragStop: OnNodeDrag = useCallback(
-    (_event, node) => {
-      if (node.type !== "block") return;
-
-      const current = flowNodes.find((candidate) => candidate.id === node.id);
-      if (!current) return;
-
-      const overlap = getIntersectingNodes(node)
-        .filter((candidate) => candidate.type === "container")
-        .at(-1);
-      const newParentId = overlap?.id;
-      if (newParentId === current.parentId) return;
-
-      const containers = flowNodes.filter((candidate) => candidate.type === "container");
-      const oldParent = containers.find((candidate) => candidate.id === current.parentId);
-      const newParent = containers.find((candidate) => candidate.id === newParentId);
-
-      const absoluteX = node.position.x + (oldParent?.position.x ?? 0);
-      const absoluteY = node.position.y + (oldParent?.position.y ?? 0);
-
-      const insets = newParent ? containerInsets(newParent.data as ContainerNodeData) : null;
-      const nextPosition =
-        newParent && insets
-          ? {
-              x: Math.max(insets.left, absoluteX - newParent.position.x),
-              y: Math.max(insets.top, absoluteY - newParent.position.y),
-            }
-          : { x: absoluteX, y: absoluteY };
-
-      const updated: FlowNode[] = flowNodes.map((candidate) =>
-        candidate.id === node.id
-          ? {
-              ...candidate,
-              position: nextPosition,
-              parentId: newParentId,
-              extent: newParentId ? ("parent" as const) : undefined,
-              data: { ...candidate.data, containerId: newParentId ?? null },
-            }
-          : candidate,
+    (_event, _node, dragged) => {
+      const current = fromFlowNodes(flowNodes);
+      const nodes = dropIntoContainers(
+        current,
+        dragged.map((node) => ({ id: node.id, position: node.position })),
       );
-      const nodes = fromFlowNodes(updated);
+      if (nodes.every((node, index) => node === current[index])) return;
       // Same key as the drag itself, so the move and the re-parent undo together.
-      setActiveSectionNodes(newParentId ? growContainerToFit(nodes, newParentId) : nodes, {
-        coalesceKey: `move:${node.id}`,
-      });
+      setActiveSectionNodes(nodes, { coalesceKey: historyKey("move", dragged.map((node) => node.id)) });
     },
-    [flowNodes, getIntersectingNodes, setActiveSectionNodes],
+    [flowNodes, setActiveSectionNodes],
   );
 
   const handleDragOver = useCallback((event: React.DragEvent) => {

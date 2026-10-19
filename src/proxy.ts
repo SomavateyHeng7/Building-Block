@@ -30,11 +30,9 @@ export function proxy(request: NextRequest) {
     if (request.cookies.get(BYPASS_COOKIE)?.value === config.bypassToken) return NextResponse.next();
   }
 
-  // Keep the visitor's URL, so the page can send them back to it once we're done.
-  const response =
-    pathname === MAINTENANCE_PATH
-      ? NextResponse.next()
-      : NextResponse.rewrite(new URL(MAINTENANCE_PATH, request.url), { status: 503 });
+  // Keep the visitor's URL, so the page can send them back to it once we're done. /maintenance itself
+  // answers 503 as well: the page checks for a non-503 answer to know the site is back.
+  const response = NextResponse.rewrite(new URL(MAINTENANCE_PATH, request.url), { status: 503 });
   response.headers.set("Retry-After", String(retryAfterSeconds(config)));
   response.headers.set("Cache-Control", "no-store");
   return response;

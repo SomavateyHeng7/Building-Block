@@ -5,18 +5,23 @@ import { useRouter } from "next/navigation";
 import { templates } from "@/templates";
 import { startDiagram } from "@/lib/diagram/file";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useUnsavedGuard } from "@/components/editor/useUnsavedGuard";
 
 const CARD =
   "flex h-full flex-col items-start justify-start rounded-lg border border-zinc-200 p-4 text-left transition-colors hover:border-zinc-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 dark:border-zinc-800 dark:hover:border-zinc-600 dark:focus-visible:outline-zinc-100";
 
 export default function TemplatesPage() {
   const router = useRouter();
+  // A diagram can still be open in memory, e.g. after the browser's Back button from the editor.
+  const { guard, dialog: unsavedDialog } = useUnsavedGuard();
 
   function applyTemplate(id: string) {
     const template = templates.find((candidate) => candidate.id === id);
     if (!template) return;
-    startDiagram(template.build());
-    router.push("/editor");
+    guard(() => {
+      startDiagram(template.build());
+      router.push("/editor");
+    });
   }
 
   return (
@@ -40,6 +45,7 @@ export default function TemplatesPage() {
       <p className="text-sm text-zinc-500">
         To reuse your own layout and legend, save a diagram as a file, then use <strong>Open file</strong> on the start page next time.
       </p>
+      {unsavedDialog}
     </div>
   );
 }

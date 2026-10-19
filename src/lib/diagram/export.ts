@@ -8,6 +8,13 @@ const LEGEND_ROW_HEIGHT = 22;
 const SWATCH = 14;
 /** Keeps very large diagrams under browser canvas size limits. */
 const MAX_CANVAS_SIDE = 12000;
+/** iOS and iPadOS Safari refuse canvases over about 16.7 million pixels (4096 × 4096) and export blank. */
+const MAX_CANVAS_AREA = 16_777_216;
+
+/** Sharp (2×) where it fits, scaled down for big diagrams so the canvas stays within every browser's limits. */
+export function exportPixelRatio(width: number, height: number): number {
+  return Math.min(2, MAX_CANVAS_SIDE / Math.max(width, height), Math.sqrt(MAX_CANVAS_AREA / (width * height)));
+}
 const FONT_FAMILY = "Arial, Helvetica, sans-serif";
 
 /** Leaves editing handles (resize and connection dots) out of the picture. */
@@ -82,7 +89,7 @@ export async function renderComposite(
 
   const { items, totalWidth, totalHeight } = layoutLegend(legend, width, height);
 
-  const pixelRatio = Math.min(2, MAX_CANVAS_SIDE / Math.max(totalWidth, totalHeight));
+  const pixelRatio = exportPixelRatio(totalWidth, totalHeight);
   const diagramCanvas = await toCanvas(viewport, {
     backgroundColor: colors.background,
     width,
@@ -174,6 +181,20 @@ export async function downloadCanvasPng(canvas: HTMLCanvasElement, filename: str
   downloadBlob(blob, `${fileBaseName(filename)}.png`);
 }
 
+/**
+ * One quoted CSV cell. Text starting with = + - @ (or a tab or carriage return) would run as a formula in
+ * Excel or Sheets, and diagram files are shared, so such cells get a leading apostrophe to stay text.
+ */
+export function csvCell(value: string): string {
+  const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+
+/** Rows joined as CSV, with a byte-order mark so Excel reads the file as UTF-8. */
+export function toCsv(rows: string[][]): string {
+  return "\ufeff" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
+}
+
 /** Every connection in every section: who talks to whom, how, and what flows. */
 export function exportConnectionsCsv(diagram: Diagram): void {
   const rows: string[][] = [
@@ -195,8 +216,7 @@ export function exportConnectionsCsv(diagram: Diagram): void {
       ]);
     }
   }
-  const csv = rows.map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")).join("\r\n");
-  downloadBlob(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }), `${fileBaseName(diagram.name)}-connections.csv`);
+  downloadBlob(new Blob([toCsv(rows)], { type: "text/csv;charset=utf-8" }), `${fileBaseName(diagram.name)}-connections.csv`);
 }
 
 /** Every container and component in every section, for the solution document's component catalogue. */
@@ -221,9 +241,7 @@ export function exportComponentsCsv(diagram: Diagram): void {
       ]);
     }
   }
-  const csv = rows.map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")).join("\r\n");
-  // The BOM makes Excel read the file as UTF-8.
-  downloadBlob(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), `${fileBaseName(diagram.name)}-components.csv`);
+  downloadBlob(new Blob([toCsv(rows)], { type: "text/csv;charset=utf-8" }), `${fileBaseName(diagram.name)}-components.csv`);
 }
 
 const escapeXml = (value: string) =>

@@ -1,7 +1,8 @@
 "use client";
 
-import { memo, useState } from "react";
+import { memo, useRef, useState } from "react";
 import { NodeResizer, NodeToolbar, Position, type Node, type NodeProps } from "@xyflow/react";
+import { defaultLabel } from "@/lib/diagram/factory";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { CONTAINER_MIN, containerInsets } from "@/lib/diagram/layout";
 import type { ContainerNodeData, HeaderAlign, HeaderPosition } from "@/lib/diagram/types";
@@ -62,6 +63,8 @@ function ContainerNodeComponent({ id, data, selected }: NodeProps<ContainerFlowN
     ),
   );
   const [editing, setEditing] = useState(false);
+  // Escape leaves the name as it was; the blur that follows must not save what was typed.
+  const cancelled = useRef(false);
 
   const accentColor = legend.find((entry) => entry.key === data.colorKey)?.color;
   const headerPosition = data.headerPosition ?? "top";
@@ -126,7 +129,10 @@ function ContainerNodeComponent({ id, data, selected }: NodeProps<ContainerFlowN
           borderRadius: HEADER_CORNERS[headerPosition],
           backgroundColor: accentColor ? `${accentColor}55` : undefined,
         }}
-        onDoubleClick={() => setEditing(true)}
+        onDoubleClick={() => {
+          cancelled.current = false;
+          setEditing(true);
+        }}
       >
         {editing ? (
           <input
@@ -135,11 +141,15 @@ function ContainerNodeComponent({ id, data, selected }: NodeProps<ContainerFlowN
             style={{ ...VERTICAL_TEXT[headerPosition], textAlign: TEXT_ALIGN[headerAlign], height: vertical ? "100%" : undefined }}
             defaultValue={data.label}
             onBlur={(event) => {
-              updateNodeLabel(id, event.target.value || "Untitled Container");
+              if (!cancelled.current) updateNodeLabel(id, event.target.value.trim() ? event.target.value : defaultLabel("container"));
               setEditing(false);
             }}
             onKeyDown={(event) => {
               if (event.key === "Enter") event.currentTarget.blur();
+              if (event.key === "Escape") {
+                cancelled.current = true;
+                event.currentTarget.blur();
+              }
             }}
           />
         ) : (

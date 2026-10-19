@@ -4,6 +4,7 @@ import {
   CONTAINER_PADDING,
   LAYOUT_GAP,
   arrangeNodes,
+  dropIntoContainers,
   growContainerToFit,
   nextSlotInContainer,
   nudgeNodes,
@@ -58,12 +59,28 @@ describe("arrangeNodes", () => {
   });
 
   it("works in canvas coordinates for nested nodes", () => {
-    const nodes = [container("c", 100, 100), block("in", 20, 50, "c"), block("out", 0, 0)];
+    const nodes = [container("c", 100, 100, 300, 300), block("in", 20, 50, "c"), block("out", 50, 0)];
     const result = arrangeNodes(nodes, ["in", "out"], "align-left");
-    // "in" sits at canvas x=120 and "out" at 0, so both align to canvas x=0.
-    expect(byId(result, "out").position.x).toBe(0);
-    // "in" is positioned relative to its container at x=100.
-    expect(byId(result, "in").position.x).toBe(-100);
+    // "in" sits at canvas x=120 and "out" at 50, so both align to canvas x=50: still over the container.
+    expect(byId(result, "out").position.x).toBe(50);
+    expect(byId(result, "in").parentId).toBe("c");
+    // Relative to the container, but kept clear of its padding.
+    expect(byId(result, "in").position.x).toBe(CONTAINER_PADDING);
+  });
+
+  it("takes a component out of its container when aligning moves it outside", () => {
+    const nodes = [container("c", 300, 100), block("in", 16, 40, "c"), block("out", 0, 500)];
+    const moved = byId(arrangeNodes(nodes, ["in", "out"], "align-left"), "in");
+    expect(moved.parentId).toBeUndefined();
+    expect(moved.data.containerId).toBeNull();
+    expect(moved.position).toEqual({ x: 0, y: 140 });
+  });
+
+  it("moves a selected container's children with it, not twice", () => {
+    const nodes = [container("c", 100, 100), block("in", 50, 50, "c"), block("out", 0, 500)];
+    const result = arrangeNodes(nodes, ["c", "in", "out"], "align-left");
+    expect(byId(result, "c").position.x).toBe(0);
+    expect(byId(result, "in")).toEqual(nodes[1]);
   });
 });
 
@@ -115,5 +132,55 @@ describe("nudgeNodes", () => {
     const nodes = [container("c", 0, 0, 200, 120), block("b", 80, 40, "c")];
     const result = nudgeNodes(nodes, ["b"], 32, 0);
     expect(byId(result, "c").size.width).toBe(112 + 100 + CONTAINER_PADDING);
+  });
+});
+
+describe("dropIntoContainers", () => {
+  it("takes a component out of its container when dropped outside it", () => {
+    const nodes = [container("c", 100, 100), block("a", 20, 50, "c")];
+    // Dragged to canvas (500, 500): relative to the container that's (400, 400).
+    const a = byId(dropIntoContainers(nodes, [{ id: "a", position: { x: 400, y: 400 } }]), "a");
+    expect(a.parentId).toBeUndefined();
+    expect(a.data.containerId).toBeNull();
+    expect(a.position).toEqual({ x: 500, y: 500 });
+  });
+
+  it("moves a component from one container into another", () => {
+    const nodes = [container("c1", 0, 0), container("c2", 400, 0), block("a", 20, 50, "c1")];
+    const a = byId(dropIntoContainers(nodes, [{ id: "a", position: { x: 450, y: 60 } }]), "a");
+    expect(a.parentId).toBe("c2");
+    expect(a.data.containerId).toBe("c2");
+    expect(a.position).toEqual({ x: 50, y: 60 });
+  });
+
+  it("puts a loose component into the container under its centre, clear of the header", () => {
+    const nodes = [container("c", 100, 100), block("a", 0, 0)];
+    // Centre lands inside the container, but the top-left corner is above its header.
+    const a = byId(dropIntoContainers(nodes, [{ id: "a", position: { x: 110, y: 90 } }]), "a");
+    expect(a.parentId).toBe("c");
+    expect(a.position).toEqual({ x: CONTAINER_PADDING, y: CONTAINER_HEADER });
+  });
+
+  it("keeps a component in its container when only its edge pokes out, growing the container", () => {
+    const nodes = [container("c", 0, 0, 300, 200), block("a", 20, 50, "c")];
+    const out = dropIntoContainers(nodes, [{ id: "a", position: { x: 240, y: 50 } }]);
+    expect(byId(out, "a").parentId).toBe("c");
+    expect(byId(out, "c").size.width).toBe(240 + 100 + CONTAINER_PADDING);
+  });
+
+  it("leaves children alone when their container is dragged with them", () => {
+    const nodes = [container("c", 0, 0), block("a", 20, 50, "c")];
+    expect(
+      dropIntoContainers(nodes, [
+        { id: "c", position: { x: 900, y: 900 } },
+        { id: "a", position: { x: 20, y: 50 } },
+      ]),
+    ).toEqual(nodes);
+  });
+
+  it("returns the same nodes when nothing changes", () => {
+    const nodes = [container("c", 0, 0), block("a", 20, 50, "c")];
+    const out = dropIntoContainers(nodes, [{ id: "a", position: { x: 20, y: 50 } }]);
+    expect(out.every((node, index) => node === nodes[index])).toBe(true);
   });
 });

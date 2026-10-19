@@ -67,10 +67,14 @@ export function suggestConnectionSides(
   return dy >= 0 ? { sourceSide: "bottom", targetSide: "top" } : { sourceSide: "top", targetSide: "bottom" };
 }
 
-/** Aligns, distributes or matches the size of the given nodes, working in canvas coordinates. */
+/**
+ * Aligns, distributes or matches the size of the given nodes, working in canvas coordinates.
+ * A selected container carries its children, so they aren't arranged separately. A component that
+ * ends up over a different container (or none) moves into it, as if it had been dragged there.
+ */
 export function arrangeNodes(nodes: DiagramNode[], ids: string[], op: ArrangeOp): DiagramNode[] {
   const targets = nodes
-    .filter((node) => ids.includes(node.id))
+    .filter((node) => ids.includes(node.id) && !(node.parentId && ids.includes(node.parentId)))
     .map((node) => ({ node, abs: absolutePosition(node, nodes) }));
   if (targets.length < 2) return nodes;
 
@@ -130,7 +134,7 @@ export function arrangeNodes(nodes: DiagramNode[], ids: string[], op: ArrangeOp)
     }
   }
 
-  return nodes.map((node) => {
+  const arranged = nodes.map((node) => {
     const placed = next.get(node.id);
     if (!placed) return node;
     const parent = node.parentId ? nodes.find((candidate) => candidate.id === node.parentId) : undefined;
@@ -139,6 +143,10 @@ export function arrangeNodes(nodes: DiagramNode[], ids: string[], op: ArrangeOp)
       : placed.abs;
     return { ...node, position: snap(position), size: placed.size };
   });
+  return dropIntoContainers(
+    arranged,
+    arranged.filter((node) => next.has(node.id)).map((node) => ({ id: node.id, position: node.position })),
+  );
 }
 
 function childrenOf(nodes: DiagramNode[], containerId: string) {
@@ -245,6 +253,56 @@ export function tidyContainer(nodes: DiagramNode[], containerId: string): Diagra
     }
     return node;
   });
+}
+
+/**
+ * Settles components after a drag. `moved` gives each dragged node's new position (relative to its
+ * current container, if any). A component belongs to the top-most container its centre is over, or to
+ * none: so it can be dragged into a container, out of one, or into another. Inside, it is kept clear of
+ * the header and padding, and the container grows to fit it. Children moving with their container
+ * are left alone.
+ */
+export function dropIntoContainers(nodes: DiagramNode[], moved: { id: string; position: Position }[]): DiagramNode[] {
+  const movedIds = new Set(moved.map((entry) => entry.id));
+  const containers = nodes.filter((node) => node.type === "container");
+  const grow = new Set<string>();
+  let next = nodes;
+  for (const { id, position } of moved) {
+    const node = nodes.find((candidate) => candidate.id === id);
+    if (!node || node.type !== "block" || (node.parentId && movedIds.has(node.parentId))) continue;
+    const oldParent = node.parentId ? containers.find((candidate) => candidate.id === node.parentId) : undefined;
+    const absolute = { x: position.x + (oldParent?.position.x ?? 0), y: position.y + (oldParent?.position.y ?? 0) };
+    const centre = { x: absolute.x + node.size.width / 2, y: absolute.y + node.size.height / 2 };
+    const parent = containers.findLast(
+      (container) =>
+        centre.x >= container.position.x &&
+        centre.x <= container.position.x + container.size.width &&
+        centre.y >= container.position.y &&
+        centre.y <= container.position.y + container.size.height,
+    );
+    let settled = absolute;
+    if (parent) {
+      const insets = insetsOf(nodes, parent.id);
+      settled = {
+        x: Math.max(insets.left, absolute.x - parent.position.x),
+        y: Math.max(insets.top, absolute.y - parent.position.y),
+      };
+      grow.add(parent.id);
+    }
+    if (parent?.id === node.parentId && settled.x === node.position.x && settled.y === node.position.y) continue;
+    next = next.map((candidate) =>
+      candidate.id === id
+        ? {
+            ...candidate,
+            position: settled,
+            parentId: parent?.id,
+            data: candidate.data.kind === "block" ? { ...candidate.data, containerId: parent?.id ?? null } : candidate.data,
+          }
+        : candidate,
+    );
+  }
+  for (const containerId of grow) next = growContainerToFit(next, containerId);
+  return next;
 }
 
 /** Where a new block should go inside a container: below its lowest child. */

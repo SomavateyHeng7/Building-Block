@@ -50,6 +50,13 @@ function withoutDanglingEdges(section: DiagramSection): DiagramSection {
   return edges.length === section.edges.length ? section : { ...section, edges };
 }
 
+/** Adds pasted or duplicated nodes and connections; containers they landed in grow to fit them. */
+function withAdded(section: DiagramSection, added: DiagramNode[], edges: DiagramEdge[]): DiagramSection {
+  const parents = new Set(added.flatMap((node) => (node.parentId ? [node.parentId] : [])));
+  const nodes = [...parents].reduce((current, id) => growContainerToFit(current, id), [...section.nodes, ...added]);
+  return { ...section, nodes, ...(edges.length ? { edges: [...(section.edges ?? []), ...edges] } : {}) };
+}
+
 /** Connections whose two ends are both in `idMap`, copied onto the new ids. */
 function copyEdges(edges: DiagramEdge[] | undefined, idMap: Map<string, string>): DiagramEdge[] {
   return (edges ?? [])
@@ -85,9 +92,9 @@ function keepExisting(diagram: Diagram, ids: string[]): string[] {
   return ids.filter((id) => nodes.some((node) => node.id === id));
 }
 
-function restore(state: DiagramState, diagram: Diagram) {
+/** The exact earlier diagram, not a copy, so undoing back to what was saved counts as saved. */
+function restore(state: DiagramState, restored: Diagram) {
   lastCommit = { key: null, at: 0 };
-  const restored = touch(diagram);
   const edgeStillThere = (getActiveSection(restored).edges ?? []).some((edge) => edge.id === state.selectedEdgeId);
   return {
     diagram: restored,
@@ -353,11 +360,7 @@ export const useDiagramStore = create<DiagramState>((set) => ({
       return {
         ...commit(
           state,
-          mapActiveSectionFull(state.diagram, (section) => ({
-            ...section,
-            nodes: [...section.nodes, ...pasted],
-            ...(edges.length ? { edges: [...(section.edges ?? []), ...edges] } : {}),
-          })),
+          mapActiveSectionFull(state.diagram, (section) => withAdded(section, pasted, edges)),
         ),
         selectedNodeIds: pasted.map((node) => node.id),
         selectedEdgeId: null,
@@ -374,11 +377,7 @@ export const useDiagramStore = create<DiagramState>((set) => ({
       return {
         ...commit(
           state,
-          mapActiveSectionFull(state.diagram, (section) => ({
-            ...section,
-            nodes: [...section.nodes, ...copies],
-            ...(edges.length ? { edges: [...(section.edges ?? []), ...edges] } : {}),
-          })),
+          mapActiveSectionFull(state.diagram, (section) => withAdded(section, copies, edges)),
         ),
         selectedNodeIds: copies.map((node) => node.id),
         selectedEdgeId: null,
@@ -496,13 +495,15 @@ export const useDiagramStore = create<DiagramState>((set) => ({
 
   updateNodeLabel: (id, label) =>
     set((state) =>
-      commit(
-        state,
-        mapActiveSection(state.diagram, (nodes) =>
-          nodes.map((node) => (node.id === id ? { ...node, data: { ...node.data, label } } : node)),
-        ),
-        `label:${id}`,
-      ),
+      getActiveSection(state.diagram).nodes.find((node) => node.id === id)?.data.label === label
+        ? state
+        : commit(
+            state,
+            mapActiveSection(state.diagram, (nodes) =>
+              nodes.map((node) => (node.id === id ? { ...node, data: { ...node.data, label } } : node)),
+            ),
+            `label:${id}`,
+          ),
     ),
 
   updateNodeColor: (id, colorKey) =>
@@ -567,15 +568,17 @@ export const useDiagramStore = create<DiagramState>((set) => ({
 
   renameSection: (id, name) =>
     set((state) =>
-      commit(
-        state,
-        touch({
-          ...state.diagram,
-          sections: state.diagram.sections.map((section) =>
-            section.id === id ? { ...section, name } : section,
+      state.diagram.sections.find((section) => section.id === id)?.name === name
+        ? state
+        : commit(
+            state,
+            touch({
+              ...state.diagram,
+              sections: state.diagram.sections.map((section) =>
+                section.id === id ? { ...section, name } : section,
+              ),
+            }),
           ),
-        }),
-      ),
     ),
 
   deleteSection: (id) =>

@@ -1,7 +1,8 @@
 "use client";
 
-import { memo, useState } from "react";
+import { memo, useRef, useState } from "react";
 import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
+import { defaultLabel } from "@/lib/diagram/factory";
 import { useDiagramStore } from "@/lib/diagram/store";
 import type { BlockNodeData } from "@/lib/diagram/types";
 
@@ -19,6 +20,8 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
   const legend = useDiagramStore((state) => state.diagram.legend);
   const showTechnology = useDiagramStore((state) => state.diagram.showTechnology !== false);
   const [editing, setEditing] = useState(false);
+  // Escape leaves the name as it was; the blur that follows must not save what was typed.
+  const cancelled = useRef(false);
 
   const entryColor = legend.find((entry) => entry.key === data.colorKey)?.color;
   const color = entryColor ?? "#ffffff";
@@ -33,7 +36,10 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
         borderStyle: entryColor ? "solid" : "dashed",
         color: textColorFor(color),
       }}
-      onDoubleClick={() => setEditing(true)}
+      onDoubleClick={() => {
+        cancelled.current = false;
+        setEditing(true);
+      }}
     >
       <NodeResizer minWidth={80} minHeight={32} isVisible={selected} />
       {/* Every side starts and ends connections (the canvas uses loose connection mode). */}
@@ -47,11 +53,15 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
           className="nodrag nopan w-full bg-transparent px-1 text-center outline-none"
           defaultValue={data.label}
           onBlur={(event) => {
-            updateNodeLabel(id, event.target.value || "Untitled");
+            if (!cancelled.current) updateNodeLabel(id, event.target.value.trim() ? event.target.value : defaultLabel("block"));
             setEditing(false);
           }}
           onKeyDown={(event) => {
             if (event.key === "Enter") event.currentTarget.blur();
+            if (event.key === "Escape") {
+              cancelled.current = true;
+              event.currentTarget.blur();
+            }
           }}
         />
       ) : (

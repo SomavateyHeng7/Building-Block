@@ -7,7 +7,8 @@ import { LogoMark } from "@/components/Logo";
 import Footer from "@/components/landing/Footer";
 import { ThemeToggle, useMounted } from "@/components/theme-toggle";
 import { createBlankDiagram } from "@/lib/diagram/factory";
-import { openDiagramFromDevice, openDroppedDiagram, startDiagram, supportsFilePicker } from "@/lib/diagram/file";
+import { useUnsavedGuard } from "@/components/editor/useUnsavedGuard";
+import { openDiagramFromDevice, openDroppedDiagram, startDiagram, supportsFilePicker, takeDroppedFile } from "@/lib/diagram/file";
 import { downloadLegacyItem, readLegacyItems, removeLegacyItems, type LegacyItem } from "@/lib/diagram/legacy";
 import { toast } from "@/lib/toast";
 import { templates } from "@/templates";
@@ -149,39 +150,46 @@ export default function StartPage() {
   const mounted = useMounted();
   const legacy = removed ? NO_ITEMS : found;
   const starterTemplates = templates.filter((template) => template.id !== "blank");
+  // A diagram can still be open in memory, e.g. after the browser's Back button from the editor.
+  const { guard, dialog: unsavedDialog } = useUnsavedGuard();
 
   function startBlank() {
-    startDiagram(createBlankDiagram());
-    router.push("/editor");
+    guard(() => {
+      startDiagram(createBlankDiagram());
+      router.push("/editor");
+    });
   }
 
   function startTemplate(id: string) {
     const template = templates.find((candidate) => candidate.id === id);
     if (!template) return;
-    startDiagram(template.build());
-    router.push("/editor");
+    guard(() => {
+      startDiagram(template.build());
+      router.push("/editor");
+    });
   }
 
-  async function openFile() {
+  async function openDiagram(open: () => Promise<unknown>) {
     setOpening(true);
     try {
-      if (await openDiagramFromDevice()) router.push("/editor");
+      if (await open()) router.push("/editor");
     } finally {
       setOpening(false);
     }
   }
 
-  async function dropFile(event: DragEvent) {
+  function openFile() {
+    guard(() => void openDiagram(openDiagramFromDevice), {
+      picker: { continueLabel: "Open…", next: "Now choose the diagram to open." },
+    });
+  }
+
+  function dropFile(event: DragEvent) {
     event.preventDefault();
     setDragging(false);
     // Starts reading synchronously, while the browser still allows access to the dropped file.
-    const opened = openDroppedDiagram(event.dataTransfer);
-    setOpening(true);
-    try {
-      if (await opened) router.push("/editor");
-    } finally {
-      setOpening(false);
-    }
+    const dropped = takeDroppedFile(event.dataTransfer);
+    guard(() => void openDiagram(async () => openDroppedDiagram(await dropped)));
   }
 
   return (
@@ -224,7 +232,7 @@ export default function StartPage() {
               title={opening ? "Opening…" : "Open a diagram file"}
               body="Carry on with a .json file you saved from Building Block."
               disabled={opening}
-              onClick={() => void openFile()}
+              onClick={openFile}
             >
               <span className="mt-auto text-xs text-zinc-500">Or drop the file anywhere on this page</span>
             </ActionCard>
@@ -334,6 +342,8 @@ export default function StartPage() {
 
       <Footer />
 
+      {unsavedDialog}
+
       {dragging && (
         // Covers the page while a file is dragged over it, so leaving it means the drag left the window.
         <div
@@ -343,7 +353,7 @@ export default function StartPage() {
             event.dataTransfer.dropEffect = "copy";
           }}
           onDragLeave={() => setDragging(false)}
-          onDrop={(event) => void dropFile(event)}
+          onDrop={dropFile}
         >
           <div className="pointer-events-none flex w-full max-w-md flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-zinc-400 p-10 text-center dark:border-zinc-600">
             <Icon path={ICONS.folder} className="h-8 w-8 text-zinc-500" />

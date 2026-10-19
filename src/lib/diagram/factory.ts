@@ -5,6 +5,11 @@ export function createId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/** The name a component or container gets when its name is left blank. */
+export function defaultLabel(type: "container" | "block"): string {
+  return type === "container" ? "Untitled Container" : "Untitled";
+}
+
 export function createBlankSection(name = "Section 1"): DiagramSection {
   return { id: createId("section"), name, nodes: [] };
 }

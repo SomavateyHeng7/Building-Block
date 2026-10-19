@@ -56,7 +56,8 @@ export default function EditorApp() {
       }
       if (event.defaultPrevented || event.altKey) return;
       const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select, button, [contenteditable='true'], [role='dialog']")) return;
+      // Buttons don't swallow shortcuts (Ctrl+Z right after clicking Undo should work); dialogs and menus do.
+      if (target?.closest("input, textarea, select, [contenteditable='true'], [role='dialog'], [role='alertdialog'], [role='menu']")) return;
 
       const store = useDiagramStore.getState();
       const hasSelection = store.selectedNodeIds.length > 0;

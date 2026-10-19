@@ -25,6 +25,10 @@ const DEFAULT_SIZE = {
   block: { width: 160, height: 56 },
 };
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+const SHORT_HEX_COLOR = /^#[0-9a-f]{3}$/i;
+/** Bigger than any real diagram; larger values would stall rendering and export. */
+const MAX_SIZE = 10_000;
+const MAX_COORDINATE = 100_000;
 const DETAIL_KEYS: (keyof NodeDetails)[] = ["technology", "owner", "description", "notes"];
 
 type Raw = Record<string, unknown>;
@@ -45,6 +49,18 @@ function oneOf<T extends string>(value: unknown, allowed: readonly T[]): T | und
   return allowed.includes(value as T) ? (value as T) : undefined;
 }
 
+/** A colour the colour picker can show: #rrggbb, also accepting the short #rgb form. */
+function hexColor(value: unknown): string | undefined {
+  const color = text(value);
+  if (color && HEX_COLOR.test(color)) return color;
+  if (color && SHORT_HEX_COLOR.test(color)) return `#${[...color.slice(1)].map((digit) => digit + digit).join("")}`;
+  return undefined;
+}
+
+function clamp(value: number, limit: number) {
+  return Math.max(-limit, Math.min(limit, value));
+}
+
 function plural(count: number, word: string) {
   return `${count} ${word}${count === 1 ? "" : "s"}`;
 }
@@ -59,8 +75,8 @@ function parseLegend(raw: unknown, fixes: string[]): LegendEntry[] {
   let dropped = 0;
   for (const item of raw) {
     const key = isObject(item) ? text(item.key) : undefined;
-    const color = isObject(item) ? text(item.color) : undefined;
-    if (!isObject(item) || !key || seen.has(key) || !color || !HEX_COLOR.test(color)) {
+    const color = isObject(item) ? hexColor(item.color) : undefined;
+    if (!isObject(item) || !key || seen.has(key) || !color) {
       dropped += 1;
       continue;
     }
@@ -76,11 +92,11 @@ function parseContainerStyle(data: Raw): ContainerStyle {
   const headerPosition = oneOf(data.headerPosition, ["top", "bottom", "left", "right"] as const);
   const headerAlign = oneOf(data.headerAlign, ["start", "center", "end"] as const);
   const outlineStyle = oneOf(data.outlineStyle, ["solid", "dashed"] as const);
-  const outlineColor = text(data.outlineColor);
+  const outlineColor = hexColor(data.outlineColor);
   if (headerPosition) style.headerPosition = headerPosition;
   if (headerAlign) style.headerAlign = headerAlign;
   if (outlineStyle) style.outlineStyle = outlineStyle;
-  if (outlineColor && HEX_COLOR.test(outlineColor)) style.outlineColor = outlineColor;
+  if (outlineColor) style.outlineColor = outlineColor;
   return style;
 }
 
@@ -96,6 +112,8 @@ function parseNode(raw: unknown, legendKeys: Set<string>): { node: DiagramNode; 
   const size = isObject(raw.size) ? raw.size : {};
   const width = finite(size.width);
   const height = finite(size.height);
+  const x = finite(position.x);
+  const y = finite(position.y);
 
   const details: NodeDetails = {};
   for (const key of DETAIL_KEYS) {
@@ -106,18 +124,20 @@ function parseNode(raw: unknown, legendKeys: Set<string>): { node: DiagramNode; 
   const label = text(data.label) ?? (type === "container" ? "Untitled Container" : "Untitled");
   const repaired =
     typeof data.label !== "string" ||
-    finite(position.x) === undefined ||
-    finite(position.y) === undefined ||
-    !(width && width > 0) ||
-    !(height && height > 0);
+    x === undefined ||
+    y === undefined ||
+    Math.abs(x) > MAX_COORDINATE ||
+    Math.abs(y) > MAX_COORDINATE ||
+    !(width && width > 0 && width <= MAX_SIZE) ||
+    !(height && height > 0 && height <= MAX_SIZE);
 
   const node: DiagramNode = {
     id,
     type,
-    position: { x: finite(position.x) ?? 0, y: finite(position.y) ?? 0 },
+    position: { x: clamp(x ?? 0, MAX_COORDINATE), y: clamp(y ?? 0, MAX_COORDINATE) },
     size: {
-      width: width && width > 0 ? width : DEFAULT_SIZE[type].width,
-      height: height && height > 0 ? height : DEFAULT_SIZE[type].height,
+      width: width && width > 0 ? Math.min(width, MAX_SIZE) : DEFAULT_SIZE[type].width,
+      height: height && height > 0 ? Math.min(height, MAX_SIZE) : DEFAULT_SIZE[type].height,
     },
     parentId: text(raw.parentId),
     zIndex: finite(raw.zIndex),
@@ -205,7 +225,7 @@ function parseSection(raw: unknown, index: number, legendKeys: Set<string>, fixe
   if (unreadable) fixes.push(`"${name}": skipped ${plural(unreadable, "item")} that couldn't be read.`);
   if (duplicates) fixes.push(`"${name}": skipped ${plural(duplicates, "duplicate item")}.`);
   if (repaired) {
-    fixes.push(`"${name}": filled in a missing name, size or position for ${plural(repaired, "item")}.`);
+    fixes.push(`"${name}": filled in or corrected a missing or out-of-range name, size or position for ${plural(repaired, "item")}.`);
   }
 
   // Only containers can hold components, and only one level deep.

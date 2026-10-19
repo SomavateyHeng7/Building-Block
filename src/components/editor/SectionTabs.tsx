@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import { useDiagramStore } from "@/lib/diagram/store";
 import { Icon } from "./Icon";
 
@@ -18,18 +18,44 @@ export default function SectionTabs() {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const tablist = useRef<HTMLDivElement>(null);
+  // Escape leaves the name as it was; some browsers blur the field as it goes, which must not save.
+  const cancelledRename = useRef(false);
+
+  function startRename(id: string) {
+    cancelledRename.current = false;
+    setEditingId(id);
+  }
 
   function commitRename(id: string, value: string) {
     const name = value.trim();
-    if (name) renameSection(id, name);
+    if (name && !cancelledRename.current) renameSection(id, name);
     setEditingId(null);
   }
 
+  /** Arrow keys, Home and End move between tabs (the usual tab-list keys); only the open tab is in the Tab order. */
+  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    const last = sections.length - 1;
+    const next =
+      event.key === "ArrowRight" ? (index === last ? 0 : index + 1)
+      : event.key === "ArrowLeft" ? (index === 0 ? last : index - 1)
+      : event.key === "Home" ? 0
+      : event.key === "End" ? last
+      : null;
+    if (next === null) return;
+    event.preventDefault();
+    setPendingDeleteId(null);
+    setActiveSection(sections[next].id);
+    tablist.current?.querySelectorAll<HTMLButtonElement>("[role='tab']")[next]?.focus();
+  }
+
   return (
-    <div role="tablist"
+    <div
+      ref={tablist}
+      role="tablist"
       aria-label="Diagram tabs"
       className="flex items-end gap-0.5 overflow-x-auto overscroll-x-contain border-b border-zinc-200 bg-zinc-50 px-2 pt-1.5 sm:px-3 dark:border-zinc-800 dark:bg-zinc-900/60">
-      {sections.map((section) => {
+      {sections.map((section, index) => {
         const active = section.id === activeSectionId;
         const confirming = pendingDeleteId === section.id;
         return (
@@ -49,7 +75,10 @@ export default function SectionTabs() {
                 onBlur={(event) => commitRename(section.id, event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") commitRename(section.id, event.currentTarget.value);
-                  if (event.key === "Escape") setEditingId(null);
+                  if (event.key === "Escape") {
+                    cancelledRename.current = true;
+                    setEditingId(null);
+                  }
                 }}
               />
             ) : (
@@ -59,9 +88,11 @@ export default function SectionTabs() {
                   setPendingDeleteId(null);
                   setActiveSection(section.id);
                 }}
-                onDoubleClick={() => setEditingId(section.id)}
+                onDoubleClick={() => startRename(section.id)}
+                onKeyDown={(event) => handleTabKeyDown(event, index)}
                 role="tab"
                 aria-selected={active}
+                tabIndex={active ? 0 : -1}
                 title="Double-click to rename"
                 className="min-h-0 pr-1"
               >
@@ -75,7 +106,7 @@ export default function SectionTabs() {
                   title="Rename tab"
                   aria-label="Rename tab"
                   className={TAB_ACTION}
-                  onClick={() => setEditingId(section.id)}
+                  onClick={() => startRename(section.id)}
                 >
                   <Icon name="pencil" className="h-3.5 w-3.5" />
                 </button>
