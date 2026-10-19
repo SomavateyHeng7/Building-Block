@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { templates } from "@/templates";
 import { startDiagram } from "@/lib/diagram/file";
 import { ThemeToggle } from "@/components/theme-toggle";
+import TemplatePreview from "@/components/TemplatePreview";
 import { useUnsavedGuard } from "@/components/editor/useUnsavedGuard";
 
 const CARD =
@@ -36,6 +37,9 @@ export default function TemplatesPage() {
       <div className="grid gap-4 sm:grid-cols-2">
         {templates.map((template) => (
           <button type="button" key={template.id} onClick={() => applyTemplate(template.id)} className={CARD}>
+            <div className="mb-3 w-full">
+              <TemplatePreview build={template.build} name={template.name} />
+            </div>
             <h2 className="font-medium text-zinc-900 dark:text-zinc-100">{template.name}</h2>
             <p className="mt-1 text-sm text-zinc-500">{template.description}</p>
           </button>

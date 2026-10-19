@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
 /**
@@ -67,6 +68,17 @@ export default function WaitlistForm() {
       >
         {status === "sending" ? "Joining…" : "Join the waitlist"}
       </button>
+      <label className="flex items-start gap-2 text-xs text-zinc-500 sm:basis-full">
+        <input type="checkbox" required className="mt-0.5 shrink-0" />
+        <span>
+          I agree that Building Block may store my email to tell me when team features are ready. No diagrams are shared.
+          See the{" "}
+          <Link href="/privacy" className="underline hover:text-zinc-900 dark:hover:text-zinc-100">
+            privacy statement
+          </Link>
+          .
+        </span>
+      </label>
       {status === "error" && (
         <p className="text-sm text-red-600 sm:basis-full dark:text-red-400">Something went wrong. Please try again.</p>
       )}

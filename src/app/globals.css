@@ -98,3 +98,15 @@ button, a, summary, [role="button"], [role="tab"], [role="menuitem"], label {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Notes tooltip: appears instantly, sits above the badge, with a short fade/rise. */
+.bb-notes-tooltip {
+  transform: translate(-50%, -100%);
+  animation: bb-notes-in 90ms ease-out;
+}
+@keyframes bb-notes-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% + 4px));
+  }
+}

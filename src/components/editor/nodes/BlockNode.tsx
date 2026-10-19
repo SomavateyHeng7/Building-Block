@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
 import { defaultLabel } from "@/lib/diagram/factory";
 import { useDiagramStore } from "@/lib/diagram/store";
@@ -76,16 +77,34 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
   );
 }
 
-/** Corner badge telling the SA this node has notes; hover shows them. */
+/** Corner badge telling the SA this node has notes; hovering shows them instantly in a card. */
 export function NotesMarker({ notes }: { notes: string }) {
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
   return (
-    <span
-      title={`Notes: ${notes}`}
-      aria-label="Has notes"
-      className="absolute -right-1.5 -top-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-white bg-amber-500 text-[9px] font-bold leading-none text-white shadow-sm dark:border-zinc-900"
-    >
-      !
-    </span>
+    <>
+      <span
+        aria-label={`Has notes: ${notes}`}
+        onMouseEnter={(event) => setAnchor(event.currentTarget.getBoundingClientRect())}
+        onMouseLeave={() => setAnchor(null)}
+        className="absolute -right-1.5 -top-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-white bg-amber-500 text-[9px] font-bold leading-none text-white shadow-sm dark:border-zinc-900"
+      >
+        !
+      </span>
+      {anchor &&
+        createPortal(
+          <div
+            role="tooltip"
+            className="bb-notes-tooltip pointer-events-none fixed z-[1000] max-w-xs rounded-lg border border-zinc-200 bg-white/95 px-3 py-2 text-left text-xs font-normal leading-relaxed text-zinc-700 shadow-xl ring-1 ring-black/5 backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95 dark:text-zinc-200"
+            style={{ left: anchor.left + anchor.width / 2, top: anchor.top - 8 }}
+          >
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-amber-600 dark:text-amber-400">
+              Notes
+            </div>
+            <div className="whitespace-pre-wrap break-words">{notes}</div>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 
