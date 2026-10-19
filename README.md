@@ -49,7 +49,7 @@ Unsaved work exists only in memory:
 - **New**, **Open** and **Start** ask Save / Don't save / Cancel.
 - A reload with nothing saved returns you to the start page.
 
-Only your theme and export-style preferences use `localStorage`, never diagram data.
+Only your theme, export-style and collapsed-panel preferences use `localStorage`, never diagram data.
 
 ### Diagrams from an earlier version
 
@@ -60,6 +60,7 @@ browser**. Nothing is deleted unless you choose it.
 ## Devices
 
 - Layout adapts to the viewport; below 1024px the palette and details panels become drawers over the canvas.
+  On wider screens either panel can be collapsed with the button at its top; a slim strip stays at the edge to open it again.
 - Touch: tap a palette item to add it (drag-and-drop is also supported where the browser allows it). Touch
   targets are at least 40px and inputs are 16px so iOS does not zoom.
 - Safe-area insets are respected on notched phones, and the minimap is hidden on small screens.

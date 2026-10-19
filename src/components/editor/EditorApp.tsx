@@ -12,12 +12,31 @@ import LegendPanel from "./LegendPanel";
 import SectionTabs from "./SectionTabs";
 import ShortcutsHelp from "./ShortcutsHelp";
 import { Icon } from "./Icon";
+import PanelToggle from "./PanelToggle";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { nextSlotInContainer, nudgeNodes } from "@/lib/diagram/layout";
 import { saveDiagramToFile, useFileStore, useIsDirty } from "@/lib/diagram/file";
 
 /** Wait this long after the last edit before writing to the open file. */
 const AUTOSAVE_DELAY_MS = 1000;
+
+/** Which side panels are collapsed on wide screens; remembered per browser, like the theme. */
+type HiddenPanels = { palette: boolean; properties: boolean };
+const PANELS_KEY = "bb:panels";
+
+function readHiddenPanels(): HiddenPanels {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(PANELS_KEY) ?? "{}");
+    return { palette: saved.palette === true, properties: saved.properties === true };
+  } catch {
+    return { palette: false, properties: false };
+  }
+}
+
+const CANVAS_BUTTON =
+  "inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white/95 px-3 py-1.5 text-sm font-medium shadow-sm backdrop-blur aria-expanded:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950/95 dark:aria-expanded:bg-zinc-800";
+/** What's left of a collapsed panel on wide screens: a strip with the button to open it again. */
+const RAIL = "hidden w-10 shrink-0 flex-col items-center bg-white py-2 dark:bg-zinc-950 lg:flex";
 
 export default function EditorApp() {
   const router = useRouter();
@@ -30,6 +49,20 @@ export default function EditorApp() {
   const [helpOpen, setHelpOpen] = useState(false);
   // Below the lg breakpoint the palette and properties panels are drawers over the canvas.
   const [drawer, setDrawer] = useState<"palette" | "properties" | null>(null);
+  // On wide screens the panels sit beside the canvas and can be collapsed to give it more room.
+  const [hidden, setHidden] = useState<HiddenPanels>(readHiddenPanels);
+
+  function togglePanel(panel: keyof HiddenPanels) {
+    setHidden((current) => {
+      const next = { ...current, [panel]: !current[panel] };
+      try {
+        window.localStorage.setItem(PANELS_KEY, JSON.stringify(next));
+      } catch {
+        // The choice just isn't remembered.
+      }
+      return next;
+    });
+  }
 
   // The diagram lives only in memory, so a fresh load (or a direct link) has nothing to edit yet.
   useEffect(() => {
@@ -152,9 +185,15 @@ export default function EditorApp() {
               onClick={() => setDrawer(null)}
             />
           )}
+          {hidden.palette && (
+            <div className={`${RAIL} border-r border-zinc-200 dark:border-zinc-800`}>
+              <PanelToggle side="left" expanded={false} label="the components panel" onClick={() => togglePanel("palette")} />
+            </div>
+          )}
           <Sidebar
             onAdded={() => setDrawer(null)}
-            className={`${drawer === "palette" ? "flex" : "hidden"} absolute inset-y-0 left-0 z-30 w-72 max-w-[85%] shadow-xl lg:static lg:z-auto lg:flex lg:w-60 lg:shrink-0 lg:shadow-none`}
+            onCollapse={() => togglePanel("palette")}
+            className={`${drawer === "palette" ? "flex" : "hidden"} absolute inset-y-0 left-0 z-30 w-72 max-w-[85%] shadow-xl lg:static lg:z-auto ${hidden.palette ? "lg:hidden" : "lg:flex"} lg:w-60 lg:shrink-0 lg:shadow-none`}
           />
           <div className="relative min-w-0 flex-1">
             <Canvas />
@@ -162,7 +201,7 @@ export default function EditorApp() {
               <button
                 type="button"
                 aria-expanded={drawer === "palette"}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white/95 px-3 py-1.5 text-sm font-medium shadow-sm backdrop-blur aria-expanded:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950/95 dark:aria-expanded:bg-zinc-800"
+                className={CANVAS_BUTTON}
                 onClick={() => setDrawer(drawer === "palette" ? null : "palette")}
               >
                 <Icon name="plus" />
@@ -173,7 +212,7 @@ export default function EditorApp() {
               <button
                 type="button"
                 aria-expanded={drawer === "properties"}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white/95 px-3 py-1.5 text-sm font-medium shadow-sm backdrop-blur aria-expanded:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950/95 dark:aria-expanded:bg-zinc-800"
+                className={CANVAS_BUTTON}
                 onClick={() => setDrawer(drawer === "properties" ? null : "properties")}
               >
                 <Icon name="panel" />
@@ -182,11 +221,18 @@ export default function EditorApp() {
             </div>
           </div>
           <aside
-            className={`${drawer === "properties" ? "flex" : "hidden"} absolute inset-y-0 right-0 z-30 w-80 max-w-[85%] flex-col overflow-y-auto border-l border-zinc-200 bg-white pr-safe shadow-xl lg:static lg:z-auto lg:flex lg:w-72 lg:shrink-0 lg:shadow-none dark:border-zinc-800 dark:bg-zinc-950`}
+            className={`${drawer === "properties" ? "flex" : "hidden"} absolute inset-y-0 right-0 z-30 w-80 max-w-[85%] flex-col overflow-y-auto border-l border-zinc-200 bg-white pr-safe shadow-xl lg:static lg:z-auto ${hidden.properties ? "lg:hidden" : "lg:flex"} lg:w-72 lg:shrink-0 lg:shadow-none dark:border-zinc-800 dark:bg-zinc-950`}
           >
-            <PropertiesPanel />
+            <PropertiesPanel
+              headerAction={<PanelToggle side="right" expanded label="details and legend" onClick={() => togglePanel("properties")} />}
+            />
             <LegendPanel />
           </aside>
+          {hidden.properties && (
+            <div className={`${RAIL} border-l border-zinc-200 dark:border-zinc-800`}>
+              <PanelToggle side="right" expanded={false} label="details and legend" onClick={() => togglePanel("properties")} />
+            </div>
+          )}
         </div>
       </div>
       {helpOpen && <ShortcutsHelp onClose={() => setHelpOpen(false)} />}

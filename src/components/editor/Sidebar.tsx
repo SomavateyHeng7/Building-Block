@@ -5,10 +5,12 @@ import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { nextSlotInContainer } from "@/lib/diagram/layout";
 import type { BlockColorKey } from "@/lib/diagram/types";
 import { Icon } from "./Icon";
+import PanelToggle from "./PanelToggle";
 
 export const PALETTE_DATA_FORMAT = "application/building-block-node";
 
-const HEADING = "mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-zinc-500";
+const HEADING_TEXT = "flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-zinc-500";
+const HEADING = `mb-2 ${HEADING_TEXT}`;
 const KBD =
   "rounded border border-zinc-200 px-1.5 font-mono text-[10px] font-medium normal-case text-zinc-400 dark:border-zinc-700";
 const ITEM =
@@ -28,9 +30,11 @@ interface SidebarProps {
   className?: string;
   /** Called after a tap adds something, so a drawer can get out of the way. */
   onAdded?: () => void;
+  /** Collapses the panel on wide screens. */
+  onCollapse?: () => void;
 }
 
-export default function Sidebar({ className = "", onAdded }: SidebarProps) {
+export default function Sidebar({ className = "", onAdded, onCollapse }: SidebarProps) {
   const legend = useDiagramStore((state) => state.diagram.legend);
   const addContainer = useDiagramStore((state) => state.addContainer);
   const addBlock = useDiagramStore((state) => state.addBlock);
@@ -84,10 +88,14 @@ export default function Sidebar({ className = "", onAdded }: SidebarProps) {
   return (
     <aside className={`flex flex-col gap-5 overflow-y-auto border-r border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950 ${className}`}>
       <section>
-        <h2 className={HEADING}>
-          Containers
-          <kbd className={KBD} title="Keyboard shortcut">C</kbd>
-        </h2>
+        {/* The collapse button shares the panel's first line. */}
+        <div className="mb-2 flex items-center gap-2">
+          <h2 className={`${HEADING_TEXT} flex-1`}>
+            Containers
+            <kbd className={KBD} title="Keyboard shortcut">C</kbd>
+          </h2>
+          {onCollapse && <PanelToggle side="left" expanded label="the components panel" onClick={onCollapse} />}
+        </div>
         <div {...itemProps(tapAddContainer, { kind: "container" })} className={ITEM}>
           <span aria-hidden className="h-5 w-7 shrink-0 rounded border-2 border-dashed border-zinc-400 dark:border-zinc-500" />
           <span className="flex-1 truncate">Container</span>

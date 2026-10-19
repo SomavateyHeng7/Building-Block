@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { suggestConnectionSides, type ArrangeOp } from "@/lib/diagram/layout";
 import { connectionCaption } from "@/lib/diagram/flowAdapter";
@@ -56,6 +57,16 @@ const ARRANGE_GROUPS: { title: string; ops: { op: ArrangeOp; label: string; icon
 ];
 
 const SECTION_TITLE = "text-xs font-semibold uppercase tracking-wide text-zinc-500";
+
+/** The panel's title line, with room at the end for the panel's own controls (e.g. collapse). */
+function PanelTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <h2 className={SECTION_TITLE}>{children}</h2>
+      {action}
+    </div>
+  );
+}
 const PANEL = "flex flex-col gap-4 border-b border-zinc-200 p-4 dark:border-zinc-800";
 const FIELD_LABEL = "flex flex-col gap-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300";
 const FIELD =
@@ -303,7 +314,7 @@ const LINE_OPTIONS: { value: ConnectionLineStyle; label: string }[] = [
   { value: "dashed", label: "Dashed" },
 ];
 
-function ConnectionPanel({ edge }: { edge: DiagramEdge }) {
+function ConnectionPanel({ edge, action }: { edge: DiagramEdge; action?: ReactNode }) {
   const section = useDiagramStore((state) => getActiveSection(state.diagram));
   const updateConnection = useDiagramStore((state) => state.updateConnection);
   const reverseConnection = useDiagramStore((state) => state.reverseConnection);
@@ -322,7 +333,7 @@ function ConnectionPanel({ edge }: { edge: DiagramEdge }) {
 
   return (
     <div className={PANEL}>
-      <h2 className={SECTION_TITLE}>Connection</h2>
+      <PanelTitle action={action}>Connection</PanelTitle>
       <p className="-mt-3 text-xs text-zinc-500">
         {end(edge.source)} → {end(edge.target)}
       </p>
@@ -389,7 +400,7 @@ function ConnectionPanel({ edge }: { edge: DiagramEdge }) {
   );
 }
 
-function MultiSelectionPanel({ ids }: { ids: string[] }) {
+function MultiSelectionPanel({ ids, action }: { ids: string[]; action?: ReactNode }) {
   const legend = useDiagramStore((state) => state.diagram.legend);
   const arrangeSelection = useDiagramStore((state) => state.arrangeSelection);
   const updateNodesColor = useDiagramStore((state) => state.updateNodesColor);
@@ -398,7 +409,7 @@ function MultiSelectionPanel({ ids }: { ids: string[] }) {
 
   return (
     <div className={PANEL}>
-      <h2 className={SECTION_TITLE}>{ids.length} items selected</h2>
+      <PanelTitle action={action}>{ids.length} items selected</PanelTitle>
       {ARRANGE_GROUPS.map((group) => (
         <div key={group.title} className={FIELD_LABEL}>
           {group.title}
@@ -437,7 +448,8 @@ function MultiSelectionPanel({ ids }: { ids: string[] }) {
   );
 }
 
-export default function PropertiesPanel() {
+/** `headerAction` goes at the end of the title line, whichever title is showing. */
+export default function PropertiesPanel({ headerAction }: { headerAction?: ReactNode }) {
   const diagram = useDiagramStore((state) => state.diagram);
   const selectedNodeIds = useDiagramStore((state) => state.selectedNodeIds);
   const selectedEdgeId = useDiagramStore((state) => state.selectedEdgeId);
@@ -457,9 +469,9 @@ export default function PropertiesPanel() {
   const section = getActiveSection(diagram);
 
   const selectedEdge = selectedEdgeId ? section.edges?.find((edge) => edge.id === selectedEdgeId) : undefined;
-  if (selectedEdge) return <ConnectionPanel edge={selectedEdge} />;
+  if (selectedEdge) return <ConnectionPanel edge={selectedEdge} action={headerAction} />;
 
-  if (selectedNodeIds.length > 1) return <MultiSelectionPanel ids={selectedNodeIds} />;
+  if (selectedNodeIds.length > 1) return <MultiSelectionPanel ids={selectedNodeIds} action={headerAction} />;
 
   const node = section.nodes.find((candidate) => candidate.id === selectedNodeIds[0]);
 
@@ -467,7 +479,7 @@ export default function PropertiesPanel() {
     const hasNested = section.nodes.some((candidate) => candidate.parentId);
     return (
       <div className={PANEL}>
-        <h2 className={SECTION_TITLE}>Diagram</h2>
+        <PanelTitle action={headerAction}>Diagram</PanelTitle>
         <label className="flex cursor-pointer items-center justify-between gap-3 text-sm text-zinc-700 dark:text-zinc-200">
           <span>
             Show technology
@@ -515,9 +527,7 @@ export default function PropertiesPanel() {
 
   return (
     <div className={PANEL}>
-      <h2 className={SECTION_TITLE}>
-        {node.type === "container" ? "Container" : "Component"}
-      </h2>
+      <PanelTitle action={headerAction}>{node.type === "container" ? "Container" : "Component"}</PanelTitle>
       {parentContainer && (
         <p className="-mt-3 text-xs text-zinc-500">
           In{" "}
