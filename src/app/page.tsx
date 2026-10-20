@@ -100,6 +100,7 @@ export default function LandingPage() {
             <a href="#how-it-works" className="hover:text-zinc-900 dark:hover:text-zinc-100">How it works</a>
             <a href="#roadmap" className="hover:text-zinc-900 dark:hover:text-zinc-100">Roadmap</a>
             <Link href="/templates" className="hover:text-zinc-900 dark:hover:text-zinc-100">Templates</Link>
+            <Link href="/contact" className="hover:text-zinc-900 dark:hover:text-zinc-100">Contact us</Link>
           </div>
           <div className="ml-auto flex items-center gap-3">
             <Link

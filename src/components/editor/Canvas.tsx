@@ -84,6 +84,7 @@ export default function Canvas() {
   const setSelectedEdge = useDiagramStore((state) => state.setSelectedEdge);
   const addConnection = useDiagramStore((state) => state.addConnection);
   const deleteConnections = useDiagramStore((state) => state.deleteConnections);
+  const deleteNodes = useDiagramStore((state) => state.deleteNodes);
   const addContainer = useDiagramStore((state) => state.addContainer);
   const addBlock = useDiagramStore((state) => state.addBlock);
   const { screenToFlowPosition } = useReactFlow();
@@ -137,12 +138,20 @@ export default function Canvas() {
     [deleteConnections, setSelectedEdge],
   );
 
-  // Connections attached to a deleted component go with it (the store prunes them), so React Flow
-  // shouldn't also report them as separate deletions, which would add a second undo step.
-  const handleBeforeDelete: OnBeforeDelete = useCallback(async ({ nodes, edges }) => {
-    const gone = new Set(nodes.map((node) => node.id));
-    return { nodes, edges: edges.filter((edge) => !gone.has(edge.source) && !gone.has(edge.target)) };
-  }, []);
+  // Delete goes through the store, which prunes connections and keeps the components of a deleted
+  // container (React Flow would delete them too), and records a single undo step.
+  const handleBeforeDelete: OnBeforeDelete = useCallback(
+    async ({ nodes }) => {
+      // React Flow adds a deleted container's children to the list; only delete those that were selected themselves.
+      const listed = new Set(nodes.map((node) => node.id));
+      const ids = nodes
+        .filter((node) => !node.parentId || !listed.has(node.parentId) || selectedNodeIds.includes(node.id))
+        .map((node) => node.id);
+      if (ids.length) deleteNodes(ids);
+      return false;
+    },
+    [deleteNodes, selectedNodeIds],
+  );
 
   const handlePaneClick = useCallback(() => {
     setSelection([]);

@@ -429,16 +429,28 @@ export const useDiagramStore = create<DiagramState>((set) => ({
       };
     }),
 
+  // Deleting a container keeps its components: they stay where they are on the canvas, no longer inside it.
   deleteNodes: (ids) =>
     set((state) => {
-      const removed = new Set(withDescendants(getActiveSection(state.diagram).nodes, ids).map((n) => n.id));
+      const nodes = getActiveSection(state.diagram).nodes;
+      const removed = new Set(ids.filter((id) => nodes.some((node) => node.id === id)));
       if (!removed.size) return state;
+      const kept = nodes
+        .filter((node) => !removed.has(node.id))
+        .map((node) => {
+          if (!node.parentId || !removed.has(node.parentId)) return node;
+          const rest = { ...node };
+          delete rest.parentId;
+          return {
+            ...rest,
+            position: absolutePosition(node, nodes),
+            data: node.data.kind === "block" ? { ...node.data, containerId: null } : node.data,
+          };
+        });
       return {
         ...commit(
           state,
-          mapActiveSectionFull(state.diagram, (section) =>
-            withoutDanglingEdges({ ...section, nodes: section.nodes.filter((node) => !removed.has(node.id)) }),
-          ),
+          mapActiveSectionFull(state.diagram, (section) => withoutDanglingEdges({ ...section, nodes: kept })),
         ),
         selectedNodeIds: state.selectedNodeIds.filter((id) => !removed.has(id)),
       };

@@ -122,7 +122,7 @@ returns to that tab, because the restored diagram carries its own `activeSection
 | `copySelection()` | Copies selected nodes **plus the children of selected containers**, their canvas positions, and the connections between copied nodes. | No |
 | `paste()` | Pastes with fresh ids, offset by 24px per repeated paste; re-attaches to the copied container, or the original container if it exists here, else places at the canvas position. Grows containers to fit (`withAdded`). | Yes |
 | `duplicateSelection()` | Like copy + paste, but leaves the clipboard alone. | Yes |
-| `deleteNodes(ids)` | Deletes nodes and their children, and their connections. | Yes |
+| `deleteNodes(ids)` | Deletes nodes and their connections. A deleted container's components are kept, moved out onto the canvas where they were. | Yes |
 | `arrangeSelection(op)` | Align/distribute/match size of ≥2 nodes (`arrangeNodes`). | Yes |
 | `fitContainer(id)` / `fitAllContainers()` | Shrink or grow container(s) to wrap their components. | Yes |
 | `tidyContainer(id)` | Lays a container's components out in a grid. | Yes |
