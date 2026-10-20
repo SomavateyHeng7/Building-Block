@@ -233,7 +233,7 @@ function ColorSwatches({
           aria-label={entry.label || "Unnamed category"}
           aria-pressed={activeKey === entry.key}
           onClick={() => onPick(entry.key)}
-          className={`h-7 w-7 rounded-md border border-black/15 transition-transform hover:scale-110 dark:border-white/15 ${
+          className={`h-7 min-h-0 w-7 rounded-md border border-black/15 transition-transform hover:scale-110 dark:border-white/15 ${
             activeKey === entry.key ? "ring-2 ring-blue-500 ring-offset-2 ring-offset-white dark:ring-offset-zinc-950" : ""
           }`}
           style={{ backgroundColor: entry.color }}

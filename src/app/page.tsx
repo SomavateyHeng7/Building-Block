@@ -41,7 +41,7 @@ const FEATURES = [
   },
   {
     title: "Private by default",
-    body: "No account, no server and no copy kept in the browser. A diagram is a file on your device that you open and save, like draw.io's device storage, so you can draw internal systems without asking security first.",
+    body: "No account, no server, and nothing kept in the browser unless you turn on recovery copies. Works offline once installed. A diagram is a file on your device that you open and save, like draw.io's device storage, so you can draw internal systems without asking security first.",
     icon: "M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3",
   },
 ];

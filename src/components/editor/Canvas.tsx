@@ -26,6 +26,7 @@ import ContainerNode from "./nodes/ContainerNode";
 import BlockNode from "./nodes/BlockNode";
 import { Icon } from "./Icon";
 import { PALETTE_DATA_FORMAT, type PaletteDragPayload } from "./Sidebar";
+import { useReadOnly } from "./viewMode";
 import type { BlockColorKey, ConnectionSide, ContainerNodeData } from "@/lib/diagram/types";
 
 function subscribeWide(callback: () => void) {
@@ -89,6 +90,7 @@ export default function Canvas() {
   const { resolvedTheme } = useTheme();
   const mounted = useMounted();
   const wide = useIsWide();
+  const readOnly = useReadOnly();
   const colorMode = mounted && resolvedTheme === "dark" ? "dark" : "light";
 
   const section = getActiveSection(diagram);
@@ -202,7 +204,7 @@ export default function Canvas() {
     (event: React.DragEvent) => {
       event.preventDefault();
       const raw = event.dataTransfer.getData(PALETTE_DATA_FORMAT);
-      if (!raw) return;
+      if (!raw || readOnly) return;
 
       const payload = JSON.parse(raw) as PaletteDragPayload;
       const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
@@ -225,7 +227,7 @@ export default function Canvas() {
 
       addBlock(position, target?.id ?? null, payload.colorKey as BlockColorKey);
     },
-    [addBlock, addContainer, flowNodes, screenToFlowPosition],
+    [addBlock, addContainer, flowNodes, readOnly, screenToFlowPosition],
   );
 
   return (
@@ -243,7 +245,10 @@ export default function Canvas() {
       colorMode={colorMode}
       onNodesChange={handleNodesChange}
       onNodeDragStop={handleNodeDragStop}
-      deleteKeyCode={["Backspace", "Delete"]}
+      deleteKeyCode={readOnly ? null : ["Backspace", "Delete"]}
+      nodesDraggable={!readOnly}
+      nodesConnectable={!readOnly}
+      edgesReconnectable={!readOnly}
       selectionMode={SelectionMode.Partial}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
@@ -277,6 +282,9 @@ export default function Canvas() {
                 </>
               )}
             </div>
+            {readOnly ? (
+              <p className="text-xs text-zinc-500">Switch to Edit to add something.</p>
+            ) : (
             <div className="flex flex-wrap justify-center gap-2">
               <button
                 type="button"
@@ -301,6 +309,7 @@ export default function Canvas() {
                 Component
               </button>
             </div>
+            )}
             <p className="hidden text-xs text-zinc-400 pointer-fine:block">
               Or press <kbd className="rounded border border-zinc-300 px-1 font-mono dark:border-zinc-700">C</kbd> /{" "}
               <kbd className="rounded border border-zinc-300 px-1 font-mono dark:border-zinc-700">B</kbd>, and{" "}

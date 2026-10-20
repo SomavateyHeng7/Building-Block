@@ -2,13 +2,21 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useSyncExternalStore, type DragEvent, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type DragEvent, type ReactNode } from "react";
 import { LogoMark } from "@/components/Logo";
 import Footer from "@/components/landing/Footer";
 import { ThemeToggle, useMounted } from "@/components/theme-toggle";
 import { createBlankDiagram } from "@/lib/diagram/factory";
 import { useUnsavedGuard } from "@/components/editor/useUnsavedGuard";
-import { openDiagramFromDevice, openDroppedDiagram, startDiagram, supportsFilePicker, takeDroppedFile } from "@/lib/diagram/file";
+import {
+  openDiagramFromDevice,
+  openDroppedDiagram,
+  openLaunchedDiagram,
+  startDiagram,
+  supportsFilePicker,
+  takeDroppedFile,
+} from "@/lib/diagram/file";
+import { clearRecoveryCopy, setRecoveryEnabled, useRecoveryCopy, useRecoveryEnabled, type RecoveryCopy } from "@/lib/diagram/recovery";
 import { downloadLegacyItem, readLegacyItems, removeLegacyItems, type LegacyItem } from "@/lib/diagram/legacy";
 import { toast } from "@/lib/toast";
 import { templates } from "@/templates";
@@ -152,6 +160,26 @@ export default function StartPage() {
   const starterTemplates = templates.filter((template) => template.id !== "blank");
   // A diagram can still be open in memory, e.g. after the browser's Back button from the editor.
   const { guard, dialog: unsavedDialog } = useUnsavedGuard();
+  const recovered = useRecoveryCopy();
+  const recoveryOn = useRecoveryEnabled();
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+
+  // Installed in Chrome or Edge, double-clicking a diagram file opens a window here with that file.
+  useEffect(() => {
+    window.launchQueue?.setConsumer((params) => {
+      const [handle] = params.files;
+      if (handle) void openDiagram(() => openLaunchedDiagram(handle));
+    });
+    // A launched window starts here once; the consumer only needs setting up then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function recover(copy: RecoveryCopy) {
+    guard(() => {
+      startDiagram(copy.diagram);
+      router.push("/editor");
+    });
+  }
 
   function startBlank() {
     guard(() => {
@@ -225,6 +253,52 @@ export default function StartPage() {
             <h1 className="text-4xl font-semibold tracking-tight text-balance text-zinc-950 sm:text-5xl dark:text-zinc-50">Start a diagram</h1>
             <p className="text-lg text-pretty text-zinc-600 dark:text-zinc-400">Begin with an empty canvas, or pick up where you left off.</p>
           </div>
+          {recovered && (
+            <div
+              role="region"
+              aria-label="Unsaved changes"
+              className="flex flex-col gap-4 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-sm text-blue-950 sm:flex-row sm:items-center dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-100"
+            >
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate font-semibold">Unsaved changes to &ldquo;{recovered.diagram.name}&rdquo;</h2>
+                <p className="mt-1 text-blue-900/80 dark:text-blue-100/80">
+                  Kept in this browser {mounted && new Date(recovered.keptAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}.
+                  Recover them, then save to a file.
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                {confirmingDiscard ? (
+                  <button
+                    type="button"
+                    autoFocus
+                    className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white"
+                    onClick={() => {
+                      clearRecoveryCopy();
+                      setConfirmingDiscard(false);
+                    }}
+                    onBlur={() => setConfirmingDiscard(false)}
+                  >
+                    Delete the changes?
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="rounded-lg border border-blue-300 px-3 py-2 text-sm font-medium hover:bg-blue-100 dark:border-blue-800 dark:hover:bg-blue-900"
+                    onClick={() => setConfirmingDiscard(true)}
+                  >
+                    Discard
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                  onClick={() => recover(recovered)}
+                >
+                  Recover
+                </button>
+              </div>
+            </div>
+          )}
           <div className="grid gap-4 sm:grid-cols-2">
             <ActionCard primary icon={ICONS.plus} title="New blank diagram" body="An empty canvas with the default colour legend." onClick={startBlank} />
             <ActionCard
@@ -269,13 +343,28 @@ export default function StartPage() {
           <div>
             <h2 className="font-semibold text-zinc-900 dark:text-zinc-100">Your diagrams are your files</h2>
             <p className="mt-1">
-              No account, no server, and no copy kept in this browser. Use <span className="font-medium">Save</span> in the editor to
-              keep your work as a <code className="font-mono text-xs">.json</code> file, and open it here next time.{" "}
+              No account and no server. Use <span className="font-medium">Save</span> in the editor to keep your work as a{" "}
+              <code className="font-mono text-xs">.json</code> file, and open it here next time.{" "}
               {mounted &&
                 (supportsFilePicker()
                   ? "This browser saves straight back to the file you opened."
                   : "This browser can't save over a file, so each Save downloads a new copy. Chrome or Edge can save in place.")}
             </p>
+            {mounted && (
+              <label className="mt-3 flex cursor-pointer items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={recoveryOn}
+                  onChange={(event) => setRecoveryEnabled(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-zinc-900 dark:accent-zinc-100"
+                />
+                <span>
+                  <span className="font-medium text-zinc-900 dark:text-zinc-100">Keep a recovery copy in this browser</span>{" "}
+                  (off unless you turn it on). Unsaved changes stay here until you save them, so a reload or crash doesn&apos;t lose
+                  them. Turning it off deletes the copy.
+                </span>
+              </label>
+            )}
           </div>
         </section>
 

@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { useDiagramStore } from "@/lib/diagram/store";
 import { isDirty, saveDiagramToFile, supportsFilePicker, useFileStore } from "@/lib/diagram/file";
+import { clearRecoveryCopy } from "@/lib/diagram/recovery";
 import UnsavedChangesDialog from "./UnsavedChangesDialog";
 
 interface GuardOptions {
@@ -49,7 +50,11 @@ export function useUnsavedGuard(): { guard: (action: () => void, options?: Guard
       needsLocation={!hasFile}
       saved={savedTo && pending.picker ? { fileName: savedTo, ...pending.picker } : null}
       onCancel={close}
-      onDiscard={() => run(pending)}
+      onDiscard={() => {
+        // Deliberately thrown away, so its recovery copy goes too.
+        clearRecoveryCopy(useDiagramStore.getState().diagram.id);
+        run(pending);
+      }}
       onContinue={() => run(pending)}
       onSave={async () => {
         const savePicksLocation = supportsFilePicker() && !useFileStore.getState().handle;

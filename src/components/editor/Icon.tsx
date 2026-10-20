@@ -1,10 +1,12 @@
 /** Stroke icons for the editor chrome, drawn on a 24×24 grid. */
 export const ICONS = {
   arrowLeft: "M19 12H5M11 6l-6 6 6 6",
+  check: "M5 13l4 4L19 7",
   chevronDown: "m6 9 6 6 6-6",
   copy: "M8 8h12v12H8zM16 8V4H4v12h4",
   cursor: "M5 3l14 7-6 2-2 6z",
   download: "M12 4v11M7 10l5 5 5-5M5 20h14",
+  eye: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
   file: "M6 3h8l4 4v14H6zM14 3v4h4",
   grip: "M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01",
   keyboard: "M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10",

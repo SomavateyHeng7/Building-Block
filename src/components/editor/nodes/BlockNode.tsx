@@ -7,6 +7,7 @@ import { defaultLabel } from "@/lib/diagram/factory";
 import { readableTextOn } from "@/lib/diagram/palette";
 import { useDiagramStore } from "@/lib/diagram/store";
 import type { BlockNodeData } from "@/lib/diagram/types";
+import { useReadOnly } from "../viewMode";
 
 export type BlockFlowNode = Node<BlockNodeData, "block">;
 
@@ -21,6 +22,7 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
   const updateNodeLabel = useDiagramStore((state) => state.updateNodeLabel);
   const legend = useDiagramStore((state) => state.diagram.legend);
   const showTechnology = useDiagramStore((state) => state.diagram.showTechnology !== false);
+  const readOnly = useReadOnly();
   const [editing, setEditing] = useState(false);
   // Escape leaves the name as it was; the blur that follows must not save what was typed.
   const cancelled = useRef(false);
@@ -39,11 +41,12 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
         color: readableTextOn(color),
       }}
       onDoubleClick={() => {
+        if (readOnly) return;
         cancelled.current = false;
         setEditing(true);
       }}
     >
-      <NodeResizer minWidth={80} minHeight={32} isVisible={selected} />
+      <NodeResizer minWidth={80} minHeight={32} isVisible={selected && !readOnly} />
       {/* Every side starts and ends connections (the canvas uses loose connection mode). */}
       {SIDES.map((side) => (
         <Handle key={side.id} id={side.id} type="source" position={side.position} className="bb-handle" />
@@ -88,7 +91,7 @@ function DetailBadge({ id, count }: { id: string; count: number }) {
       type="button"
       title={label}
       aria-label={label}
-      className="nodrag nopan absolute -bottom-2 -right-2 flex h-4 items-center gap-0.5 rounded-full border border-white bg-blue-600 px-1.5 text-[9px] font-bold leading-none text-white shadow-sm hover:bg-blue-700 dark:border-zinc-900"
+      className="nodrag nopan absolute -bottom-2 -right-2 flex h-4 min-h-0 items-center gap-0.5 rounded-full border border-white bg-blue-600 px-1.5 text-[9px] font-bold leading-none text-white shadow-sm hover:bg-blue-700 dark:border-zinc-900"
       onClick={(event) => {
         event.stopPropagation();
         openDetail(id);

@@ -45,20 +45,8 @@ export default function ContactForm() {
   const [status, setStatus] = useState<Status>("idle");
   const [touched, setTouched] = useState(false);
 
-  if (!CONTACT_URL && !CONTACT_EMAIL) {
-    return (
-      <p className="rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
-        {process.env.NODE_ENV === "development" ? (
-          <>
-            Set <code className="font-mono">NEXT_PUBLIC_CONTACT_URL</code> (a form endpoint) and/or{" "}
-            <code className="font-mono">NEXT_PUBLIC_CONTACT_EMAIL</code> to turn on this form.
-          </>
-        ) : (
-          "The contact form isn't available right now. Please try again later."
-        )}
-      </p>
-    );
-  }
+  // Without somewhere to deliver messages the form still shows, but can't be sent, so nothing is submitted into nothing.
+  const canSend = !!CONTACT_URL || !!CONTACT_EMAIL;
 
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const messageValid = message.trim().length >= 10;
@@ -70,6 +58,7 @@ export default function ContactForm() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!canSend) return;
     setTouched(true);
     if (!emailValid || !messageValid || !agreed) return;
     if (website) return setStatus("sent");
@@ -223,12 +212,24 @@ export default function ContactForm() {
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="submit"
-          disabled={status === "sending"}
+          disabled={status === "sending" || !canSend}
           className="rounded-full bg-foreground px-6 py-2.5 text-sm font-medium text-background transition-colors hover:bg-[#383838] disabled:opacity-60 dark:hover:bg-[#ccc]"
         >
-          {status === "sending" ? "Sending…" : CONTACT_URL ? "Send message" : "Write the email"}
+          {status === "sending" ? "Sending…" : CONTACT_URL || !canSend ? "Send message" : "Write the email"}
         </button>
-        {!CONTACT_URL && <span className="text-xs text-zinc-500">Opens your email app with the message filled in.</span>}
+        {!canSend && (
+          <span className="text-xs text-zinc-500">
+            {process.env.NODE_ENV === "development" ? (
+              <>
+                Sending is off: set <code className="font-mono">NEXT_PUBLIC_CONTACT_URL</code> and/or{" "}
+                <code className="font-mono">NEXT_PUBLIC_CONTACT_EMAIL</code>, then rebuild.
+              </>
+            ) : (
+              "Messages can't be sent from here just yet. Please check back soon."
+            )}
+          </span>
+        )}
+        {canSend && !CONTACT_URL && <span className="text-xs text-zinc-500">Opens your email app with the message filled in.</span>}
       </div>
     </form>
   );

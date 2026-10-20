@@ -8,7 +8,17 @@ interface DataTransferItem {
   getAsFileSystemHandle?: () => Promise<FileSystemHandle | null>;
 }
 
+// File Handling API: files an installed app was launched with (Chrome, Edge).
+interface LaunchParams {
+  readonly files: readonly FileSystemHandle[];
+}
+
+interface LaunchQueue {
+  setConsumer(consumer: (params: LaunchParams) => void): void;
+}
+
 interface Window {
+  launchQueue?: LaunchQueue;
   showOpenFilePicker?: (options?: {
     types?: FilePickerAcceptType[];
     multiple?: boolean;

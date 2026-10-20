@@ -14,11 +14,13 @@ export default function DetailBar() {
       <button
         type="button"
         title="Back to the tab (Esc)"
-        className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 font-medium hover:bg-blue-100 dark:hover:bg-blue-900"
+        className="inline-flex h-7 min-w-0 max-w-[45%] shrink-0 items-center gap-1 rounded-md px-2 font-medium hover:bg-blue-100 dark:hover:bg-blue-900"
         onClick={closeDetail}
       >
         <Icon name="arrowLeft" />
-        <span className="hidden sm:inline">Back to</span> {parent.section.name}
+        <span className="truncate">
+          <span className="hidden sm:inline">Back to</span> {parent.section.name}
+        </span>
       </button>
       <span aria-hidden className="text-blue-300 dark:text-blue-700">
         /

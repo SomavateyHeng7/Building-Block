@@ -39,8 +39,10 @@ const OPTIONS = [
 ] as const;
 
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
+  const { theme, resolvedTheme, setTheme } = useTheme();
   const mounted = useMounted();
+  // There's no System button, so a first visit (theme "system") shows whichever theme it resolved to.
+  const current = theme === "system" ? resolvedTheme : theme;
 
   return (
     <div
@@ -49,7 +51,7 @@ export function ThemeToggle() {
       className="flex items-center gap-0.5 rounded-md border border-zinc-300 p-0.5 dark:border-zinc-700"
     >
       {OPTIONS.map((option) => {
-        const active = mounted && theme === option.value;
+        const active = mounted && current === option.value;
         return (
           <button
             key={option.value}

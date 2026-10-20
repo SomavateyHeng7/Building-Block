@@ -57,7 +57,9 @@ export default function ColorPicker({ value, onChange, label, usedBy, size = "sm
       if (!popover.current?.contains(target) && !trigger.current?.contains(target)) close(false);
     }
     // It's placed against the trigger, so scrolling or resizing would leave it behind: close instead.
+    // Not while typing in it: on Android the on-screen keyboard opening resizes the window.
     function handleMove(event: Event) {
+      if (popover.current?.contains(document.activeElement)) return;
       if (!popover.current?.contains(event.target as Node)) close(false);
     }
     document.addEventListener("pointerdown", handlePointerDown);
@@ -97,7 +99,7 @@ export default function ColorPicker({ value, onChange, label, usedBy, size = "sm
         title={`${colorName(value)} — click to change`}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className={`${sizeClass} shrink-0 rounded-md border border-black/20 shadow-sm transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-white/20`}
+        className={`${sizeClass} min-h-0 shrink-0 rounded-md border border-black/20 shadow-sm transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-white/20`}
         style={{ backgroundColor: value }}
         onClick={() => {
           setHexDraft(value);
@@ -138,7 +140,7 @@ export default function ColorPicker({ value, onChange, label, usedBy, size = "sm
                     aria-label={description}
                     title={description}
                     tabIndex={index === (selectedIndex >= 0 ? selectedIndex : 0) ? 0 : -1}
-                    className={`relative flex h-8 w-8 items-center justify-center rounded-md border border-black/15 transition-transform hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-white/15 ${
+                    className={`relative flex h-8 min-h-0 w-8 items-center justify-center rounded-md border border-black/15 transition-transform hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-white/15 ${
                       selected ? "ring-2 ring-blue-500 ring-offset-2 ring-offset-white dark:ring-offset-zinc-900" : ""
                     }`}
                     style={{ backgroundColor: color.hex }}

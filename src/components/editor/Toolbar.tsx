@@ -15,6 +15,7 @@ import {
   useIsDirty,
 } from "@/lib/diagram/file";
 import { createBlankDiagram } from "@/lib/diagram/factory";
+import { setRecoveryEnabled, useRecoveryEnabled } from "@/lib/diagram/recovery";
 import {
   canvasToPng,
   componentsCsv,
@@ -32,6 +33,7 @@ import ExportDialog, { type ExportChoice, type ExportPrefs } from "./ExportDialo
 import { toast } from "@/lib/toast";
 import { useUnsavedGuard } from "./useUnsavedGuard";
 import { Icon } from "./Icon";
+import { useReadOnly } from "./viewMode";
 import { LogoMark } from "@/components/Logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -43,7 +45,9 @@ const ICON_BUTTON =
   "inline-flex h-8 w-8 items-center justify-center rounded-md text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100";
 const MENU =
   "absolute z-50 mt-1.5 w-60 max-w-[calc(100vw-1rem)] rounded-lg border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900";
-const DIVIDER = "mx-1 hidden h-5 w-px bg-zinc-200 sm:block dark:bg-zinc-800";
+/** w-60 above. */
+const MENU_WIDTH = 240;
+const DIVIDER ="mx-1 hidden h-5 w-px bg-zinc-200 sm:block dark:bg-zinc-800";
 
 const EXPORT_PREFS_KEY = "bb:export";
 /** Earlier versions remembered only the picture style, under this key. */
@@ -93,6 +97,9 @@ function FileMenu({
   onSaveAs: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  // On phones the toolbar wraps and File can land near the right edge: open leftwards then.
+  const [alignRight, setAlignRight] = useState(false);
+  const recoveryOn = useRecoveryEnabled();
   const mod = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+";
   const items = [
     { label: "New diagram", run: onNew, keys: "" },
@@ -110,12 +117,21 @@ function FileMenu({
         if (event.key === "Escape") setOpen(false);
       }}
     >
-      <button type="button" aria-haspopup="menu" aria-expanded={open} className={GHOST_BUTTON} onClick={() => setOpen((value) => !value)}>
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={GHOST_BUTTON}
+        onClick={(event) => {
+          setAlignRight(event.currentTarget.getBoundingClientRect().left + MENU_WIDTH > window.innerWidth - 8);
+          setOpen((value) => !value);
+        }}
+      >
         File
         <Icon name="chevronDown" className="h-3.5 w-3.5 opacity-60" />
       </button>
       {open && (
-        <div role="menu" className={`${MENU} left-0`}>
+        <div role="menu" className={`${MENU} ${alignRight ? "right-0" : "left-0"}`}>
           {items.map((item) => (
             <button
               key={item.label}
@@ -131,6 +147,25 @@ function FileMenu({
               <span className="text-[11px] text-zinc-500">{item.keys}</span>
             </button>
           ))}
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            aria-checked={recoveryOn}
+            className={`${MENU_ITEM} mt-1 border-t border-zinc-200 pt-2 dark:border-zinc-700`}
+            title="Keeps unsaved changes in this browser until you save, so a reload or crash doesn't lose them"
+            onClick={() => setRecoveryEnabled(!recoveryOn)}
+          >
+            <span className="flex flex-col">
+              <span className="font-medium">Keep a recovery copy</span>
+              <span className="text-[11px] text-zinc-500">Unsaved changes stay in this browser until saved</span>
+            </span>
+            <span
+              aria-hidden
+              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${recoveryOn ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900" : "border-zinc-400"}`}
+            >
+              {recoveryOn && <Icon name="check" className="h-3 w-3" />}
+            </span>
+          </button>
           {!supportsFilePicker() && (
             <p className="mt-1 border-t border-zinc-200 px-2 pb-1 pt-2 text-[11px] leading-snug text-zinc-500 dark:border-zinc-700">
               This browser can&apos;t save over a file, so Save downloads a new copy each time. Chrome or Edge can save in place.
@@ -197,6 +232,7 @@ export default function Toolbar({ onShowShortcuts }: { onShowShortcuts: () => vo
   const hasFile = useFileStore((state) => state.handle !== null);
   const saving = useFileStore((state) => state.saving);
   const dirty = useIsDirty();
+  const readOnly = useReadOnly();
 
   const section = getActiveSection(diagram);
 
@@ -367,6 +403,7 @@ export default function Toolbar({ onShowShortcuts }: { onShowShortcuts: () => vo
           size={Math.min(Math.max(diagram.name.length, 8), 32)}
           className="h-8 min-w-0 max-w-[45vw] rounded-md border border-transparent bg-transparent px-2 text-sm font-semibold outline-none transition-colors placeholder:font-normal placeholder:text-zinc-400 hover:border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 sm:max-w-none dark:hover:border-zinc-700"
           value={diagram.name}
+          readOnly={readOnly}
           onChange={(event) => renameDiagram(event.target.value)}
           onFocus={(event) => event.target.select()}
           // An empty name would leave blank file names.
@@ -387,12 +424,16 @@ export default function Toolbar({ onShowShortcuts }: { onShowShortcuts: () => vo
       />
 
       <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
-        <button type="button" title="Undo (Ctrl/⌘+Z)" aria-label="Undo" disabled={!canUndo} onClick={undo} className={ICON_BUTTON}>
-          <Icon name="undo" />
-        </button>
-        <button type="button" title="Redo (Ctrl/⌘+Shift+Z)" aria-label="Redo" disabled={!canRedo} onClick={redo} className={ICON_BUTTON}>
-          <Icon name="redo" />
-        </button>
+        {!readOnly && (
+          <>
+            <button type="button" title="Undo (Ctrl/⌘+Z)" aria-label="Undo" disabled={!canUndo} onClick={undo} className={ICON_BUTTON}>
+              <Icon name="undo" />
+            </button>
+            <button type="button" title="Redo (Ctrl/⌘+Shift+Z)" aria-label="Redo" disabled={!canRedo} onClick={redo} className={ICON_BUTTON}>
+              <Icon name="redo" />
+            </button>
+          </>
+        )}
         <span className="hidden pointer-fine:contents">
           <button type="button" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" onClick={onShowShortcuts} className={ICON_BUTTON}>
             <Icon name="keyboard" />

@@ -85,6 +85,9 @@ Browser behaviour for saving is in the table above; everything else is the same 
 
 ## Development
 
+Developer documentation (architecture, routing, data model, every module and the reasons behind it) is in
+[`docs/`](docs/README.md).
+
 ```bash
 pnpm install
 pnpm dev        # http://localhost:3000

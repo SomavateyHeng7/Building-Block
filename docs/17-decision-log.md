@@ -1,0 +1,236 @@
+# 17. Decision log
+
+Each entry: the situation, what we decided, what else we considered, and what follows from it. Newest concerns are
+not necessarily last; entries are grouped by area. Add an entry when you make a decision someone might later
+want to reverse.
+
+---
+
+## Product and data
+
+### No server; the user's file is the only copy
+
+- **Context:** architects draw internal systems; uploading them needs security approval.
+- **Decision:** no backend, no accounts, no diagrams in browser storage. Open/Save a `.json` file like draw.io's
+  device storage.
+- **Alternatives:** cloud storage with accounts (blocked by security reviews, needs a backend); keeping diagrams in
+  `localStorage` (what earlier versions did: invisible copies on shared machines, lost when storage is cleared, and
+  "is my work saved?" was unclear).
+- **Consequences:** reloads lose unsaved work, so every exit path warns (principle 3); autosave only where the File
+  System Access API can write in place; the legacy page migrates old browser copies out.
+
+### Repair files instead of rejecting them
+
+- **Decision:** `parseDiagram` fixes what it can and reports each fix; it only throws for input that isn't a
+  diagram at all.
+- **Why:** a file with one bad connection is still the user's work. Rejecting it would leave them stuck.
+
+### Ids are short random strings, unique per diagram
+
+- `prefix_8chars` is readable in files and diffs. Global uniqueness isn't needed; copies always get new ids.
+
+---
+
+## State and undo
+
+### Zustand, readable outside React
+
+- **Alternatives:** React context (re-renders everything, not readable from plain functions), Redux (more code).
+- **Why:** keyboard handlers, exports, the file module and the editor error page all need `getState()` outside
+  React, and the editor error page must still reach the diagram after React has crashed.
+
+### Undo stores whole immutable diagrams
+
+- **Alternatives:** command pattern with inverse operations, or patches.
+- **Why:** diagrams are small; snapshots make undo exact with no inverse logic to get wrong, and the same identity
+  makes dirty tracking an `!==` check.
+
+### Coalesce bursts into one undo step
+
+- Drags, typing and colour-picker drags fire dozens of updates; a coalesce key plus an 800 ms window turns each
+  burst into one step. **Sorted ids** in `historyKey` so the drag and its re-parent share a key.
+
+### Undo restores the exact earlier object
+
+- **Before:** undo made a copy with a new `updatedAt`, so undoing back to the saved state still showed "Unsaved
+  changes".
+- **Decision:** `restore()` puts back the same object. Undo-to-saved is clean.
+
+### Navigation is not an edit
+
+- **Before:** switching tabs created a new diagram object, so it showed "Unsaved changes" and triggered autosave.
+- **Decision:** dirty tracking compares every top-level field except `activeSectionId` and `activeDetailId` by
+  identity; tab switches and opening an internal design aren't undo steps.
+- **Alternative:** keeping navigation outside the diagram. Rejected because files should reopen where they were
+  saved, and undo should return to the tab where a change happened.
+
+### No-op edits aren't recorded
+
+- Renaming to the same name (or clicking into a label and away) used to add an undo step. `updateNodeLabel` and
+  `renameSection` now return the state unchanged.
+
+---
+
+## Canvas and layout
+
+### React Flow, controlled by the store
+
+- **Why React Flow:** pan/zoom, drag, resize, selection, handles and minimap would be months of work.
+- **Why controlled:** one source of truth makes undo, autosave and dirty tracking cover every change.
+
+### One level of container nesting
+
+- L0 groups systems into domains; deeper structure belongs in L2. Keeps every layout calculation simple.
+
+### Components can leave containers
+
+- **Before:** nested nodes had React Flow's `extent: "parent"`, which clamps them inside their parent while dragging,
+  so a component could never be dragged out, and cut/paste put it back in the same container.
+- **Decision:** no `extent`; when a drag ends, `dropIntoContainers` puts each component in the top-most container
+  under its **centre**, or none, clamped clear of the header, growing the container.
+- **Why the centre:** "any overlap" made leaving impossible (it still overlaps while you drag it out) and made
+  components jump into neighbours they barely touched.
+- **Consequence:** while dragging, a component can be drawn outside its container; it settles on drop. Resizing a
+  component past its container's edge now grows the container (the clamp used to prevent that).
+
+### Arranging respects containers
+
+- **Before:** aligning a container with its own component moved the component twice; aligning a nested component
+  with an outside one put it outside its container while still "inside" it.
+- **Decision:** selected containers carry their children; results settle with `dropIntoContainers`, the same rule
+  as dragging.
+
+### Paste and duplicate grow containers
+
+- Same principle: containers never clip their components.
+
+### Shortcuts aren't blocked by focused buttons
+
+- **Before:** the shortcut handler ignored keys while a `<button>` had focus, so Ctrl+Z did nothing right after
+  clicking Undo.
+- **Decision:** only text inputs, `contenteditable`, dialogs and menus suppress shortcuts.
+
+---
+
+## Files and saving
+
+### Guard the start pages, not just the editor
+
+- **Context:** the App Router can't intercept the browser's Back button, and `beforeunload` doesn't fire for
+  client-side navigation. After Back, the diagram is still in memory.
+- **Decision:** `/diagrams` and `/templates` run the same Save / Don't save / Cancel guard (`useUnsavedGuard`)
+  before replacing the diagram.
+
+### Two-step "Saved — Open…"
+
+- **Context:** browsers only show file pickers right after a click, and Chrome consumes that permission when a
+  picker opens. "Save as (picker) then Open (picker)" from one click failed.
+- **Decision:** when saving needed its own picker, the dialog asks for one more click to open.
+
+### Revoke download URLs after 60 seconds
+
+- Safari can still be starting a download after `click()` returns; revoking immediately could break it.
+
+### Sanitise file names
+
+- Remove characters Windows/macOS forbid, avoid Windows reserved names, keep accented letters, cap length.
+
+---
+
+## Levels
+
+### The roadmap is computed from the code
+
+- `levels.ts` lists the store actions each level needs; shipping them flips the landing page. No hand-edited
+  status to forget.
+
+### L2 lives inside the component, one level deep
+
+- **Alternatives:** separate linked diagram files (break on rename/move; browsers can't open a linked file without
+  a picker), or unlimited nesting (rarely needed, complicates navigation).
+- **Decision:** `BlockNodeData.detail = { nodes, edges }`, one level, absent until used.
+- **Consequence:** files with large internal designs grow; copying a component copies its design.
+
+### "The active section" means the active view
+
+- Making `getActiveSection` return an internal design when one is open made every existing action work at L2
+  without touching them. View objects are cached so selectors stay stable.
+
+---
+
+## Export
+
+### A dialog instead of a menu
+
+- **Context:** people wanted "one file or many, as they like", across formats and views.
+- **Decision:** a dialog with formats (multi-select), views, style and one-file/separate, plus a summary of exactly
+  what will download. Choices are remembered.
+
+### Pictures from the live page
+
+- **Alternative:** re-implementing the diagram in canvas or SVG drawing code (two renderers to keep identical).
+- **Decision:** `html-to-image` on the real React Flow DOM, at zoom 1, stepping through views and switching the theme
+  while rendering.
+- **Consequence:** exports briefly change what's on screen; colours that come from CSS variables don't survive, so
+  edge colours are explicit.
+
+### Cap canvas size for iOS
+
+- iOS Safari silently produces blank canvases above ~16.7 MP; `exportPixelRatio` keeps under it.
+
+### ZIP without a dependency
+
+- **Alternatives:** JSZip or fflate.
+- **Decision:** a ~100-line store-only writer. PNG/PDF don't compress further; no dependency to audit or update.
+  Tested against `unzip` and Python's `zipfile`.
+
+### Protect CSVs against formula injection
+
+- Shared files mean exported labels come from other people; prefix risky cells with `'`.
+
+---
+
+## Privacy and UI
+
+### Consent gate on app pages, versioned, stored locally
+
+- **Decision:** accept once on `/diagrams`, `/templates`, `/editor`; stored with the notice version; withdrawable;
+  public pages stay open. Forms ask separately and record what was agreed.
+- **Why local:** there's no server to record it on, and nothing personal is collected by the app itself.
+
+### Forms through configurable providers
+
+- No backend, so the waitlist and contact form POST to a URL set at build time (or open the email app). Unset means
+  fully offline.
+
+### One toast system with writing rules
+
+- Errors stay until dismissed, repeats replace, timers pause on hover/focus, success names the file.
+
+### A named colour palette
+
+- Native colour inputs gave no guidance; categories ended up with near-identical colours. A curated, named palette
+  marks colours already used, with custom colours still available.
+
+### Collapsible panels with rails
+
+- Collapse buttons sit on each panel's first title line; a collapsed panel leaves a 40 px rail with the expand
+  button, so there is always a way back.
+
+---
+
+## Operations and security
+
+### Maintenance via the proxy: rewrite with 503
+
+- Rewrite keeps the requested URL so the page can reload into it; 503 on every page (including `/maintenance`) is
+  what the page polls for; the bypass token becomes an HttpOnly cookie and leaves the URL.
+
+### Partial security headers only
+
+- Clickjacking, sniffing, referrer and permissions headers are set. A full CSP (needs nonces, makes pages dynamic)
+  and HSTS (host-dependent, hard to undo) are deliberately left for later.
+
+### Tests in `tests/`, mirroring `src/`
+
+- Keeps shipped code and tests apart; imports use `@/`.

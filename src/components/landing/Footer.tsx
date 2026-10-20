@@ -58,7 +58,7 @@ export default function Footer() {
           <span>
             &copy; <CurrentYear /> Building Block. Built by Somatech.
           </span>
-          <span className="flex items-center gap-4">
+          <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <Link href="/privacy" className="hover:text-zinc-900 dark:hover:text-zinc-100">
               Privacy
             </Link>

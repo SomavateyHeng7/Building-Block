@@ -241,6 +241,24 @@ export async function openDroppedDiagram(dropped: DroppedFile | null): Promise<D
   return dropped ? openDiagramFile(dropped.file, dropped.handle) : null;
 }
 
+/**
+ * Opens the file the installed app was launched with (double-clicking a .json in Chrome or Edge).
+ * Saving writes back to that same file. Resolves null if it couldn't be read (the user has been told why).
+ */
+export async function openLaunchedDiagram(handle: FileSystemHandle): Promise<Diagram | null> {
+  if (handle.kind !== "file") return null;
+  const fileHandle = handle as FileSystemFileHandle;
+  let file: File;
+  try {
+    file = await fileHandle.getFile();
+  } catch (error) {
+    console.error(error);
+    toast.error("Couldn't open the file", { description: "Please try again, or use Open a diagram file." });
+    return null;
+  }
+  return openDiagramFile(file, fileHandle);
+}
+
 async function openDiagramFile(file: File, handle: FileSystemFileHandle | null): Promise<Diagram | null> {
   try {
     const { diagram, fixes } = await parseDiagramFile(file);

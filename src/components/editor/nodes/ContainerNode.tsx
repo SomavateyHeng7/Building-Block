@@ -7,6 +7,7 @@ import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { CONTAINER_MIN, containerInsets } from "@/lib/diagram/layout";
 import type { ContainerNodeData, HeaderAlign, HeaderPosition } from "@/lib/diagram/types";
 import { NotesMarker } from "./BlockNode";
+import { useReadOnly } from "../viewMode";
 
 export type ContainerFlowNode = Node<ContainerNodeData, "container">;
 
@@ -62,6 +63,7 @@ function ContainerNodeComponent({ id, data, selected }: NodeProps<ContainerFlowN
       0,
     ),
   );
+  const readOnly = useReadOnly();
   const [editing, setEditing] = useState(false);
   // Escape leaves the name as it was; the blur that follows must not save what was typed.
   const cancelled = useRef(false);
@@ -84,6 +86,7 @@ function ContainerNodeComponent({ id, data, selected }: NodeProps<ContainerFlowN
       }}
     >
       {/* Always active so any edge or corner can be dragged; only drawn on hover or when selected. */}
+      {!readOnly && (
       <NodeResizer
         minWidth={Math.max(CONTAINER_MIN.width, contentRight + insets.right)}
         minHeight={Math.max(CONTAINER_MIN.height, contentBottom + insets.bottom)}
@@ -92,7 +95,8 @@ function ContainerNodeComponent({ id, data, selected }: NodeProps<ContainerFlowN
         handleClassName={selected ? "" : "opacity-0 group-hover:opacity-100"}
         lineClassName={selected ? "" : "opacity-0 group-hover:opacity-100"}
       />
-      {contentRight > 0 && (
+      )}
+      {contentRight > 0 && !readOnly && (
         <NodeToolbar position={Position.Top} align="end" offset={6}>
           <div className="flex gap-1 rounded-md border border-zinc-200 bg-white p-1 text-[11px] font-medium shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
             <button
@@ -130,6 +134,7 @@ function ContainerNodeComponent({ id, data, selected }: NodeProps<ContainerFlowN
           backgroundColor: accentColor ? `${accentColor}55` : undefined,
         }}
         onDoubleClick={() => {
+          if (readOnly) return;
           cancelled.current = false;
           setEditing(true);
         }}

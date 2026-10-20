@@ -22,7 +22,7 @@ export default function PanelToggle({
       aria-expanded={expanded}
       aria-label={action}
       title={action}
-      className="-my-1.5 hidden h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 lg:inline-flex dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+      className="-my-1.5 hidden h-7 min-h-0 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 lg:inline-flex dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
       onClick={onClick}
     >
       <Icon name={side === "left" ? "panelLeft" : "panel"} />

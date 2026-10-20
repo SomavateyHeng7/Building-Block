@@ -302,7 +302,7 @@ export default function ExportDialog({
           )}
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-zinc-200 bg-zinc-50 px-5 py-4 dark:border-zinc-800 dark:bg-zinc-950/40">
+        <div className="flex flex-col gap-3 border-t border-zinc-200 bg-zinc-50 px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] dark:border-zinc-800 dark:bg-zinc-950/40">
           <p className="text-xs text-zinc-600 dark:text-zinc-400" aria-live="polite">
             {problem ?? (
               <>

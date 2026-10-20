@@ -16,7 +16,11 @@ const POINTS = [
   },
   {
     title: "A few preferences are remembered here",
-    body: "Your theme, panel layout and export choices, plus a note that you accepted this notice. No tracking, no analytics.",
+    body: "Your theme, panel layout and export choices, plus a note that you accepted this notice. The app's own pages are cached so it opens offline. No tracking, no analytics.",
+  },
+  {
+    title: "Recovery copies only if you turn them on",
+    body: "With the option on, unsaved changes are kept in this browser until you save them, so a crash doesn't lose them. They never leave your device.",
   },
   {
     title: "Anything else asks first",

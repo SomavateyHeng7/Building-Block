@@ -13,7 +13,7 @@ const SECTIONS = [
     title: "Your diagrams",
     body: [
       "Diagrams are created and edited entirely in your browser. They are never uploaded to Building Block, to Somatech or to any third party, and we cannot see them.",
-      "A diagram exists in your browser's memory while it is open. The only copy is the .json file you save or download to your own device. Closing or reloading the tab discards anything you have not saved.",
+      "A diagram exists in your browser's memory while it is open. The only copy is the .json file you save or download to your own device, unless you turn on recovery copies (below). Without them, closing or reloading the tab discards anything you have not saved.",
       "PNG and PDF exports are generated in your browser as well.",
     ],
   },
@@ -22,6 +22,8 @@ const SECTIONS = [
     body: [
       "A few small preferences are kept in your browser's local storage: the colour theme, which editor panels are collapsed, and your last export choices (format, light or dark style, one file or several). They contain no diagram content or personal information, and you can clear them at any time in your browser settings.",
       "When you accept this notice, the browser also keeps a note of which version you accepted and when, so you aren't asked every time.",
+      "Recovery copies are off unless you turn them on (on the start page, or File in the editor). When they're on, the unsaved changes to the diagram you're editing are kept in your browser's local storage until you save them to a file or discard them, so a reload or crash doesn't lose them. The copy stays on your device and is never sent anywhere. Turning the option off deletes it.",
+      "So the app opens without an internet connection, your browser caches Building Block's own pages, code and fonts. No diagram content is ever cached this way.",
       "If an earlier version of Building Block saved diagrams in your browser, the app offers to download them and then deletes those copies.",
     ],
   },
@@ -36,6 +38,12 @@ const SECTIONS = [
     title: "Contact form",
     body: [
       "If you write to us through the contact page, we receive the name (if you give one), email address and message you enter, through our form provider. We use them only to reply, and you're asked to agree to that before sending.",
+    ],
+  },
+  {
+    title: "Donations",
+    body: [
+      "Donating is optional and happens on our payment provider's website, under its own privacy policy. Building Block never sees your card or bank details. The provider may share your name, email address and the amount with us, which we use only to keep records and to thank you.",
     ],
   },
   {

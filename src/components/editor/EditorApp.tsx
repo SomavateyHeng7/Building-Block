@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ReactFlowProvider } from "@xyflow/react";
@@ -14,12 +14,18 @@ import DetailBar from "./DetailBar";
 import ShortcutsHelp from "./ShortcutsHelp";
 import { Icon } from "./Icon";
 import PanelToggle from "./PanelToggle";
+import ViewSheet from "./ViewSheet";
+import { ReadOnlyContext, useMediaQuery } from "./viewMode";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { nextSlotInContainer, nudgeNodes } from "@/lib/diagram/layout";
 import { saveDiagramToFile, useFileStore, useIsDirty } from "@/lib/diagram/file";
+import { clearRecoveryCopy, useRecoveryEnabled, writeRecoveryCopy } from "@/lib/diagram/recovery";
+import { toast } from "@/lib/toast";
 
 /** Wait this long after the last edit before writing to the open file. */
 const AUTOSAVE_DELAY_MS = 1000;
+/** Wait this long after the last edit before updating the recovery copy (when it's turned on). */
+const RECOVERY_DELAY_MS = 500;
 
 /** Which side panels are collapsed on wide screens; remembered per browser, like the theme. */
 type HiddenPanels = { palette: boolean; properties: boolean };
@@ -52,6 +58,23 @@ export default function EditorApp() {
   const [drawer, setDrawer] = useState<"palette" | "properties" | null>(null);
   // On wide screens the panels sit beside the canvas and can be collapsed to give it more room.
   const [hidden, setHidden] = useState<HiddenPanels>(readHiddenPanels);
+  // Phones open in view mode (reading a diagram); anyone can switch. Wide screens always edit.
+  const phone = useMediaQuery("(max-width: 767px)", false);
+  const wide = useMediaQuery("(min-width: 1024px)", true);
+  const [mode, setMode] = useState<"view" | "edit" | null>(null);
+  const readOnly = !wide && (mode ?? (phone ? "view" : "edit")) === "view";
+  const [legendOpen, setLegendOpen] = useState(false);
+  // The keyboard handler is set up once, so it reads the mode from here.
+  const readOnlyRef = useRef(readOnly);
+  useEffect(() => {
+    readOnlyRef.current = readOnly;
+  }, [readOnly]);
+
+  function switchMode(next: "view" | "edit") {
+    setMode(next);
+    setDrawer(null);
+    setLegendOpen(false);
+  }
 
   function togglePanel(panel: keyof HiddenPanels) {
     setHidden((current) => {
@@ -92,6 +115,9 @@ export default function EditorApp() {
       const target = event.target as HTMLElement | null;
       // Buttons don't swallow shortcuts (Ctrl+Z right after clicking Undo should work); dialogs and menus do.
       if (target?.closest("input, textarea, select, [contenteditable='true'], [role='dialog'], [role='alertdialog'], [role='menu']")) return;
+
+      // View mode only looks: Esc still clears the selection and leaves an internal design.
+      if (readOnlyRef.current && event.key !== "Escape") return;
 
       const store = useDiagramStore.getState();
       const hasSelection = store.selectedNodeIds.length > 0;
@@ -152,6 +178,24 @@ export default function EditorApp() {
     return () => clearTimeout(timeout);
   }, [opened, handle, dirty, diagram, saving, saveFailed]);
 
+  // With recovery copies on, unsaved changes are kept in the browser until saved; a clean diagram needs none.
+  const recoveryOn = useRecoveryEnabled();
+  useEffect(() => {
+    if (!opened || !recoveryOn) return;
+    if (!dirty) {
+      clearRecoveryCopy(diagram.id);
+      return;
+    }
+    const timeout = setTimeout(() => {
+      if (!writeRecoveryCopy(diagram, useFileStore.getState().fileName)) {
+        toast.warning("Couldn't keep a recovery copy", {
+          description: "The browser's storage is full or blocked. Save to a file to keep your changes.",
+        });
+      }
+    }, RECOVERY_DELAY_MS);
+    return () => clearTimeout(timeout);
+  }, [opened, recoveryOn, dirty, diagram]);
+
   // Closing or reloading the tab would lose whatever isn't in a file yet.
   useEffect(() => {
     if (!dirty) return;
@@ -175,6 +219,7 @@ export default function EditorApp() {
 
   return (
     <ReactFlowProvider>
+      <ReadOnlyContext.Provider value={readOnly}>
       <div className="flex h-dvh w-full flex-col bg-zinc-100 pb-safe pt-safe px-safe dark:bg-zinc-900">
         <Toolbar onShowShortcuts={() => setHelpOpen(true)} />
         <SectionTabs />
@@ -199,30 +244,52 @@ export default function EditorApp() {
             onCollapse={() => togglePanel("palette")}
             className={`${drawer === "palette" ? "flex" : "hidden"} absolute inset-y-0 left-0 z-30 w-72 max-w-[85%] shadow-xl lg:static lg:z-auto ${hidden.palette ? "lg:hidden" : "lg:flex"} lg:w-60 lg:shrink-0 lg:shadow-none`}
           />
-          <div className="relative min-w-0 flex-1">
+          <div className={`relative min-w-0 flex-1 ${readOnly ? "bb-readonly" : ""}`}>
             <Canvas />
             <div className="absolute left-3 top-3 z-10 flex gap-2 lg:hidden">
-              <button
-                type="button"
-                aria-expanded={drawer === "palette"}
-                className={CANVAS_BUTTON}
-                onClick={() => setDrawer(drawer === "palette" ? null : "palette")}
-              >
-                <Icon name="plus" />
-                Add
-              </button>
+              {readOnly ? (
+                <button type="button" className={CANVAS_BUTTON} onClick={() => switchMode("edit")}>
+                  <Icon name="pencil" />
+                  Edit
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    aria-expanded={drawer === "palette"}
+                    className={CANVAS_BUTTON}
+                    onClick={() => setDrawer(drawer === "palette" ? null : "palette")}
+                  >
+                    <Icon name="plus" />
+                    Add
+                  </button>
+                  <button type="button" title="View only: look around without moving anything" className={CANVAS_BUTTON} onClick={() => switchMode("view")}>
+                    <Icon name="eye" />
+                    <span className="sr-only sm:not-sr-only">View</span>
+                  </button>
+                </>
+              )}
             </div>
             <div className="absolute right-3 top-3 z-10 lg:hidden">
-              <button
-                type="button"
-                aria-expanded={drawer === "properties"}
-                className={CANVAS_BUTTON}
-                onClick={() => setDrawer(drawer === "properties" ? null : "properties")}
-              >
-                <Icon name="panel" />
-                Details &amp; legend
-              </button>
+              {readOnly ? (
+                <button type="button" aria-expanded={legendOpen} className={CANVAS_BUTTON} onClick={() => setLegendOpen((open) => !open)}>
+                  <Icon name="layers" />
+                  Legend
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  aria-expanded={drawer === "properties"}
+                  className={CANVAS_BUTTON}
+                  onClick={() => setDrawer(drawer === "properties" ? null : "properties")}
+                >
+                  <Icon name="panel" />
+                  <span className="hidden min-[380px]:inline">Details &amp; legend</span>
+                  <span className="min-[380px]:hidden">Details</span>
+                </button>
+              )}
             </div>
+            {readOnly && <ViewSheet legendOpen={legendOpen} onCloseLegend={() => setLegendOpen(false)} />}
           </div>
           <aside
             className={`${drawer === "properties" ? "flex" : "hidden"} absolute inset-y-0 right-0 z-30 w-80 max-w-[85%] flex-col overflow-y-auto border-l border-zinc-200 bg-white pr-safe shadow-xl lg:static lg:z-auto ${hidden.properties ? "lg:hidden" : "lg:flex"} lg:w-72 lg:shrink-0 lg:shadow-none dark:border-zinc-800 dark:bg-zinc-950`}
@@ -240,6 +307,7 @@ export default function EditorApp() {
         </div>
       </div>
       {helpOpen && <ShortcutsHelp onClose={() => setHelpOpen(false)} />}
+      </ReadOnlyContext.Provider>
     </ReactFlowProvider>
   );
 }

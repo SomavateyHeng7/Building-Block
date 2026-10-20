@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import ToastViewport from "@/components/ToastViewport";
 import ConsentGate from "@/components/ConsentGate";
+import ServiceWorker from "@/components/ServiceWorker";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -48,6 +49,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           {children}
           <ToastViewport />
           <ConsentGate />
+          <ServiceWorker />
           </ThemeProvider>
         </body>
     </html>

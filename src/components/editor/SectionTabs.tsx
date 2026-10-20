@@ -3,6 +3,7 @@
 import { useRef, useState, type KeyboardEvent } from "react";
 import { useDiagramStore } from "@/lib/diagram/store";
 import { Icon } from "./Icon";
+import { useReadOnly } from "./viewMode";
 
 const TAB_ACTION =
   "inline-flex min-h-0 items-center justify-center rounded p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-900 pointer-coarse:p-2 dark:hover:bg-zinc-800 dark:hover:text-zinc-100";
@@ -16,6 +17,7 @@ export default function SectionTabs() {
   const deleteSection = useDiagramStore((state) => state.deleteSection);
   const duplicateSection = useDiagramStore((state) => state.duplicateSection);
 
+  const readOnly = useReadOnly();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const tablist = useRef<HTMLDivElement>(null);
@@ -63,7 +65,7 @@ export default function SectionTabs() {
             key={section.id}
             className={`relative -mb-px flex h-9 shrink-0 items-center gap-0.5 whitespace-nowrap rounded-t-lg border border-b-0 pl-3 text-sm transition-colors ${
               active
-                ? "border-zinc-200 bg-white pr-1 font-medium text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+                ? `border-zinc-200 bg-white ${readOnly ? "pr-3" : "pr-1"} font-medium text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100`
                 : "border-transparent pr-3 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
             }`}
           >
@@ -88,18 +90,18 @@ export default function SectionTabs() {
                   setPendingDeleteId(null);
                   setActiveSection(section.id);
                 }}
-                onDoubleClick={() => startRename(section.id)}
+                onDoubleClick={() => !readOnly && startRename(section.id)}
                 onKeyDown={(event) => handleTabKeyDown(event, index)}
                 role="tab"
                 aria-selected={active}
                 tabIndex={active ? 0 : -1}
-                title="Double-click to rename"
+                title={readOnly ? undefined : "Double-click to rename"}
                 className="min-h-0 pr-1"
               >
                 {section.name}
               </button>
             )}
-            {active && editingId !== section.id && (
+            {active && !readOnly && editingId !== section.id && (
               <>
                 <button
                   type="button"
@@ -149,6 +151,7 @@ export default function SectionTabs() {
           </div>
         );
       })}
+      {!readOnly && (
       <button
         type="button"
         title="Add a tab"
@@ -159,6 +162,7 @@ export default function SectionTabs() {
         <Icon name="plus" className="h-3.5 w-3.5" />
         <span className="hidden sm:inline">Add tab</span>
       </button>
+      )}
     </div>
   );
 }
