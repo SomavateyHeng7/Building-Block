@@ -76,12 +76,16 @@ export function downloadDiagramJson(diagram: Diagram): void {
   downloadBlob(new Blob([JSON.stringify(diagram, null, 2)], { type: "application/json" }), `${fileBaseName(diagram.name)}.json`);
 }
 
-/** Which tab is showing isn't an edit, so a diagram that differs from the saved one only by that is clean. */
+/**
+ * Which tab or internal design is showing isn't an edit, so a diagram that differs from the saved one only
+ * by that is clean.
+ */
 function differsFromSaved(saved: Diagram | null, diagram: Diagram): boolean {
   if (saved === diagram) return false;
   if (!saved) return hasContent(diagram);
   const keys = new Set([...Object.keys(saved), ...Object.keys(diagram)] as (keyof Diagram)[]);
   keys.delete("activeSectionId");
+  keys.delete("activeDetailId");
   return [...keys].some((key) => saved[key] !== diagram[key]);
 }
 
@@ -148,8 +152,8 @@ export async function saveDiagramToFile({ saveAs = false }: { saveAs?: boolean }
     console.error(error);
     if (!useFileStore.getState().error) {
       toast.error("Couldn't save the file", {
-        details: ["The file may be read-only, moved, or its folder no longer allows writing.", "Use Save as to pick another location."],
-        duration: 0,
+        description: "It may be read-only or have moved. Use File → Save as to choose another location.",
+        action: { label: "Save as…", onClick: () => void saveDiagramToFile({ saveAs: true }) },
       });
     }
     useFileStore.setState({ error: true });
@@ -199,7 +203,7 @@ export async function openDiagramFromDevice(): Promise<Diagram | null> {
   } catch (error) {
     if (!isAbort(error)) {
       console.error(error);
-      toast.error("Couldn't open the file");
+      toast.error("Couldn't open the file", { description: "Please try again, or drop the file onto the start page." });
     }
     return null;
   }
@@ -241,11 +245,16 @@ async function openDiagramFile(file: File, handle: FileSystemFileHandle | null):
   try {
     const { diagram, fixes } = await parseDiagramFile(file);
     startDiagram(diagram, { handle, fileName: file.name });
-    if (fixes.length) toast.info(`Opened "${diagram.name}" with some repairs`, { details: [...fixes, "Save to keep the repaired version."] });
+    if (fixes.length) {
+      toast.warning(`Opened "${diagram.name}" with repairs`, {
+        description: "Some parts of the file needed fixing. Save to keep the repaired version.",
+        details: fixes,
+      });
+    }
     return diagram;
   } catch (error) {
     toast.error(`Couldn't open "${file.name}"`, {
-      details: [error instanceof DiagramFileError ? error.message : "Please check it's a diagram saved from Building Block."],
+      description: error instanceof DiagramFileError ? error.message : "Please check it's a diagram saved from Building Block.",
     });
     return null;
   }

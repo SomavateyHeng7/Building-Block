@@ -110,3 +110,16 @@ button, a, summary, [role="button"], [role="tab"], [role="menuitem"], label {
     transform: translate(-50%, calc(-100% + 4px));
   }
 }
+
+/* Toasts slide up into place; skipped for people who prefer reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .bb-toast {
+    animation: bb-toast-in 180ms ease-out;
+  }
+}
+@keyframes bb-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}

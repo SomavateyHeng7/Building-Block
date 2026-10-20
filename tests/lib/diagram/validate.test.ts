@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createBlankDiagram } from "./factory";
-import { DiagramFileError, parseDiagram } from "./validate";
+import { createBlankDiagram } from "@/lib/diagram/factory";
+import { DiagramFileError, parseDiagram } from "@/lib/diagram/validate";
 
 const node = (overrides: Record<string, unknown> = {}) => ({
   id: "n1",

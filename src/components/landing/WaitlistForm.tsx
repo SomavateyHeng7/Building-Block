@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
+import { PRIVACY_VERSION } from "@/lib/consent";
 
 /**
  * Form endpoint that accepts a JSON POST of `{ email }`, e.g. a Formspree form URL.
@@ -13,6 +14,7 @@ type Status = "idle" | "sending" | "done" | "error";
 
 export default function WaitlistForm() {
   const [email, setEmail] = useState("");
+  const [agreed, setAgreed] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
 
   if (!WAITLIST_URL) {
@@ -30,7 +32,8 @@ export default function WaitlistForm() {
       const response = await fetch(WAITLIST_URL!, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ email, source: "landing" }),
+        // Records what was agreed to and when, alongside the address.
+        body: JSON.stringify({ email, source: "landing", consent: { agreed: true, privacyVersion: PRIVACY_VERSION, at: new Date().toISOString() } }),
       });
       setStatus(response.ok ? "done" : "error");
     } catch {
@@ -63,20 +66,26 @@ export default function WaitlistForm() {
       />
       <button
         type="submit"
-        disabled={status === "sending"}
+        disabled={status === "sending" || !agreed}
         className="rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-colors hover:bg-[#383838] disabled:opacity-60 dark:hover:bg-[#ccc]"
       >
         {status === "sending" ? "Joining…" : "Join the waitlist"}
       </button>
       <label className="flex items-start gap-2 text-xs text-zinc-500 sm:basis-full">
-        <input type="checkbox" required className="mt-0.5 shrink-0" />
+        <input
+          type="checkbox"
+          required
+          checked={agreed}
+          onChange={(event) => setAgreed(event.target.checked)}
+          className="mt-0.5 h-4 w-4 shrink-0 accent-zinc-900 dark:accent-zinc-100"
+        />
         <span>
           I agree that Building Block may store my email to tell me when team features are ready. No diagrams are shared.
           See the{" "}
           <Link href="/privacy" className="underline hover:text-zinc-900 dark:hover:text-zinc-100">
             privacy statement
           </Link>
-          .
+          . You can unsubscribe at any time.
         </span>
       </label>
       {status === "error" && (

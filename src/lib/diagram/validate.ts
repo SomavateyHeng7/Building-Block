@@ -205,8 +205,24 @@ function parseEdges(raw: unknown, nodes: DiagramNode[], name: string, fixes: str
 function parseSection(raw: unknown, index: number, legendKeys: Set<string>, fixes: string[]): DiagramSection {
   const section = isObject(raw) ? raw : {};
   const name = text(section.name) || `Section ${index + 1}`;
-  const rawNodes = Array.isArray(section.nodes) ? section.nodes : [];
+  const { nodes, edges } = parseView(section.nodes, section.edges, name, legendKeys, fixes, 0);
+  return { id: text(section.id) || createId("section"), name, nodes, ...(edges.length ? { edges } : {}) };
+}
 
+/**
+ * The nodes and connections of one canvas: a tab (depth 0) or a component's internal design (depth 1).
+ * `name` says where in the file a repair was made.
+ */
+function parseView(
+  rawNodesInput: unknown,
+  rawEdges: unknown,
+  name: string,
+  legendKeys: Set<string>,
+  fixes: string[],
+  depth: 0 | 1,
+): { nodes: DiagramNode[]; edges: DiagramEdge[] } {
+  const rawNodes = Array.isArray(rawNodesInput) ? rawNodesInput : [];
+  const rawDetails = new Map<string, unknown>();
   const nodes: DiagramNode[] = [];
   const ids = new Set<string>();
   let unreadable = 0;
@@ -220,6 +236,8 @@ function parseSection(raw: unknown, index: number, legendKeys: Set<string>, fixe
       ids.add(parsed.node.id);
       nodes.push(parsed.node);
       if (parsed.repaired) repaired += 1;
+      const rawDetail = isObject(item) && isObject(item.data) ? item.data.detail : undefined;
+      if (parsed.node.type === "block" && rawDetail !== undefined) rawDetails.set(parsed.node.id, rawDetail);
     }
   }
   if (unreadable) fixes.push(`"${name}": skipped ${plural(unreadable, "item")} that couldn't be read.`);
@@ -249,8 +267,27 @@ function parseSection(raw: unknown, index: number, legendKeys: Set<string>, fixe
     fixes.push(`"${name}": took ${plural(detached, "item")} out of a container that is missing or isn't a container.`);
   }
 
-  const edges = parseEdges(section.edges, linked, name, fixes);
-  return { id: text(section.id) || createId("section"), name, nodes: linked, ...(edges.length ? { edges } : {}) };
+  const edges = parseEdges(rawEdges, linked, name, fixes);
+
+  // Internal designs (L2) are one level deep.
+  if (depth === 1) {
+    if (rawDetails.size) {
+      fixes.push(`"${name}": removed ${plural(rawDetails.size, "internal design")} nested inside an internal design.`);
+    }
+    return { nodes: linked, edges };
+  }
+  const withDetails = linked.map((node) => {
+    const raw = rawDetails.get(node.id);
+    if (raw === undefined || node.data.kind !== "block") return node;
+    if (!isObject(raw)) {
+      fixes.push(`"${name}": skipped the internal design of "${node.data.label}", which couldn't be read.`);
+      return node;
+    }
+    const detail = parseView(raw.nodes, raw.edges, `${name} › ${node.data.label}`, legendKeys, fixes, 1);
+    if (!detail.nodes.length) return node;
+    return { ...node, data: { ...node.data, detail: { nodes: detail.nodes, ...(detail.edges.length ? { edges: detail.edges } : {}) } } };
+  });
+  return { nodes: withDetails, edges };
 }
 
 /**
@@ -293,5 +330,11 @@ export function parseDiagram(input: unknown): ParsedDiagram {
     updatedAt: text(input.updatedAt) ?? now,
   };
   if (typeof input.showTechnology === "boolean") diagram.showTechnology = input.showTechnology;
+  // Reopen the internal design that was open when the file was saved, if that component is still there.
+  const activeDetailId = text(input.activeDetailId);
+  const activeSection = sections.find((section) => section.id === diagram.activeSectionId)!;
+  if (activeDetailId && activeSection.nodes.some((node) => node.id === activeDetailId && node.type === "block")) {
+    diagram.activeDetailId = activeDetailId;
+  }
   return { diagram, fixes };
 }

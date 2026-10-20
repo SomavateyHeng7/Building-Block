@@ -4,6 +4,7 @@ import { memo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
 import { defaultLabel } from "@/lib/diagram/factory";
+import { readableTextOn } from "@/lib/diagram/palette";
 import { useDiagramStore } from "@/lib/diagram/store";
 import type { BlockNodeData } from "@/lib/diagram/types";
 
@@ -35,7 +36,7 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
         backgroundColor: color,
         borderColor: selected ? "#2563eb" : "rgba(0,0,0,0.25)",
         borderStyle: entryColor ? "solid" : "dashed",
-        color: textColorFor(color),
+        color: readableTextOn(color),
       }}
       onDoubleClick={() => {
         cancelled.current = false;
@@ -48,6 +49,7 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
         <Handle key={side.id} id={side.id} type="source" position={side.position} className="bb-handle" />
       ))}
       {data.notes && <NotesMarker notes={data.notes} />}
+      {data.detail?.nodes.length ? <DetailBadge id={id} count={data.detail.nodes.length} /> : null}
       {editing ? (
         <input
           autoFocus
@@ -74,6 +76,27 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
         </span>
       )}
     </div>
+  );
+}
+
+/** Corner badge on a component that has an internal design (L2); clicking it opens that design. */
+function DetailBadge({ id, count }: { id: string; count: number }) {
+  const openDetail = useDiagramStore((state) => state.openDetail);
+  const label = `Open internal design (${count} item${count === 1 ? "" : "s"})`;
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      className="nodrag nopan absolute -bottom-2 -right-2 flex h-4 items-center gap-0.5 rounded-full border border-white bg-blue-600 px-1.5 text-[9px] font-bold leading-none text-white shadow-sm hover:bg-blue-700 dark:border-zinc-900"
+      onClick={(event) => {
+        event.stopPropagation();
+        openDetail(id);
+      }}
+      onDoubleClick={(event) => event.stopPropagation()}
+    >
+      L2
+    </button>
   );
 }
 
@@ -106,16 +129,6 @@ export function NotesMarker({ notes }: { notes: string }) {
         )}
     </>
   );
-}
-
-function textColorFor(hex: string): string {
-  const value = hex.replace("#", "");
-  if (value.length !== 6) return "#111827";
-  const r = parseInt(value.slice(0, 2), 16);
-  const g = parseInt(value.slice(2, 4), 16);
-  const b = parseInt(value.slice(4, 6), 16);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.6 ? "#111827" : "#f9fafb";
 }
 
 export default memo(BlockNodeComponent);

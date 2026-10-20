@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_RETRY_AFTER_SECONDS, readMaintenanceConfig, retryAfterSeconds, upcomingEnd } from "./maintenance";
+import { DEFAULT_RETRY_AFTER_SECONDS, readMaintenanceConfig, retryAfterSeconds, upcomingEnd } from "@/lib/maintenance";
 
 describe("readMaintenanceConfig", () => {
   it("is off unless MAINTENANCE_MODE says on", () => {

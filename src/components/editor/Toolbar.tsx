@@ -6,7 +6,7 @@ import { useReactFlow } from "@xyflow/react";
 import { useTheme } from "next-themes";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import {
-  downloadDiagramJson,
+  downloadBlob,
   openDiagramFromDevice,
   saveDiagramToFile,
   startDiagram,
@@ -16,18 +16,19 @@ import {
 } from "@/lib/diagram/file";
 import { createBlankDiagram } from "@/lib/diagram/factory";
 import {
-  downloadCanvasPng,
-  exportComponentsCsv,
-  exportConnectionsCsv,
-  exportPdf,
-  exportPdfPages,
-  exportPng,
-  exportSvg,
+  canvasToPng,
+  componentsCsv,
+  connectionsCsv,
   exportTitle,
   legendUsedIn,
+  pdfFromPages,
   renderComposite,
+  renderSvg,
   type RenderedComposite,
 } from "@/lib/diagram/export";
+import { DATA_FORMATS, IMAGE_FORMATS, describeFiles, planExport, type ExportFormat } from "@/lib/diagram/exportPlan";
+import { createZip } from "@/lib/zip";
+import ExportDialog, { type ExportChoice, type ExportPrefs } from "./ExportDialog";
 import { toast } from "@/lib/toast";
 import { useUnsavedGuard } from "./useUnsavedGuard";
 import { Icon } from "./Icon";
@@ -44,114 +45,38 @@ const MENU =
   "absolute z-50 mt-1.5 w-60 max-w-[calc(100vw-1rem)] rounded-lg border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900";
 const DIVIDER = "mx-1 hidden h-5 w-px bg-zinc-200 sm:block dark:bg-zinc-800";
 
-type ExportTheme = "light" | "dark";
-const EXPORT_THEME_KEY = "bb:exportTheme";
+const EXPORT_PREFS_KEY = "bb:export";
+/** Earlier versions remembered only the picture style, under this key. */
+const OLD_EXPORT_THEME_KEY = "bb:exportTheme";
+const ALL_FORMATS = [...IMAGE_FORMATS, ...DATA_FORMATS];
 
-function readExportTheme(): ExportTheme {
+/** The last export's choices, so the dialog opens the way it was left. */
+function readExportPrefs(): ExportPrefs {
+  const fallback: ExportPrefs = { formats: ["png"], bundle: "one", theme: "light" };
   try {
-    return window.localStorage.getItem(EXPORT_THEME_KEY) === "dark" ? "dark" : "light";
+    const saved = JSON.parse(window.localStorage.getItem(EXPORT_PREFS_KEY) ?? "{}");
+    const formats = Array.isArray(saved.formats) ? saved.formats.filter((f: ExportFormat) => ALL_FORMATS.includes(f)) : [];
+    const oldTheme = window.localStorage.getItem(OLD_EXPORT_THEME_KEY);
+    return {
+      formats: formats.length ? formats : fallback.formats,
+      bundle: saved.bundle === "separate" ? "separate" : "one",
+      theme: (saved.theme ?? oldTheme) === "dark" ? "dark" : "light",
+    };
   } catch {
-    return "light";
+    return fallback;
   }
 }
 
-type ExportFormat = "png" | "pdf" | "svg" | "png-all" | "pdf-all" | "csv" | "connections-csv" | "json";
-
-const EXPORT_OPTIONS: { format: ExportFormat; label: string; hint: string }[] = [
-  { format: "png", label: "PNG image", hint: "Current tab, with legend" },
-  { format: "pdf", label: "PDF document", hint: "Current tab, with legend" },
-  { format: "svg", label: "SVG vector", hint: "Current tab, editable title and legend" },
-  { format: "png-all", label: "PNG images (all tabs)", hint: "One file per tab, with legend" },
-  { format: "pdf-all", label: "PDF document (all tabs)", hint: "One page per tab, with legend" },
-  { format: "csv", label: "Component list (CSV)", hint: "All tabs, with details" },
-  { format: "connections-csv", label: "Connection list (CSV)", hint: "All tabs: from, to, protocol, what flows" },
-  { format: "json", label: "Diagram file (JSON)", hint: "A copy you can re-open with Open" },
-];
-
-function ExportMenu({
-  busy,
-  multiTab,
-  imageTheme,
-  onImageThemeChange,
-  onSelect,
-}: {
-  busy: boolean;
-  multiTab: boolean;
-  imageTheme: ExportTheme;
-  onImageThemeChange: (theme: ExportTheme) => void;
-  onSelect: (format: ExportFormat) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div
-      className="relative"
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") setOpen(false);
-      }}
-    >
-      <button
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        disabled={busy}
-        className="inline-flex h-8 items-center gap-1.5 rounded-md bg-zinc-900 px-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-        onClick={() => setOpen((value) => !value)}
-      >
-        <Icon name="download" />
-        {busy ? "Exporting…" : "Export"}
-        <Icon name="chevronDown" className="h-3.5 w-3.5 opacity-70" />
-      </button>
-      {open && (
-        <div
-          role="menu"
-          className={`${MENU} right-0 max-h-[70dvh] overflow-y-auto overflow-x-hidden`}
-        >
-          <div className="mb-1 border-b border-zinc-200 px-2 pb-2 pt-1.5 dark:border-zinc-700">
-            <p id="export-style-label" className="mb-1 text-[11px] font-medium text-zinc-500">
-              Image style (PNG, PDF, SVG)
-            </p>
-            <div role="radiogroup" aria-labelledby="export-style-label" className="flex overflow-hidden rounded border border-zinc-300 text-xs font-medium dark:border-zinc-700">
-              {(["light", "dark"] as const).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  role="radio"
-                  aria-checked={imageTheme === value}
-                  className={`flex-1 px-2 py-1 capitalize ${
-                    imageTheme === value
-                      ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                      : "hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                  }`}
-                  onClick={() => onImageThemeChange(value)}
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
-          </div>
-          {EXPORT_OPTIONS.filter((option) => multiTab || !option.format.endsWith("-all")).map((option) => (
-            <button
-              key={option.format}
-              type="button"
-              role="menuitem"
-              className="flex w-full flex-col items-start rounded-md px-2 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              onClick={() => {
-                setOpen(false);
-                onSelect(option.format);
-              }}
-            >
-              <span className="text-sm font-medium">{option.label}</span>
-              <span className="text-[11px] text-zinc-500">{option.hint}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+function saveExportPrefs(prefs: ExportPrefs) {
+  try {
+    window.localStorage.setItem(EXPORT_PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    // The choices just aren't remembered.
+  }
 }
+
+/** Browsers drop downloads fired back to back. */
+const BETWEEN_DOWNLOADS_MS = 400;
 
 const MENU_ITEM =
   "flex w-full items-center justify-between gap-4 rounded-md px-2 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800";
@@ -259,7 +184,7 @@ export default function Toolbar({ onShowShortcuts }: { onShowShortcuts: () => vo
   const router = useRouter();
   const { getNodes, getNodesBounds } = useReactFlow();
   const { theme, resolvedTheme, setTheme } = useTheme();
-  const [exportTheme, setExportTheme] = useState<ExportTheme>(readExportTheme);
+  const [exportOpen, setExportOpen] = useState(false);
   const diagram = useDiagramStore((state) => state.diagram);
   const renameDiagram = useDiagramStore((state) => state.renameDiagram);
   const setSelection = useDiagramStore((state) => state.setSelection);
@@ -306,127 +231,116 @@ export default function Toolbar({ onShowShortcuts }: { onShowShortcuts: () => vo
     }
   }
 
-  /** The canvas only renders the active tab, so step through the tabs and put the original one back after. */
-  async function handleExportAll(format: "png-all" | "pdf-all") {
-    const originalId = diagram.activeSectionId;
-    const { setActiveSection } = useDiagramStore.getState();
-    setExporting(true);
-    setSelection([]);
-    useDiagramStore.getState().setSelectedEdge(null);
-    try {
-      const pages: { name: string; page: RenderedComposite }[] = [];
-      for (const target of diagram.sections) {
-        if (!target.nodes.length) continue;
-        setActiveSection(target.id);
-        await waitForSection(target.nodes.length);
-        const viewport = document.querySelector<HTMLElement>(".react-flow__viewport");
-        if (!viewport) continue;
-        const page = await renderComposite({
-          viewport,
-          bounds: getNodesBounds(getNodes()),
-          title: exportTitle(diagram, target),
-          legend: legendUsedIn(diagram, target),
-          dark: exportTheme === "dark",
-          filename: exportTitle(diagram, target),
-        });
-        pages.push({ name: exportTitle(diagram, target), page });
-      }
-      if (!pages.length) {
-        toast.info("There's nothing to export yet", { details: ["Add a container or component first."] });
-        return;
-      }
-      if (format === "pdf-all") {
-        await exportPdfPages(pages.map((entry) => entry.page), diagram.name);
-      } else {
-        for (const entry of pages) {
-          await downloadCanvasPng(entry.page.canvas, entry.name);
-          // Browsers drop downloads fired back to back.
-          await new Promise((resolve) => setTimeout(resolve, 300));
-        }
-      }
-      toast.success(format === "pdf-all" ? "PDF downloaded" : `${pages.length} PNG files downloaded`);
-    } catch (error) {
-      console.error(error);
-      toast.error("Export failed", { details: ["Please try again. If it keeps failing, export the diagram as JSON to keep your work."] });
-    } finally {
-      setActiveSection(originalId);
-      setExporting(false);
-    }
-  }
-
-  function changeExportTheme(next: ExportTheme) {
-    setExportTheme(next);
-    try {
-      window.localStorage.setItem(EXPORT_THEME_KEY, next);
-    } catch {
-      // The choice just isn't remembered.
-    }
-  }
-
-  /**
-   * Images are drawn from the live page, so the app itself has to be in the chosen style while
-   * they render. Switch the theme, export, then put the user's theme back.
-   */
-  async function handleExport(format: ExportFormat) {
-    if (format === "json" || format === "csv" || format === "connections-csv" || resolvedTheme === exportTheme) return runExport(format);
+  /** Puts the app in the picture style while images render (they're drawn from the live page). */
+  async function inTheme<T>(style: "light" | "dark", run: () => Promise<T>): Promise<T> {
+    if (resolvedTheme === style) return run();
     const previous = theme;
-    setTheme(exportTheme);
+    setTheme(style);
     for (let attempt = 0; attempt < 40; attempt++) {
       await nextFrames();
-      if (document.documentElement.classList.contains("dark") === (exportTheme === "dark")) break;
+      if (document.documentElement.classList.contains("dark") === (style === "dark")) break;
     }
     await nextFrames();
     try {
-      await runExport(format);
+      return await run();
     } finally {
       if (previous) setTheme(previous);
     }
   }
 
-  async function runExport(format: ExportFormat) {
-    if (format === "json") {
-      downloadDiagramJson(diagram);
-      toast.success("Diagram file downloaded", { details: ["Re-open it any time with File → Open."] });
-      return;
-    }
-    if (format === "csv") {
-      exportComponentsCsv(diagram);
-      toast.success("Component list downloaded");
-      return;
-    }
-    if (format === "connections-csv") {
-      exportConnectionsCsv(diagram);
-      toast.success("Connection list downloaded");
-      return;
-    }
-    if (format === "png-all" || format === "pdf-all") return handleExportAll(format);
+  /**
+   * Makes the chosen files and downloads them, as one .zip or one by one. The canvas only renders one view,
+   * so it steps through the views being pictured, then puts back what was open.
+   */
+  async function runExport(choice: ExportChoice) {
+    setExportOpen(false);
+    saveExportPrefs({ formats: choice.formats, bundle: choice.bundle, theme: choice.theme });
+    const plan = planExport(diagram, choice);
+    if (!plan.files.length) return;
 
-    const viewport = document.querySelector<HTMLElement>(".react-flow__viewport");
-    const nodes = getNodes();
-    if (!viewport || !nodes.length) {
-      toast.info("There's nothing on this tab to export yet", { details: ["Add a container or component first."] });
-      return;
-    }
+    const originalId = diagram.activeSectionId;
+    const originalDetailId = diagram.activeDetailId;
+    const { setActiveSection, openDetail } = useDiagramStore.getState();
+    const pictured = [...new Map(plan.files.flatMap((file) => file.views).map((view) => [view.id, view])).values()];
+    const needs = (format: ExportFormat) => plan.files.some((file) => file.format === format);
     setExporting(true);
-    // Clear the selection first so handles and highlight outlines aren't in the picture.
     setSelection([]);
     useDiagramStore.getState().setSelectedEdge(null);
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     try {
-      const options = {
-        viewport,
-        bounds: getNodesBounds(nodes),
-        title: exportTitle(diagram, section),
-        legend: legendUsedIn(diagram, section),
-        dark: exportTheme === "dark",
-        filename: exportTitle(diagram, section),
-      };
-      await (format === "png" ? exportPng(options) : format === "svg" ? exportSvg(options) : exportPdf(options));
-      toast.success(`${format.toUpperCase()} downloaded`);
+      // Render each pictured view once, in whichever forms the chosen formats need.
+      const pages = new Map<string, RenderedComposite>();
+      const svgs = new Map<string, Blob>();
+      if (pictured.length) {
+        await inTheme(choice.theme, async () => {
+          for (const target of pictured) {
+            setActiveSection(target.sectionId);
+            if (target.componentId) openDetail(target.componentId);
+            const view = getActiveSection(useDiagramStore.getState().diagram);
+            await waitForSection(view.nodes.length);
+            const viewport = document.querySelector<HTMLElement>(".react-flow__viewport");
+            if (!viewport) throw new Error("The canvas isn't showing");
+            const options = {
+              viewport,
+              bounds: getNodesBounds(getNodes()),
+              title: exportTitle(diagram, view),
+              legend: legendUsedIn(diagram, view),
+              dark: choice.theme === "dark",
+            };
+            if (needs("png") || needs("pdf")) pages.set(target.id, await renderComposite(options));
+            if (needs("svg")) svgs.set(target.id, await renderSvg(options));
+          }
+        });
+      }
+
+      const blobs: { name: string; blob: Blob }[] = [];
+      for (const file of plan.files) {
+        const blob =
+          file.format === "png"
+            ? await canvasToPng(pages.get(file.views[0].id)!.canvas)
+            : file.format === "pdf"
+              ? await pdfFromPages(file.views.map((view) => pages.get(view.id)!))
+              : file.format === "svg"
+                ? svgs.get(file.views[0].id)!
+                : file.format === "components-csv"
+                  ? componentsCsv(diagram)
+                  : file.format === "connections-csv"
+                    ? connectionsCsv(diagram)
+                    : new Blob([JSON.stringify(diagram, null, 2)], { type: "application/json" });
+        blobs.push({ name: file.name, blob });
+      }
+
+      if (plan.zipName) {
+        const entries = await Promise.all(
+          blobs.map(async ({ name, blob }) => ({ name, data: new Uint8Array(await blob.arrayBuffer()) })),
+        );
+        downloadBlob(new Blob([createZip(entries) as BlobPart], { type: "application/zip" }), plan.zipName);
+        toast.success(`Downloaded ${plan.zipName}`, { description: `A zip with ${describeFiles(plan.files)}.` });
+      } else {
+        for (const [index, { name, blob }] of blobs.entries()) {
+          if (index) await new Promise((resolve) => setTimeout(resolve, BETWEEN_DOWNLOADS_MS));
+          downloadBlob(blob, name);
+        }
+        if (blobs.length === 1) {
+          toast.success(`Downloaded ${blobs[0].name}`, {
+            description: plan.files[0].format === "json" ? "Open it again any time with File → Open." : undefined,
+          });
+        } else {
+          toast.success(`Downloaded ${blobs.length} files`, {
+            description: "If some are missing, allow this site to download several files, then try again.",
+            details: blobs.map((entry) => entry.name),
+          });
+        }
+      }
     } catch (error) {
       console.error(error);
-      toast.error("Export failed", { details: ["Please try again. If it keeps failing, export the diagram as JSON to keep your work."] });
+      toast.error("Couldn't export", {
+        description: "Please try again. If it keeps failing, save the diagram with File → Save so your work is safe.",
+      });
     } finally {
+      if (pictured.length) {
+        setActiveSection(originalId);
+        if (originalDetailId) openDetail(originalDetailId);
+      }
       setExporting(false);
     }
   }
@@ -499,9 +413,27 @@ export default function Toolbar({ onShowShortcuts }: { onShowShortcuts: () => vo
           <Icon name="save" />
           <span className="hidden sm:inline">Save</span>
         </button>
-        <ExportMenu imageTheme={exportTheme} onImageThemeChange={changeExportTheme} multiTab={diagram.sections.length > 1} busy={exporting} onSelect={handleExport} />
+        <button
+          type="button"
+          disabled={exporting}
+          aria-haspopup="dialog"
+          className="inline-flex h-8 items-center gap-1.5 rounded-md bg-zinc-900 px-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+          onClick={() => setExportOpen(true)}
+        >
+          <Icon name="download" />
+          {exporting ? "Exporting…" : "Export"}
+        </button>
       </div>
       {unsavedDialog}
+      {exportOpen && (
+        <ExportDialog
+          diagram={diagram}
+          currentViewId={section.id}
+          prefs={readExportPrefs()}
+          onCancel={() => setExportOpen(false)}
+          onExport={(choice) => void runExport(choice)}
+        />
+      )}
     </div>
   );
 }

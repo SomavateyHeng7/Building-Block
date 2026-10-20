@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { createBlankDiagram, createBlankSection, createId } from "./factory";
+import { nextLegendColor } from "./palette";
 import {
   absolutePosition,
   arrangeNodes,
@@ -11,6 +12,7 @@ import {
 } from "./layout";
 import type {
   BlockColorKey,
+  ComponentDetail,
   ConnectionSide,
   ContainerStyle,
   Diagram,
@@ -30,16 +32,55 @@ function mapActiveSection(
   diagram: Diagram,
   fn: (nodes: DiagramNode[]) => DiagramNode[],
 ): Diagram {
+  return mapActiveSectionFull(diagram, (section) => ({ ...section, nodes: fn(section.nodes) }));
+}
+
+/** Internal designs are one level deep, so whatever lands in one can't carry its own. */
+function withoutDetail(node: DiagramNode): DiagramNode {
+  if (node.data.kind !== "block" || !node.data.detail) return node;
+  return { ...node, data: { ...node.data, detail: undefined } };
+}
+
+/**
+ * Applies a change to the view on screen as a whole (nodes and connections together): the active
+ * tab, or the internal design of the component that is open. An emptied internal design is dropped.
+ */
+function mapActiveSectionFull(diagram: Diagram, fn: (section: DiagramSection) => DiagramSection): Diagram {
+  const view = getActiveSection(diagram);
+  if (!view.parent) {
+    const sections = diagram.sections.map((section) => (section.id === view.id ? fn(section) : section));
+    return touch({ ...diagram, sections });
+  }
+  const { section: owner, component } = view.parent;
+  const changed = fn(view);
+  const nodes = changed.nodes.map(withoutDetail);
+  const detail: ComponentDetail | undefined = nodes.length
+    ? { nodes, ...(changed.edges?.length ? { edges: changed.edges } : {}) }
+    : undefined;
   const sections = diagram.sections.map((section) =>
-    section.id === diagram.activeSectionId ? { ...section, nodes: fn(section.nodes) } : section,
+    section.id === owner.id
+      ? {
+          ...section,
+          nodes: section.nodes.map((node) =>
+            node.id === component.id && node.data.kind === "block" ? { ...node, data: { ...node.data, detail } } : node,
+          ),
+        }
+      : section,
   );
   return touch({ ...diagram, sections });
 }
 
-/** Applies a change to the active section as a whole (nodes and connections together). */
-function mapActiveSectionFull(diagram: Diagram, fn: (section: DiagramSection) => DiagramSection): Diagram {
-  const sections = diagram.sections.map((section) => (section.id === diagram.activeSectionId ? fn(section) : section));
-  return touch({ ...diagram, sections });
+/** Applies `fn` to every node in the diagram, including those inside internal designs. */
+function mapEveryNode(diagram: Diagram, fn: (node: DiagramNode) => DiagramNode): DiagramSection[] {
+  return diagram.sections.map((section) => ({
+    ...section,
+    nodes: section.nodes.map((node) => {
+      const mapped = fn(node);
+      return mapped.data.kind === "block" && mapped.data.detail
+        ? { ...mapped, data: { ...mapped.data, detail: { ...mapped.data.detail, nodes: mapped.data.detail.nodes.map(fn) } } }
+        : mapped;
+    }),
+  }));
 }
 
 /** Connections are dropped with the components they join. */
@@ -209,6 +250,10 @@ interface DiagramState {
   addLegendEntry: () => BlockColorKey;
   removeLegendEntry: (key: BlockColorKey) => void;
   setActiveSection: (id: string) => void;
+  /** Opens a component's internal design (L2). Navigation, like switching tabs: not an edit. */
+  openDetail: (componentId: string) => void;
+  /** Back from an internal design to the tab it belongs to, with its component selected. */
+  closeDetail: () => void;
   addSection: (name?: string) => void;
   renameSection: (id: string, name: string) => void;
   deleteSection: (id: string) => void;
@@ -541,13 +586,35 @@ export const useDiagramStore = create<DiagramState>((set) => ({
       );
     }),
 
-  // Switching tabs is navigation, not an edit, so it isn't recorded.
+  // Switching tabs is navigation, not an edit, so it isn't recorded. It also leaves any internal design.
   setActiveSection: (id) =>
     set((state) =>
       state.diagram.sections.some((section) => section.id === id)
-        ? { diagram: { ...state.diagram, activeSectionId: id }, selectedNodeIds: [], selectedEdgeId: null }
+        ? {
+            diagram: { ...state.diagram, activeSectionId: id, activeDetailId: undefined },
+            selectedNodeIds: [],
+            selectedEdgeId: null,
+          }
         : state,
     ),
+
+  openDetail: (componentId) =>
+    set((state) => {
+      const view = getActiveSection(state.diagram);
+      const component = view.nodes.find((node) => node.id === componentId);
+      if (view.parent || component?.type !== "block") return state;
+      return { diagram: { ...state.diagram, activeDetailId: componentId }, selectedNodeIds: [], selectedEdgeId: null };
+    }),
+
+  closeDetail: () =>
+    set((state) => {
+      const { parent } = getActiveSection(state.diagram);
+      return {
+        diagram: { ...state.diagram, activeDetailId: undefined },
+        selectedNodeIds: parent ? [parent.component.id] : [],
+        selectedEdgeId: null,
+      };
+    }),
 
   addSection: (name) =>
     set((state) => {
@@ -559,6 +626,7 @@ export const useDiagramStore = create<DiagramState>((set) => ({
             ...state.diagram,
             sections: [...state.diagram.sections, section],
             activeSectionId: section.id,
+            activeDetailId: undefined,
           }),
         ),
         selectedNodeIds: [],
@@ -591,7 +659,15 @@ export const useDiagramStore = create<DiagramState>((set) => ({
       const nextActive =
         activeSectionId === id ? remaining[Math.min(index, remaining.length - 1)].id : activeSectionId;
       return {
-        ...commit(state, touch({ ...state.diagram, sections: remaining, activeSectionId: nextActive })),
+        ...commit(
+          state,
+          touch({
+            ...state.diagram,
+            sections: remaining,
+            activeSectionId: nextActive,
+            activeDetailId: activeSectionId === id ? undefined : state.diagram.activeDetailId,
+          }),
+        ),
         selectedNodeIds: activeSectionId === id ? [] : state.selectedNodeIds,
         selectedEdgeId: activeSectionId === id ? null : state.selectedEdgeId,
       };
@@ -620,7 +696,7 @@ export const useDiagramStore = create<DiagramState>((set) => ({
       const sections = [...state.diagram.sections];
       sections.splice(index + 1, 0, copy);
       return {
-        ...commit(state, touch({ ...state.diagram, sections, activeSectionId: copy.id })),
+        ...commit(state, touch({ ...state.diagram, sections, activeSectionId: copy.id, activeDetailId: undefined })),
         selectedNodeIds: [],
         selectedEdgeId: null,
       };
@@ -654,10 +730,7 @@ export const useDiagramStore = create<DiagramState>((set) => ({
     const key = createId("legend");
     set((state) => {
       const { legend } = state.diagram;
-      const used = new Set(legend.map((entry) => entry.color.toLowerCase()));
-      const color =
-        NEW_ENTRY_COLORS.find((candidate) => !used.has(candidate)) ??
-        NEW_ENTRY_COLORS[legend.length % NEW_ENTRY_COLORS.length];
+      const color = nextLegendColor(legend.map((entry) => entry.color));
       return commit(
         state,
         touch({
@@ -677,28 +750,54 @@ export const useDiagramStore = create<DiagramState>((set) => ({
         touch({
           ...state.diagram,
           legend: state.diagram.legend.filter((entry) => entry.key !== key),
-          sections: state.diagram.sections.map((section) => ({
-            ...section,
-            nodes: section.nodes.map((node) =>
-              node.data.colorKey === key ? { ...node, data: { ...node.data, colorKey: undefined } } : node,
-            ),
-          })),
+          sections: mapEveryNode(state.diagram, (node) =>
+            node.data.colorKey === key ? { ...node, data: { ...node.data, colorKey: undefined } } : node,
+          ),
         }),
       ),
     ),
 }));
 
-const NEW_ENTRY_COLORS = [
-  "#60a5fa",
-  "#f472b6",
-  "#34d399",
-  "#fb923c",
-  "#a78bfa",
-  "#facc15",
-  "#2dd4bf",
-  "#f87171",
-];
+/** What the canvas shows: a tab, or (with `parent` set) the internal design of one of its components. */
+export interface ActiveView extends DiagramSection {
+  parent?: { section: DiagramSection; component: DiagramNode };
+}
 
-export function getActiveSection(diagram: Diagram) {
-  return diagram.sections.find((section) => section.id === diagram.activeSectionId) ?? diagram.sections[0];
+const NO_NODES: DiagramNode[] = [];
+/** One view object per component and tab version, so store selectors get a stable value back. */
+const detailViews = new WeakMap<DiagramNode, ActiveView>();
+
+/**
+ * The view on screen. Edits made through the store apply to it, so every editing action works the same
+ * on a tab (L0/L1) and inside a component's internal design (L2).
+ */
+export function getActiveSection(diagram: Diagram): ActiveView {
+  const section = diagram.sections.find((candidate) => candidate.id === diagram.activeSectionId) ?? diagram.sections[0];
+  const component = diagram.activeDetailId
+    ? section.nodes.find((node) => node.id === diagram.activeDetailId && node.type === "block")
+    : undefined;
+  if (!component || component.data.kind !== "block") return section;
+  const cached = detailViews.get(component);
+  if (cached?.parent?.section === section) return cached;
+  const view: ActiveView = {
+    id: `${section.id}/${component.id}`,
+    name: component.data.label,
+    nodes: component.data.detail?.nodes ?? NO_NODES,
+    edges: component.data.detail?.edges,
+    parent: { section, component },
+  };
+  detailViews.set(component, view);
+  return view;
+}
+
+/** Every node in the diagram, including those inside internal designs. */
+export function everyNode(diagram: Diagram): DiagramNode[] {
+  return diagram.sections.flatMap((section) =>
+    section.nodes.flatMap((node) => [node, ...(node.data.kind === "block" ? (node.data.detail?.nodes ?? []) : [])]),
+  );
+}
+
+/** Components in a section that have an internal design. */
+export function componentsWithDetail(section: DiagramSection): DiagramNode[] {
+  return section.nodes.filter((node) => node.data.kind === "block" && !!node.data.detail?.nodes.length);
 }

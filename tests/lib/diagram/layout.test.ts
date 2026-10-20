@@ -8,8 +8,8 @@ import {
   growContainerToFit,
   nextSlotInContainer,
   nudgeNodes,
-} from "./layout";
-import type { DiagramNode } from "./types";
+} from "@/lib/diagram/layout";
+import type { DiagramNode } from "@/lib/diagram/types";
 
 function block(id: string, x: number, y: number, parentId?: string, width = 100, height = 40): DiagramNode {
   return {

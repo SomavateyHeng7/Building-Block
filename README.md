@@ -9,19 +9,27 @@ device, like draw.io's device storage. The app holds the diagram in memory only 
 ## Features
 
 - Containers and components with drag-in nesting, resize, snap-to-grid and a minimap
-- A user-defined legend; exports include only the categories used
+- A user-defined legend with a named colour palette (it marks colours another category already uses) and
+  custom colours; exports include only the categories used
 - Connections between components (L1): drag from the dot on a component's edge to another, or pick one in
   the details panel. Each has a label (what flows), a protocol, a description, arrows (one way, both ways,
   none) and a solid or dashed line
+- Internal design per component (L2): open a component to draw what it's made of on its own canvas, with
+  its own containers, components and connections. The details panel shows the component's L1 connections
+  alongside, a bar above the canvas leads back, and an **L2** badge marks components that have one. It is
+  saved inside the same `.json` file, one level deep
 - Details per component: technology, owner, description, notes
 - Align, distribute, match size, fit container, tidy layout
 - Several tabs per diagram (e.g. current vs target) with copy/paste between them
 - Built-in templates; to reuse your own layout, save it as a file and open that
-- Export: PNG, PDF, SVG, component list (CSV), connection list (CSV), JSON; PNG/PDF can cover all tabs
+- Export dialog: pick any mix of PNG, SVG, PDF, component list (CSV), connection list (CSV) and the diagram
+  file (JSON), and which tabs and internal designs to picture. Download it all as **one file** (a `.zip`,
+  or a single PDF with a page per view) or as **separate files**. The dialog shows exactly what you'll get;
+  the CSVs say which component each internal item is part of
 - Works on desktop, tablet and phone (see [Devices](#devices))
 - Keyboard shortcuts (press `?` in the editor)
 
-The landing page's roadmap works out which levels exist from the editor's code (`src/lib/levels.ts`), so it stays current: L0 (landscape) and L1 (connections) are built; L2 (drilling into a component's internal design) is not yet.
+The landing page's roadmap works out which levels exist from the editor's code (`src/lib/levels.ts`), so it stays current: L0 (landscape), L1 (connections) and L2 (a component's internal design) are all built.
 
 ## Where your diagrams live
 
@@ -49,7 +57,15 @@ Unsaved work exists only in memory:
 - **New**, **Open** and **Start** ask Save / Don't save / Cancel.
 - A reload with nothing saved returns you to the start page.
 
-Only your theme, export-style and collapsed-panel preferences use `localStorage`, never diagram data.
+Only your theme, collapsed panels, last export choices and privacy-notice acceptance use `localStorage`,
+never diagram data.
+
+### Privacy notice
+
+The app pages (`/diagrams`, `/templates`, `/editor`) ask people to accept the privacy notice once before use;
+the landing, privacy and contact pages stay open. The acceptance records the notice's version
+(`PRIVACY_VERSION` in `src/lib/consent.ts`): **change it whenever the notice changes**, and everyone is asked
+again. People can withdraw it on `/privacy`. The waitlist and contact forms ask for their own agreement.
 
 ### Diagrams from an earlier version
 
@@ -72,14 +88,19 @@ Browser behaviour for saving is in the table above; everything else is the same 
 ```bash
 pnpm install
 pnpm dev        # http://localhost:3000
-pnpm test       # unit tests: validation, layout, connections, and file save / dirty tracking
+pnpm test       # unit tests in tests/ (mirrors src/): diagrams, files, exports, zip, consent, toasts
 pnpm lint
 pnpm build
 ```
 
-Optional: set `NEXT_PUBLIC_WAITLIST_URL` to a form endpoint that accepts a JSON `{ email }` POST to show
-the landing-page waitlist form. Leave it unset to keep the app fully offline. This is the only place data
-can leave the browser.
+Optional form endpoints (each accepts a JSON POST, e.g. a Formspree form). Leave them unset to keep the app
+fully offline; these forms are the only places data can leave the browser:
+
+| Variable | What it turns on |
+| --- | --- |
+| `NEXT_PUBLIC_WAITLIST_URL` | The landing-page waitlist form (`{ email, consent }`) |
+| `NEXT_PUBLIC_CONTACT_URL` | The `/contact` form (`{ name, email, topic, message, consent }`) |
+| `NEXT_PUBLIC_CONTACT_EMAIL` | An address shown on `/contact`; without a form URL, the form opens the visitor's email app instead |
 
 ### Project layout
 
@@ -92,6 +113,7 @@ can leave the browser.
 | `src/lib/diagram/legacy.ts` | Reads and clears diagrams left in `localStorage` by earlier versions |
 | `src/lib/diagram/export.ts` | PNG, PDF, SVG, CSV and JSON export |
 | `src/templates/` | Built-in templates |
+| `tests/` | Unit tests, in folders mirroring `src/` |
 
 ### Stack
 

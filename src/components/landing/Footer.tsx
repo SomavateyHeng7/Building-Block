@@ -62,6 +62,9 @@ export default function Footer() {
             <Link href="/privacy" className="hover:text-zinc-900 dark:hover:text-zinc-100">
               Privacy
             </Link>
+            <Link href="/contact" className="hover:text-zinc-900 dark:hover:text-zinc-100">
+              Contact
+            </Link>
             <span className="flex items-center gap-2">
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3" />

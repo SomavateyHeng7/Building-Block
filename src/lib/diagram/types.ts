@@ -56,6 +56,18 @@ export interface BlockNodeData extends NodeDetails {
   /** Undefined when unassigned, e.g. after its legend entry was removed. */
   colorKey?: BlockColorKey;
   containerId: string | null;
+  /** The component's internal design (L2). Absent until something is drawn in it. */
+  detail?: ComponentDetail;
+}
+
+/**
+ * What a component is made of (L2): its own containers, components and connections, drawn on a canvas
+ * of their own. Kept inside the component so it travels with it. One level deep: the components in
+ * here don't have internal designs of their own.
+ */
+export interface ComponentDetail {
+  nodes: DiagramNode[];
+  edges?: DiagramEdge[];
 }
 
 export type DiagramNodeData = ContainerNodeData | BlockNodeData;
@@ -110,6 +122,8 @@ export interface Diagram {
   legend: LegendEntry[];
   sections: DiagramSection[];
   activeSectionId: string;
+  /** A component in the active section whose internal design (L2) is open; absent at L1. */
+  activeDetailId?: string;
   /** Show each component's technology under its label. Defaults to true. */
   showTechnology?: boolean;
   createdAt: string;

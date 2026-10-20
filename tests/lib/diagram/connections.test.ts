@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { suggestConnectionSides } from "./layout";
-import { getActiveSection, useDiagramStore } from "./store";
-import { parseDiagram } from "./validate";
-import { createBlankDiagram, defaultLabel } from "./factory";
-import { historyKey } from "./flowAdapter";
+import { suggestConnectionSides } from "@/lib/diagram/layout";
+import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
+import { parseDiagram } from "@/lib/diagram/validate";
+import { createBlankDiagram, defaultLabel } from "@/lib/diagram/factory";
+import { historyKey } from "@/lib/diagram/flowAdapter";
 import { l0ArchitectureTemplate } from "@/templates/l0-architecture";
-import type { DiagramNode } from "./types";
+import type { DiagramNode } from "@/lib/diagram/types";
 
 const store = () => useDiagramStore.getState();
 const active = () => getActiveSection(store().diagram);

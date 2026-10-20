@@ -30,8 +30,7 @@ const LEVEL_DEFINITIONS: LevelDefinition[] = [
     level: "L2",
     title: "Component detail",
     body: "Drill down from any L1 component into its internal design, kept linked to the level above.",
-    // Nothing in the store does this yet. Add the action with this name (or change the name here) when it exists.
-    requires: ["linkComponentToDiagram"],
+    requires: ["openDetail", "closeDetail"],
   },
 ];
 

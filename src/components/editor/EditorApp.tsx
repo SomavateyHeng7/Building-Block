@@ -10,6 +10,7 @@ import Sidebar from "./Sidebar";
 import PropertiesPanel from "./PropertiesPanel";
 import LegendPanel from "./LegendPanel";
 import SectionTabs from "./SectionTabs";
+import DetailBar from "./DetailBar";
 import ShortcutsHelp from "./ShortcutsHelp";
 import { Icon } from "./Icon";
 import PanelToggle from "./PanelToggle";
@@ -103,6 +104,8 @@ export default function EditorApp() {
           const nodes = nudgeNodes(section.nodes, store.selectedNodeIds, nudge[0] * step, nudge[1] * step);
           store.setActiveSectionNodes(nodes, { coalesceKey: `nudge:${store.selectedNodeIds.join(",")}` });
         } else if (event.key === "Escape") {
+          // Esc clears the selection first; with nothing selected it goes back up from an internal design.
+          if (!hasSelection && !store.selectedEdgeId && section.parent) store.closeDetail();
           store.setSelection([]);
           store.setSelectedEdge(null);
         }
@@ -175,6 +178,7 @@ export default function EditorApp() {
       <div className="flex h-dvh w-full flex-col bg-zinc-100 pb-safe pt-safe px-safe dark:bg-zinc-900">
         <Toolbar onShowShortcuts={() => setHelpOpen(true)} />
         <SectionTabs />
+        <DetailBar />
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
           {drawer && (
             <button

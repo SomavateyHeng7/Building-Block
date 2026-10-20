@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useDiagramStore } from "@/lib/diagram/store";
+import { everyNode, useDiagramStore } from "@/lib/diagram/store";
 import { Icon } from "./Icon";
+import ColorPicker from "./ColorPicker";
 
 export default function LegendPanel() {
   const legend = useDiagramStore((state) => state.diagram.legend);
-  const sections = useDiagramStore((state) => state.diagram.sections);
+  const diagram = useDiagramStore((state) => state.diagram);
   const updateLegendEntry = useDiagramStore((state) => state.updateLegendEntry);
   const addLegendEntry = useDiagramStore((state) => state.addLegendEntry);
   const removeLegendEntry = useDiagramStore((state) => state.removeLegendEntry);
@@ -14,17 +15,26 @@ export default function LegendPanel() {
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const [pendingRemoveKey, setPendingRemoveKey] = useState<string | null>(null);
 
-  // How many nodes use each entry, across all sections.
+  // How many nodes use each entry, across all tabs and internal designs.
   const usage = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const section of sections) {
-      for (const node of section.nodes) {
-        const key = node.data.colorKey;
-        if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
-      }
+    for (const node of everyNode(diagram)) {
+      const key = node.data.colorKey;
+      if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     return counts;
-  }, [sections]);
+  }, [diagram]);
+
+  /** Lower-case colour → the categories using it, so the picker can point out repeats. */
+  function usedByOthers(key: string): Map<string, string[]> {
+    const users = new Map<string, string[]>();
+    for (const entry of legend) {
+      if (entry.key === key) continue;
+      const color = entry.color.toLowerCase();
+      users.set(color, [...(users.get(color) ?? []), entry.label || "an unnamed category"]);
+    }
+    return users;
+  }
 
   function handleRemove(key: string) {
     if ((usage.get(key) ?? 0) > 0 && pendingRemoveKey !== key) {
@@ -60,12 +70,11 @@ export default function LegendPanel() {
           const confirming = pendingRemoveKey === entry.key;
           return (
             <div key={entry.key} className="group flex items-center gap-2 rounded-md px-1 py-0.5 hover:bg-zinc-50 dark:hover:bg-zinc-900">
-              <input
-                type="color"
-                aria-label={`Color for ${entry.label || "unnamed category"}`}
+              <ColorPicker
+                label={`Colour for ${entry.label || "unnamed category"}`}
                 value={entry.color}
-                onChange={(event) => updateLegendEntry(entry.key, { color: event.target.value })}
-                className="h-6 w-6 shrink-0 cursor-pointer rounded-md border border-zinc-300 bg-transparent p-0 dark:border-zinc-700"
+                usedBy={usedByOthers(entry.key)}
+                onChange={(color) => updateLegendEntry(entry.key, { color })}
               />
               <input
                 autoFocus={entry.key === focusKey}

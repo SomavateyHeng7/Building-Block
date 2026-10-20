@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
+import { getActiveSection, useDiagramStore, type ActiveView } from "@/lib/diagram/store";
 import { suggestConnectionSides, type ArrangeOp } from "@/lib/diagram/layout";
 import { connectionCaption } from "@/lib/diagram/flowAdapter";
 import type {
@@ -19,6 +19,7 @@ import type {
 } from "@/lib/diagram/types";
 import { defaultLabel } from "@/lib/diagram/factory";
 import { Icon } from "./Icon";
+import ColorPicker from "./ColorPicker";
 
 const DETAIL_FIELDS: {
   key: keyof NodeDetails;
@@ -181,12 +182,11 @@ function ContainerStyleControls({
       <div className={FIELD_LABEL}>
         Outline
         <div className="flex items-center gap-2">
-          <input
-            type="color"
-            aria-label="Outline color"
+          <ColorPicker
+            size="md"
+            label="Outline colour"
             value={outlineColor}
-            onChange={(event) => onChange(id, { outlineColor: event.target.value })}
-            className="h-8 w-10 cursor-pointer rounded-md border border-zinc-300 bg-transparent p-0.5 dark:border-zinc-700"
+            onChange={(color) => onChange(id, { outlineColor: color })}
           />
           <div className="flex-1">
             <Segmented
@@ -299,6 +299,67 @@ function ConnectionsSection({ nodeId }: { nodeId: string }) {
       <span className="text-[11px] font-normal text-zinc-400">
         Or drag from a dot on the edge of this component to another one.
       </span>
+    </div>
+  );
+}
+
+/** On an L1 component: what it's made of (L2), and the way in. */
+function InternalDesignSection({ nodeId, count }: { nodeId: string; count: number }) {
+  const openDetail = useDiagramStore((state) => state.openDetail);
+  return (
+    <div className={FIELD_LABEL}>
+      Internal design (L2)
+      <span className="text-[11px] font-normal text-zinc-400">
+        {count
+          ? `${count} item${count === 1 ? "" : "s"} inside.`
+          : "Break this component down into what it's made of, on a canvas of its own."}
+      </span>
+      <button type="button" className={`${ACTION_BUTTON} inline-flex items-center gap-1.5 self-start`} onClick={() => openDetail(nodeId)}>
+        <Icon name="layers" className="h-3.5 w-3.5" />
+        {count ? "Open internal design" : "Design its internals"}
+      </button>
+    </div>
+  );
+}
+
+/** Inside an internal design: the component it belongs to, and how that component connects at L1. */
+function ParentContext({ parent }: { parent: NonNullable<ActiveView["parent"]> }) {
+  const closeDetail = useDiagramStore((state) => state.closeDetail);
+  const { section, component } = parent;
+  const labelOf = (id: string) => section.nodes.find((node) => node.id === id)?.data.label ?? "?";
+  const links = (section.edges ?? []).filter((edge) => edge.source === component.id || edge.target === component.id);
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-blue-200 bg-blue-50/60 p-3 text-xs text-zinc-600 dark:border-blue-900 dark:bg-blue-950/40 dark:text-zinc-300">
+      <p>
+        Inside <span className="font-semibold text-zinc-900 dark:text-zinc-100">{component.data.label}</span>
+        {component.data.technology ? <span className="text-zinc-500"> [{component.data.technology}]</span> : null}, on{" "}
+        <span className="font-medium">{section.name}</span>.
+      </p>
+      {component.data.description && <p className="text-zinc-500">{component.data.description}</p>}
+      <div className="flex flex-col gap-1">
+        <span className="font-medium text-zinc-700 dark:text-zinc-200">Its connections at L1</span>
+        {links.length ? (
+          <ul className="flex flex-col gap-0.5">
+            {links.map((edge) => {
+              const outgoing = edge.source === component.id;
+              const caption = connectionCaption(edge);
+              return (
+                <li key={edge.id} className="flex items-baseline gap-1.5">
+                  <span aria-hidden>{edge.direction === "both" ? "↔" : edge.direction === "none" ? "—" : outgoing ? "→" : "←"}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium">{labelOf(outgoing ? edge.target : edge.source)}</span>
+                  {caption && <span className="shrink-0 text-zinc-500">{caption}</span>}
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <span className="text-zinc-400">None yet.</span>
+        )}
+      </div>
+      <button type="button" className={`${ACTION_BUTTON} self-start bg-white dark:bg-zinc-950`} onClick={closeDetail}>
+        Back to {section.name}
+      </button>
     </div>
   );
 }
@@ -479,7 +540,8 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
     const hasNested = section.nodes.some((candidate) => candidate.parentId);
     return (
       <div className={PANEL}>
-        <PanelTitle action={headerAction}>Diagram</PanelTitle>
+        <PanelTitle action={headerAction}>{section.parent ? "Internal design" : "Diagram"}</PanelTitle>
+        {section.parent && <ParentContext parent={section.parent} />}
         <label className="flex cursor-pointer items-center justify-between gap-3 text-sm text-zinc-700 dark:text-zinc-200">
           <span>
             Show technology
@@ -583,6 +645,10 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
       })}
 
       {node.type === "block" && <ConnectionsSection nodeId={node.id} />}
+
+      {node.data.kind === "block" && !section.parent && (
+        <InternalDesignSection nodeId={node.id} count={node.data.detail?.nodes.length ?? 0} />
+      )}
 
       {node.data.kind === "container" && (
         <ContainerStyleControls

@@ -1,6 +1,6 @@
 import type { Rect } from "@xyflow/react";
-import { downloadBlob, fileBaseName } from "./file";
-import type { Diagram, DiagramSection, LegendEntry } from "./types";
+import type { ActiveView } from "./store";
+import type { Diagram, DiagramEdge, DiagramNode, DiagramSection, LegendEntry } from "./types";
 
 const PADDING = 40;
 const HEADER_HEIGHT = 52;
@@ -31,7 +31,6 @@ export interface ImageExportOptions {
   title: string;
   legend: LegendEntry[];
   dark: boolean;
-  filename: string;
 }
 
 /** Legend entries actually used in a section, in legend order. */
@@ -40,8 +39,22 @@ export function legendUsedIn(diagram: Diagram, section: DiagramSection): LegendE
   return diagram.legend.filter((entry) => used.has(entry.key));
 }
 
-export function exportTitle(diagram: Diagram, section: DiagramSection): string {
-  return diagram.sections.length > 1 ? `${diagram.name} — ${section.name}` : diagram.name;
+/** "Plan — Current", plus the component for an internal design: "Plan — Current — Orders (internal design)". */
+export function exportTitle(diagram: Diagram, view: ActiveView): string {
+  if (view.parent) return `${diagram.name} — ${view.parent.section.name} — ${view.name} (internal design)`;
+  return diagram.sections.length > 1 ? `${diagram.name} — ${view.name}` : diagram.name;
+}
+
+/** Each canvas in a section: the tab itself, then each component's internal design that has something in it. */
+function viewsOf(section: DiagramSection): { partOf: string; nodes: DiagramNode[]; edges: DiagramEdge[] }[] {
+  return [
+    { partOf: "", nodes: section.nodes, edges: section.edges ?? [] },
+    ...section.nodes.flatMap((node) =>
+      node.data.kind === "block" && node.data.detail?.nodes.length
+        ? [{ partOf: node.data.label, nodes: node.data.detail.nodes, edges: node.data.detail.edges ?? [] }]
+        : [],
+    ),
+  ];
 }
 
 interface LegendLayout {
@@ -139,30 +152,14 @@ export async function renderComposite(
   return { canvas, width: totalWidth, height: totalHeight };
 }
 
-export async function exportPng(options: ImageExportOptions): Promise<void> {
-  const { canvas } = await renderComposite(options);
+export async function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
   if (!blob) throw new Error("Could not render PNG");
-  downloadBlob(blob, `${fileBaseName(options.filename)}.png`);
+  return blob;
 }
 
-/** One page sized to the diagram, so nothing is scaled down or cropped. */
-export async function exportPdf(options: ImageExportOptions): Promise<void> {
-  const [{ canvas, width, height }, { jsPDF }] = await Promise.all([
-    renderComposite(options),
-    import("jspdf"),
-  ]);
-  const pdf = new jsPDF({
-    orientation: width >= height ? "landscape" : "portrait",
-    unit: "pt",
-    format: [width, height],
-  });
-  pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, width, height);
-  pdf.save(`${fileBaseName(options.filename)}.pdf`);
-}
-
-/** Canvases are one-per-tab; the PDF gets one page per canvas, each sized to its diagram. */
-export async function exportPdfPages(pages: RenderedComposite[], filename: string): Promise<void> {
+/** A PDF with one page per picture, each page sized to its picture so nothing is scaled down or cropped. */
+export async function pdfFromPages(pages: RenderedComposite[]): Promise<Blob> {
   const { jsPDF } = await import("jspdf");
   const orient = (page: RenderedComposite) => (page.width >= page.height ? "landscape" : "portrait");
   const [first, ...rest] = pages;
@@ -172,13 +169,7 @@ export async function exportPdfPages(pages: RenderedComposite[], filename: strin
     pdf.addPage([page.width, page.height], orient(page));
     pdf.addImage(page.canvas.toDataURL("image/png"), "PNG", 0, 0, page.width, page.height);
   }
-  pdf.save(`${fileBaseName(filename)}.pdf`);
-}
-
-export async function downloadCanvasPng(canvas: HTMLCanvasElement, filename: string): Promise<void> {
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
-  if (!blob) throw new Error("Could not render PNG");
-  downloadBlob(blob, `${fileBaseName(filename)}.png`);
+  return pdf.output("blob");
 }
 
 /**
@@ -195,53 +186,72 @@ export function toCsv(rows: string[][]): string {
   return "\ufeff" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
 }
 
-/** Every connection in every section: who talks to whom, how, and what flows. */
-export function exportConnectionsCsv(diagram: Diagram): void {
+/** Every connection on every canvas: who talks to whom, how, and what flows. */
+export function connectionsCsv(diagram: Diagram): Blob {
+  return new Blob([toCsv(connectionRows(diagram))], { type: "text/csv;charset=utf-8" });
+}
+
+/** The connection list's rows. "Part of" names the component whose internal design (L2) a row is in. */
+export function connectionRows(diagram: Diagram): string[][] {
   const rows: string[][] = [
-    ["Section", "From", "To", "Direction", "Line", "What flows", "Protocol or technology", "Description"],
+    ["Section", "Part of", "From", "To", "Direction", "Line", "What flows", "Protocol or technology", "Description"],
   ];
   const directions = { forward: "One way", both: "Both ways", none: "No arrow" };
   for (const section of diagram.sections) {
-    const nameOf = (id: string) => section.nodes.find((node) => node.id === id)?.data.label ?? "";
-    for (const edge of section.edges ?? []) {
-      rows.push([
-        section.name,
-        nameOf(edge.source),
-        nameOf(edge.target),
-        directions[edge.direction ?? "forward"],
-        edge.style === "dashed" ? "Dashed" : "Solid",
-        edge.label ?? "",
-        edge.protocol ?? "",
-        edge.description ?? "",
-      ]);
+    for (const view of viewsOf(section)) {
+      const nameOf = (id: string) => view.nodes.find((node) => node.id === id)?.data.label ?? "";
+      for (const edge of view.edges) {
+        rows.push([
+          section.name,
+          view.partOf,
+          nameOf(edge.source),
+          nameOf(edge.target),
+          directions[edge.direction ?? "forward"],
+          edge.style === "dashed" ? "Dashed" : "Solid",
+          edge.label ?? "",
+          edge.protocol ?? "",
+          edge.description ?? "",
+        ]);
+      }
     }
   }
-  downloadBlob(new Blob([toCsv(rows)], { type: "text/csv;charset=utf-8" }), `${fileBaseName(diagram.name)}-connections.csv`);
+  return rows;
 }
 
-/** Every container and component in every section, for the solution document's component catalogue. */
-export function exportComponentsCsv(diagram: Diagram): void {
+/** Every container and component on every canvas, for the solution document's component catalogue. */
+export function componentsCsv(diagram: Diagram): Blob {
+  return new Blob([toCsv(componentRows(diagram))], { type: "text/csv;charset=utf-8" });
+}
+
+/**
+ * The component list's rows: each tab's containers and components, then what each component is made of.
+ * "Part of" names the component whose internal design (L2) a row is in.
+ */
+export function componentRows(diagram: Diagram): string[][] {
   const categories = new Map(diagram.legend.map((entry) => [entry.key, entry.label]));
   const rows: string[][] = [
-    ["Section", "Type", "Name", "Container", "Category", "Technology", "Owner", "Description", "Notes"],
+    ["Section", "Part of", "Type", "Name", "Container", "Category", "Technology", "Owner", "Description", "Notes"],
   ];
   for (const section of diagram.sections) {
-    for (const node of section.nodes) {
-      const parent = section.nodes.find((candidate) => candidate.id === node.parentId);
-      rows.push([
-        section.name,
-        node.type === "container" ? "Container" : "Component",
-        node.data.label,
-        parent?.data.label ?? "",
-        node.data.colorKey ? (categories.get(node.data.colorKey) ?? "") : "",
-        node.data.technology ?? "",
-        node.data.owner ?? "",
-        node.data.description ?? "",
-        node.data.notes ?? "",
-      ]);
+    for (const view of viewsOf(section)) {
+      for (const node of view.nodes) {
+        const parent = view.nodes.find((candidate) => candidate.id === node.parentId);
+        rows.push([
+          section.name,
+          view.partOf,
+          node.type === "container" ? "Container" : "Component",
+          node.data.label,
+          parent?.data.label ?? "",
+          node.data.colorKey ? (categories.get(node.data.colorKey) ?? "") : "",
+          node.data.technology ?? "",
+          node.data.owner ?? "",
+          node.data.description ?? "",
+          node.data.notes ?? "",
+        ]);
+      }
     }
   }
-  downloadBlob(new Blob([toCsv(rows)], { type: "text/csv;charset=utf-8" }), `${fileBaseName(diagram.name)}-components.csv`);
+  return rows;
 }
 
 const escapeXml = (value: string) =>
@@ -251,7 +261,7 @@ const escapeXml = (value: string) =>
  * SVG with the title and legend as real, editable text and shapes. The diagram itself is embedded
  * as a nested SVG picture, so individual boxes aren't separate shapes in a vector editor.
  */
-export async function exportSvg(options: ImageExportOptions): Promise<void> {
+export async function renderSvg(options: ImageExportOptions): Promise<Blob> {
   const { toSvg } = await import("html-to-image");
   const { viewport, bounds, title, legend, dark } = options;
   const width = Math.ceil(bounds.width + PADDING * 2);
@@ -294,5 +304,5 @@ export async function exportSvg(options: ImageExportOptions): Promise<void> {
     `<image x="0" y="${HEADER_HEIGHT}" width="${width}" height="${height}" href="${diagramUri}"/>` +
     legendSvg +
     `</svg>`;
-  downloadBlob(new Blob([svg], { type: "image/svg+xml" }), `${fileBaseName(options.filename)}.svg`);
+  return new Blob([svg], { type: "image/svg+xml" });
 }

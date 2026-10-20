@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createBlankDiagram } from "./factory";
-import { fileBaseName, isDirty, saveDiagramToFile, startDiagram, useFileStore } from "./file";
-import { useDiagramStore } from "./store";
+import { createBlankDiagram } from "@/lib/diagram/factory";
+import { fileBaseName, isDirty, saveDiagramToFile, startDiagram, useFileStore } from "@/lib/diagram/file";
+import { useDiagramStore } from "@/lib/diagram/store";
 
 function fakeHandle(name = "plan.json") {
   const writes: string[] = [];

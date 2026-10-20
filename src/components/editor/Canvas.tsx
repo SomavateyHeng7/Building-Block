@@ -263,8 +263,19 @@ export default function Canvas() {
               <Icon name="layers" className="h-5 w-5" />
             </span>
             <div>
-              <p className="font-semibold text-zinc-900 dark:text-zinc-100">This tab is empty</p>
-              <p className="mt-1">Start with a container to group your components, or drag items in from the panel.</p>
+              {section.parent ? (
+                <>
+                  <p className="font-semibold text-zinc-900 dark:text-zinc-100">What is {section.name} made of?</p>
+                  <p className="mt-1">
+                    Draw its internal design: the modules, services and stores inside it, and how they connect.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold text-zinc-900 dark:text-zinc-100">This tab is empty</p>
+                  <p className="mt-1">Start with a container to group your components, or drag items in from the panel.</p>
+                </>
+              )}
             </div>
             <div className="flex flex-wrap justify-center gap-2">
               <button

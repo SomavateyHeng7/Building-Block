@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { csvCell, exportPixelRatio, toCsv } from "./export";
+import { csvCell, exportPixelRatio, toCsv } from "@/lib/diagram/export";
 
 describe("CSV export", () => {
   it("quotes cells and doubles quotes inside them", () => {

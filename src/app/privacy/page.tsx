@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PRIVACY_VERSION } from "@/lib/consent";
+import WithdrawConsent from "./WithdrawConsent";
 
 export const metadata: Metadata = {
   title: "Privacy · Building Block",
@@ -18,15 +20,22 @@ const SECTIONS = [
   {
     title: "What is stored in your browser",
     body: [
-      "Two small preferences are kept in your browser's local storage: which editor panels are open, and whether exports use the light or dark theme. They contain no diagram content or personal information, and you can clear them at any time in your browser settings.",
+      "A few small preferences are kept in your browser's local storage: the colour theme, which editor panels are collapsed, and your last export choices (format, light or dark style, one file or several). They contain no diagram content or personal information, and you can clear them at any time in your browser settings.",
+      "When you accept this notice, the browser also keeps a note of which version you accepted and when, so you aren't asked every time.",
       "If an earlier version of Building Block saved diagrams in your browser, the app offers to download them and then deletes those copies.",
     ],
   },
   {
     title: "Waitlist",
     body: [
-      "If you join the team-features waitlist, we collect only the email address you enter. It is sent to our form provider and used only to tell you when team features are ready. We do not sell it or use it for anything else.",
-      "You can ask us to remove your email at any time, and every message we send will say how to unsubscribe.",
+      "Joining the waitlist is optional and needs your separate agreement: the form asks you to tick a box before it sends anything. If you join, we collect only the email address you enter. It is sent to our form provider and used only to tell you when team features are ready. We do not sell it or use it for anything else.",
+      "You can ask us to remove your email at any time through the contact page, and every message we send will say how to unsubscribe.",
+    ],
+  },
+  {
+    title: "Contact form",
+    body: [
+      "If you write to us through the contact page, we receive the name (if you give one), email address and message you enter, through our form provider. We use them only to reply, and you're asked to agree to that before sending.",
     ],
   },
   {
@@ -56,6 +65,15 @@ export default function PrivacyPage() {
           Short version: your diagrams stay on your device. Building Block does not receive, store or analyse them.
         </p>
       </header>
+      <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Your acceptance</h2>
+        <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+          You&apos;re asked to accept this notice once before using the app. If it changes, you&apos;ll be asked again. You can
+          withdraw your acceptance at any time; you&apos;ll then be asked again before you next use the app.
+        </p>
+        <WithdrawConsent />
+        <p className="text-xs text-zinc-500">Version {PRIVACY_VERSION}</p>
+      </section>
       {SECTIONS.map((section) => (
         <section key={section.title} className="flex flex-col gap-2">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{section.title}</h2>

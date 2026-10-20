@@ -8,7 +8,7 @@ const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: "Drag from a dot", action: "Connect a component to another (dots appear on hover, selection or touch)" },
   { keys: "Arrow keys", action: "Nudge the selection by 8 px (hold Shift for 32 px)" },
   { keys: "Delete / Backspace", action: "Delete the selection, including a selected connection" },
-  { keys: "Esc", action: "Clear the selection" },
+  { keys: "Esc", action: "Clear the selection; with nothing selected, leave an internal design" },
   { keys: "Ctrl/⌘ + A", action: "Select everything on this tab" },
   { keys: "Ctrl/⌘ + C / X / V", action: "Copy, cut, paste" },
   { keys: "Ctrl/⌘ + D", action: "Duplicate the selection" },

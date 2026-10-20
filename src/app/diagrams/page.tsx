@@ -320,7 +320,7 @@ export default function StartPage() {
                   onClick={() => {
                     removeLegacyItems();
                     setRemoved(true);
-                    toast.success("Removed the old copies from this browser");
+                    toast.success("Removed the old copies", { description: "Nothing from earlier versions is left in this browser." });
                   }}
                   onBlur={() => setConfirmingRemove(false)}
                 >
