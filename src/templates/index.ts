@@ -1,8 +1,17 @@
 import { blankTemplate } from "./blank";
+import { currentVsTargetTemplate } from "./current-vs-target";
+import { eventDrivenTemplate } from "./event-driven";
 import { l0ArchitectureTemplate } from "./l0-architecture";
+import { threeTierTemplate } from "./three-tier";
 import type { TemplateDefinition } from "./types";
 
-export const templates: TemplateDefinition[] = [blankTemplate, l0ArchitectureTemplate];
+export const templates: TemplateDefinition[] = [
+  blankTemplate,
+  l0ArchitectureTemplate,
+  threeTierTemplate,
+  eventDrivenTemplate,
+  currentVsTargetTemplate,
+];
 
 export function getTemplate(id: string): TemplateDefinition | undefined {
   return templates.find((template) => template.id === id);

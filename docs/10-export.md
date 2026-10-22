@@ -105,6 +105,10 @@ Why each step:
   - **Theme:** `inTheme` switches `next-themes` to the export style, waits until `<html>` has (or loses) the
     `dark` class, renders, then restores the user's theme (including "system").
 - **Each view is rendered once**, even if PNG and PDF are both wanted.
+- **Compare marks:** while a comparison is shown on the canvas, the marked tabs are pictured with their outlines
+  and tags (they're CSS on the live nodes), and the picture's legend gets a line per kind of change that appears
+  ("Added since Current", "Removed in Target"…) from `changeMarksForView`. That's how to get a "current vs target"
+  slide: Compare → Show on canvas → Export.
 - **Data formats don't touch the canvas**, so a CSV-only export is instant and doesn't flicker.
 - **400 ms between separate downloads:** browsers drop downloads fired back to back.
 - **Afterwards** the original tab and internal design are reopened, even if the export failed (`finally`).
@@ -141,7 +145,7 @@ or cropped onto A4.
 
 - Every tab, then each component's internal design right after it (`viewsOf`). The **Part of** column names the
   component whose internal design a row is in (empty for tab rows).
-- Components: Section, Part of, Type, Name, Container, Category, Technology, Owner, Description, Notes.
+- Components: Section, Part of, Type, Name, Container, Category, Icon, Technology, Owner, Description, Notes.
 - Connections: Section, Part of, From, To, Direction, Line, What flows, Protocol or technology, Description.
 - Every cell is quoted with quotes doubled; rows end in CRLF; the file starts with a **UTF-8 byte-order mark** so
   Excel reads accents correctly.

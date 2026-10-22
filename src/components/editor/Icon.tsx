@@ -17,6 +17,8 @@ export const ICONS = {
   plus: "M12 5v14M5 12h14",
   redo: "m15 14 5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13",
   save: "M5 3h11l3 3v15H5zM8 3v5h7V3M8 21v-7h8v7",
+  search: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-5-5",
+  swap: "M4 8h14M14 4l4 4-4 4M20 16H6M10 12l-4 4 4 4",
   trash: "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
   undo: "M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11",
   x: "M6 6l12 12M18 6 6 18",

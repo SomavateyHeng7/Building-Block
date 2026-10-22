@@ -124,6 +124,38 @@ describe("parseDiagram", () => {
     expect(data.technology).toBe("Go");
     expect(data.owner).toBeUndefined();
   });
+
+  it("keeps a connection's route and bend, and drops values it doesn't know", () => {
+    const edges = [
+      { id: "e1", source: "n1", target: "n2", shape: "curved", bend: { x: 40, y: -16 } },
+      { id: "e2", source: "n1", target: "n2", shape: "zigzag", bend: { x: "far", y: 0 } },
+      { id: "e3", source: "n1", target: "n2", bend: { x: 0, y: 0 } },
+    ];
+    const input = { ...diagramWith([node(), node({ id: "n2" })]), sections: [{ id: "s1", name: "Current", nodes: [node(), node({ id: "n2" })], edges }] };
+    const { diagram } = parseDiagram(input);
+    expect(diagram.sections[0].edges?.map(({ shape, bend }) => ({ shape, bend }))).toEqual([
+      { shape: "curved", bend: { x: 40, y: -16 } },
+      { shape: undefined, bend: undefined },
+      { shape: undefined, bend: undefined },
+    ]);
+  });
+
+  it("keeps a component's built-in icon", () => {
+    const { diagram, fixes } = parseDiagram(diagramWith([node({ data: { kind: "block", label: "DB", icon: "database" } })]));
+    expect(fixes).toEqual([]);
+    expect(diagram.sections[0].nodes[0].data.icon).toBe("database");
+  });
+
+  it("drops icons it doesn't have, and says so", () => {
+    const { diagram, fixes } = parseDiagram(
+      diagramWith([
+        node({ data: { kind: "block", label: "A", icon: "hologram" } }),
+        node({ id: "c1", type: "container", data: { kind: "container", label: "Box", icon: "database" } }),
+      ]),
+    );
+    expect(diagram.sections[0].nodes.map((item) => item.data.icon)).toEqual([undefined, undefined]);
+    expect(fixes).toEqual(['"Current": removed 1 icon this version doesn\'t have.']);
+  });
 });
 
 describe("parseDiagram limits and colours", () => {

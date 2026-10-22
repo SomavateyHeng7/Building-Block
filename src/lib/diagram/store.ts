@@ -10,6 +10,7 @@ import {
   tidyContainer,
   type ArrangeOp,
 } from "./layout";
+import type { ComponentIconKey } from "./componentIcons";
 import type {
   BlockColorKey,
   ComponentDetail,
@@ -245,6 +246,8 @@ interface DiagramState {
   updateNodeColor: (id: string, colorKey: BlockColorKey) => void;
   updateNodesColor: (ids: string[], colorKey: BlockColorKey) => void;
   updateNodeDetails: (id: string, patch: NodeDetails) => void;
+  /** Sets or (with undefined) removes a component's icon. */
+  updateNodeIcon: (id: string, icon: ComponentIconKey | undefined) => void;
   updateContainerStyle: (id: string, patch: ContainerStyle) => void;
   updateLegendEntry: (key: BlockColorKey, patch: Partial<LegendEntry>) => void;
   addLegendEntry: () => BlockColorKey;
@@ -595,6 +598,22 @@ export const useDiagramStore = create<DiagramState>((set) => ({
           nodes.map((node) => (node.id === id ? { ...node, data: { ...node.data, ...cleaned } } : node)),
         ),
         `details:${id}:${Object.keys(patch).join(",")}`,
+      );
+    }),
+
+  updateNodeIcon: (id, icon) =>
+    set((state) => {
+      const node = getActiveSection(state.diagram).nodes.find((candidate) => candidate.id === id);
+      if (node?.data.kind !== "block" || node.data.icon === icon) return state;
+      return commit(
+        state,
+        mapActiveSection(state.diagram, (nodes) =>
+          nodes.map((candidate) =>
+            candidate.id === id && candidate.data.kind === "block"
+              ? { ...candidate, data: { ...candidate.data, icon } }
+              : candidate,
+          ),
+        ),
       );
     }),
 

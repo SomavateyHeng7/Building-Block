@@ -40,6 +40,15 @@ year would be stale until the next deploy.
 | --- | --- |
 | `blank` | `createBlankDiagram("Untitled Diagram")` |
 | `l0-architecture` | Four containers (channels, core systems, integration, infrastructure) of components laid out in columns with the default legend, plus three example connections (one dashed "Order events · Kafka"). The column gap leaves room for connection labels. |
+| `three-tier` | Presentation, application and data tiers plus an external identity provider, with technologies and six connections. |
+| `event-driven` | Clients → API gateway → order services → event broker → downstream services, a payment provider, and an **internal design (L2)** for the Order Service. |
+| `current-vs-target` | Two tabs, **Current** and **Target**, that differ in added, removed and recategorised components, made to show **Compare tabs**. |
+
+Every template except `blank` is written as data (columns of containers holding components, and connections by
+component name) and laid out by `buildDiagram` / `buildCanvas` in `src/templates/build.ts`: fixed column widths and
+gaps, containers stacked within a column, and connection sides facing each other (right → left across columns,
+bottom → top within one). `tests/templates/templates.test.ts` checks every template opens without repairs, mints
+fresh ids, connects only components that exist, and fits every component inside its container.
 
 `build()` creates fresh ids every time, so two diagrams from the same template never share ids.
 

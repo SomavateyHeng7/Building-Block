@@ -34,6 +34,8 @@ import { toast } from "@/lib/toast";
 import { useUnsavedGuard } from "./useUnsavedGuard";
 import { Icon } from "./Icon";
 import { useReadOnly } from "./viewMode";
+import { useCompareView } from "./compareView";
+import { changeMarksForView } from "@/lib/diagram/compare";
 import { LogoMark } from "@/components/Logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -215,7 +217,7 @@ function SaveStatus() {
   return null;
 }
 
-export default function Toolbar({ onShowShortcuts }: { onShowShortcuts: () => void }) {
+export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts: () => void; onSearch: () => void }) {
   const router = useRouter();
   const { getNodes, getNodesBounds } = useReactFlow();
   const { theme, resolvedTheme, setTheme } = useTheme();
@@ -319,7 +321,11 @@ export default function Toolbar({ onShowShortcuts }: { onShowShortcuts: () => vo
               viewport,
               bounds: getNodesBounds(getNodes()),
               title: exportTitle(diagram, view),
-              legend: legendUsedIn(diagram, view),
+              // While a comparison is shown, the picture's legend says what the change colours mean.
+              legend: [
+                ...legendUsedIn(diagram, view),
+                ...(changeMarksForView(diagram, useCompareView.getState().pair, view)?.legend ?? []),
+              ],
               dark: choice.theme === "dark",
             };
             if (needs("png") || needs("pdf")) pages.set(target.id, await renderComposite(options));
@@ -434,6 +440,9 @@ export default function Toolbar({ onShowShortcuts }: { onShowShortcuts: () => vo
             </button>
           </>
         )}
+        <button type="button" title="Find in diagram (Ctrl/⌘+F)" aria-label="Find in diagram" onClick={onSearch} className={ICON_BUTTON}>
+          <Icon name="search" />
+        </button>
         <span className="hidden pointer-fine:contents">
           <button type="button" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" onClick={onShowShortcuts} className={ICON_BUTTON}>
             <Icon name="keyboard" />

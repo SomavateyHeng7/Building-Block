@@ -177,6 +177,22 @@ describe("internal designs in files and exports", () => {
     expect(connectionRows(diagram).slice(1).map((row) => row.slice(1, 4))).toEqual([["Orders", "Orders API", "Orders DB"]]);
   });
 
+  it("sets and clears a component's icon as one undo step each, and lists it in the component CSV", () => {
+    const api = addBlock();
+    store().updateNodeIcon(api, "api");
+    expect(view().nodes[0].data.icon).toBe("api");
+    expect(componentRows(store().diagram)[1][6]).toBe("API or gateway");
+
+    const before = store().past.length;
+    store().updateNodeIcon(api, "api");
+    expect(store().past.length).toBe(before);
+
+    store().updateNodeIcon(api, undefined);
+    expect(view().nodes[0].data.icon).toBeUndefined();
+    store().undo();
+    expect(view().nodes[0].data.icon).toBe("api");
+  });
+
   it("titles an internal design's image with its tab and component", () => {
     const diagram = diagramWithDetail();
     expect(exportTitle(diagram, getActiveSection(diagram))).toBe("Untitled Diagram — Section 1 — Orders (internal design)");

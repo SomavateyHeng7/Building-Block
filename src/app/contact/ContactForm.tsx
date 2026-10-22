@@ -209,9 +209,13 @@ export default function ContactForm() {
         </p>
       )}
 
+      {/* this is the part where people send message to contact us */}
+
+
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="submit"
+          
           disabled={status === "sending" || !canSend}
           className="rounded-full bg-foreground px-6 py-2.5 text-sm font-medium text-background transition-colors hover:bg-[#383838] disabled:opacity-60 dark:hover:bg-[#ccc]"
         >

@@ -13,15 +13,26 @@ device, like draw.io's device storage. The app holds the diagram in memory only 
   custom colours; exports include only the categories used
 - Connections between components (L1): drag from the dot on a component's edge to another, or pick one in
   the details panel. Each has a label (what flows), a protocol, a description, arrows (one way, both ways,
-  none) and a solid or dashed line
+  none) and a solid or dashed line. Lines run in right angles, curved or straight; drag the dot on a selected line to
+  move it clear of other boxes (double-click the dot to put it back), or **Attach to nearest sides** to re-route it
 - Internal design per component (L2): open a component to draw what it's made of on its own canvas, with
   its own containers, components and connections. The details panel shows the component's L1 connections
   alongside, a bar above the canvas leads back, and an **L2** badge marks components that have one. It is
   saved inside the same `.json` file, one level deep
 - Details per component: technology, owner, description, notes
+- **Find (Ctrl/⌘+F):** search names, technology, owner, category, notes and connections across every tab and
+  internal design; picking a result opens its tab, selects it and zooms to it
+- A built-in icon per component (service, API, web, mobile, database, cache, storage, queue, event stream,
+  function, scheduler, analytics, identity, notification, user, external system, cloud). The icons ship with the
+  app, so they work offline and appear in every export
 - Align, distribute, match size, fit container, tidy layout
 - Several tabs per diagram (e.g. current vs target) with copy/paste between them
-- Built-in templates; to reuse your own layout, save it as a file and open that
+- **Compare tabs:** pick two tabs to list the components, containers and connections added, removed and changed
+  between them (matched by name), jump to any of them, or download the change list as a CSV. **Show on canvas** outlines and tags what was added and
+  changed (on the newer tab) and removed (on the older one); exports taken while it's shown include the marks and
+  a legend for them
+- Built-in templates (L0 architecture, three-tier web application, event-driven microservices with an internal
+  design, current vs target state); to reuse your own layout, save it as a file and open that
 - Export dialog: pick any mix of PNG, SVG, PDF, component list (CSV), connection list (CSV) and the diagram
   file (JSON), and which tabs and internal designs to picture. Download it all as **one file** (a `.zip`,
   or a single PDF with a page per view) or as **separate files**. The dialog shows exactly what you'll get;

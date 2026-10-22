@@ -36,6 +36,8 @@ environment: no browser, so tests cover the pure logic and the stores.
 | `tests/lib/maintenance.test.ts` | 6 | Reading the environment; `Retry-After`; upcoming end time |
 | `tests/proxy.test.ts` | 2 | 503 on every page during maintenance (incl. `/maintenance`); redirect home afterwards |
 | `tests/lib/levels.test.ts` | 2 | Roadmap statuses and heading wording |
+| `tests/lib/diagram/compare.test.ts` | 9 | Compare tabs: matching by name across ids, added/removed/changed fields, container moves, ignoring layout, connection matching (incl. two-way), internal designs, change-list rows |
+| `tests/templates/templates.test.ts` | 17 | Every template opens without repairs, mints fresh ids, connects real components, fits its containers; the richer templates have connections, an L2 design and two tabs |
 
 `zip.test.ts` shells out to `unzip` and `python3`, which are present on macOS and most Linux CI images.
 

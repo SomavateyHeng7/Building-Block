@@ -1,7 +1,9 @@
 "use client";
 
 import { useRef, useState, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import { useDiagramStore } from "@/lib/diagram/store";
+import CompareDialog from "./CompareDialog";
 import { Icon } from "./Icon";
 import { useReadOnly } from "./viewMode";
 
@@ -20,6 +22,7 @@ export default function SectionTabs() {
   const readOnly = useReadOnly();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [comparing, setComparing] = useState(false);
   const tablist = useRef<HTMLDivElement>(null);
   // Escape leaves the name as it was; some browsers blur the field as it goes, which must not save.
   const cancelledRename = useRef(false);
@@ -163,6 +166,20 @@ export default function SectionTabs() {
         <span className="hidden sm:inline">Add tab</span>
       </button>
       )}
+      {sections.length > 1 && (
+        <button
+          type="button"
+          title="Compare two tabs: what is added, removed and changed"
+          className="mb-1 ml-auto inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-sm text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          onClick={() => setComparing(true)}
+        >
+          <Icon name="swap" className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Compare tabs</span>
+          <span className="sr-only sm:hidden">Compare tabs</span>
+        </button>
+      )}
+      {/* Portalled: a dialog doesn't belong inside the tab list. */}
+      {comparing && createPortal(<CompareDialog onClose={() => setComparing(false)} />, document.body)}
     </div>
   );
 }

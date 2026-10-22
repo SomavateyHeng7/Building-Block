@@ -1,3 +1,5 @@
+import type { ComponentIconKey } from "./componentIcons";
+
 /** Key of a LegendEntry. Legends are user-defined, so any string is valid. */
 export type BlockColorKey = string;
 
@@ -56,6 +58,8 @@ export interface BlockNodeData extends NodeDetails {
   /** Undefined when unassigned, e.g. after its legend entry was removed. */
   colorKey?: BlockColorKey;
   containerId: string | null;
+  /** A built-in icon shown beside the name; absent means none. */
+  icon?: ComponentIconKey;
   /** The component's internal design (L2). Absent until something is drawn in it. */
   detail?: ComponentDetail;
 }
@@ -87,6 +91,8 @@ export type ConnectionSide = "top" | "right" | "bottom" | "left";
 /** Where the arrowheads go: at the target, at both ends, or nowhere. */
 export type ConnectionDirection = "forward" | "both" | "none";
 export type ConnectionLineStyle = "solid" | "dashed";
+/** How the line runs: in right angles, as a curve, or straight from end to end. */
+export type ConnectionShape = "step" | "curved" | "straight";
 
 /** A line between two components: how they interact (L1). */
 export interface DiagramEdge {
@@ -105,6 +111,13 @@ export interface DiagramEdge {
   direction?: ConnectionDirection;
   /** Defaults to "solid"; dashed is the usual convention for asynchronous calls. */
   style?: ConnectionLineStyle;
+  /** Defaults to "step" (right angles). */
+  shape?: ConnectionShape;
+  /**
+   * How far the middle of the line is moved from where it's drawn by default, in canvas pixels; set by
+   * dragging the dot on a selected connection. Relative, so the line keeps its bend when components move.
+   */
+  bend?: Position;
 }
 
 export interface DiagramSection {

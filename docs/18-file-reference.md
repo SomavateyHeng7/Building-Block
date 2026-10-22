@@ -64,8 +64,14 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 | --- | --- |
 | `EditorApp.tsx` | Editor shell: redirect, shortcuts, autosave, leave warning, layout, drawers, collapsed panels |
 | `Toolbar.tsx` | Back, name, save status, File menu, undo/redo, theme, Save, Export (and running exports) |
-| `SectionTabs.tsx` | Tabs: switch, rename, duplicate, delete, add, keyboard navigation |
+| `SectionTabs.tsx` | Tabs: switch, rename, duplicate, delete, add, keyboard navigation, Compare tabs button |
+| `CompareDialog.tsx` | Compare two tabs: added, removed, changed; jump to an item; change list CSV |
 | `DetailBar.tsx` | "Back to tab / component · L2" bar |
+| `CompareBar.tsx` | Shown while a comparison is marked on the canvas: colours, the two tabs, Stop showing |
+| `compareView.ts` | Which two tabs are compared on the canvas (screen state, not saved) |
+| `SearchDialog.tsx` | Find (Ctrl/⌘+F) across tabs and internal designs |
+| `canvasFocus.ts` | `goTo`: open a view, select an item and ask the canvas to zoom to it |
+| `edges/ConnectionEdge.tsx` | A connection line: right-angled, curved or straight, with the dot that bends it |
 | `Canvas.tsx` | React Flow canvas: changes → store, drops, connections, empty state |
 | `Sidebar.tsx` | Palette: drag or tap to add containers and components |
 | `PropertiesPanel.tsx` | Details for the selection (component, container, connection, several, diagram, internal design) |
@@ -92,9 +98,12 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 | `diagram/defaultLegend.ts` | The default legend |
 | `diagram/palette.ts` | Named colours, colour names, next colour, parsing colour codes, readable text colour |
 | `diagram/layout.ts` | Nesting, insets, arrange, tidy, fit, nudge, re-parenting ([layout](08-layout-and-containers.md)) |
-| `diagram/flowAdapter.ts` | Our nodes/edges ↔ React Flow's; undo keys; connection captions |
+| `diagram/flowAdapter.ts` | Our nodes/edges ↔ React Flow's; undo keys; connection captions; line geometry (`connectionPath`); change marks |
+| `diagram/search.ts` | Finding components, containers and connections across the diagram |
 | `diagram/export.ts` | Rendering pictures, PDF, SVG, CSV rows, export titles ([export](10-export.md)) |
 | `diagram/exportPlan.ts` | Which files an export produces |
+| `diagram/componentIcons.ts` | The built-in component icons (key, label, SVG path); keys are stored in files |
+| `diagram/compare.ts` | Comparing two tabs by name; change counts and the change-list CSV rows |
 | `diagram/legacy.ts` | Finds, downloads and removes diagrams left by earlier versions |
 | `zip.ts` | Minimal ZIP writer |
 | `toast.ts` | Toast store and API |
@@ -109,7 +118,11 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 | `types.ts` | `TemplateDefinition` |
 | `index.ts` | The list of templates; `getTemplate(id)` |
 | `blank.ts` | Blank canvas |
+| `build.ts` | Lays out templates written as data (`CanvasSpec`) and builds diagrams with fresh ids |
 | `l0-architecture.ts` | Four-layer L0 example with connections |
+| `three-tier.ts` | Three-tier web application |
+| `event-driven.ts` | Event-driven microservices, with an internal design (L2) |
+| `current-vs-target.ts` | Two tabs, current and target, for Compare tabs |
 
 ## `src/types/`
 

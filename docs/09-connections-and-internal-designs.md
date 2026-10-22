@@ -33,6 +33,19 @@ stream).
 (one way, both ways, none), and line style (dashed for asynchronous calls). Reverse swaps the ends. The canvas
 caption is "What flows · Protocol" (`connectionCaption`).
 
+**Routing:** *Route* picks right angles (`step`, the default), curved or straight. A selected line shows a blue dot
+just above its label (`edges/ConnectionEdge.tsx`): dragging it stores `bend`, the offset of the line's middle from
+its default position, snapped to 8 px, coalesced into one undo step per drag. Double-clicking the dot, or **Reset
+line**, removes it. The geometry is `connectionPath` in `flowAdapter.ts` (tested): a right-angled line moves its
+middle segment to the point, and curved and straight lines pass through it. **Attach to nearest sides** sets the
+facing sides (`suggestConnectionSides`) and clears the bend.
+
+- **Why an offset, not a fixed waypoint:** a waypoint in canvas coordinates is left behind when a component moves;
+  an offset from the default middle moves with the line.
+- **Why not automatic obstacle avoidance:** it moves lines the architect didn't touch whenever anything moves, and
+  needs a routing library. One draggable middle covers the usual "this line crosses a box" case.
+- The dot is only drawn on a selected line, and exports clear the selection, so it never appears in pictures.
+
 **Deleting a component deletes its connections** (`withoutDanglingEdges`), in the same undo step.
 
 **Copying:** connections are copied when *both* ends are copied (copy/paste, duplicate, duplicate tab).

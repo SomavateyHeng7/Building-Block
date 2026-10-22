@@ -1,4 +1,5 @@
 import type { Rect } from "@xyflow/react";
+import { componentIcon } from "./componentIcons";
 import type { ActiveView } from "./store";
 import type { Diagram, DiagramEdge, DiagramNode, DiagramSection, LegendEntry } from "./types";
 
@@ -230,7 +231,7 @@ export function componentsCsv(diagram: Diagram): Blob {
 export function componentRows(diagram: Diagram): string[][] {
   const categories = new Map(diagram.legend.map((entry) => [entry.key, entry.label]));
   const rows: string[][] = [
-    ["Section", "Part of", "Type", "Name", "Container", "Category", "Technology", "Owner", "Description", "Notes"],
+    ["Section", "Part of", "Type", "Name", "Container", "Category", "Icon", "Technology", "Owner", "Description", "Notes"],
   ];
   for (const section of diagram.sections) {
     for (const view of viewsOf(section)) {
@@ -243,6 +244,7 @@ export function componentRows(diagram: Diagram): string[][] {
           node.data.label,
           parent?.data.label ?? "",
           node.data.colorKey ? (categories.get(node.data.colorKey) ?? "") : "",
+          node.data.kind === "block" ? (componentIcon(node.data.icon)?.label ?? "") : "",
           node.data.technology ?? "",
           node.data.owner ?? "",
           node.data.description ?? "",

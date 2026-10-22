@@ -3,6 +3,7 @@
 import { memo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
+import { componentIcon } from "@/lib/diagram/componentIcons";
 import { defaultLabel } from "@/lib/diagram/factory";
 import { readableTextOn } from "@/lib/diagram/palette";
 import { useDiagramStore } from "@/lib/diagram/store";
@@ -29,6 +30,7 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
 
   const entryColor = legend.find((entry) => entry.key === data.colorKey)?.color;
   const color = entryColor ?? "#ffffff";
+  const icon = componentIcon(data.icon);
 
   return (
     <div
@@ -71,14 +73,38 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
           }}
         />
       ) : (
-        <span className="flex flex-col px-1 leading-tight">
-          <span>{data.label}</span>
-          {showTechnology && data.technology && (
-            <span className="text-[10px] font-normal opacity-75">[{data.technology}]</span>
-          )}
+        <span className="flex min-w-0 items-center gap-1.5 px-1">
+          {icon && <ComponentIcon path={icon.path} label={icon.label} />}
+          <span className="flex min-w-0 flex-col leading-tight">
+            <span>{data.label}</span>
+            {showTechnology && data.technology && (
+              <span className="text-[10px] font-normal opacity-75">[{data.technology}]</span>
+            )}
+          </span>
         </span>
       )}
     </div>
+  );
+}
+
+/** The component's built-in icon, in the label's colour so it reads on any category colour. */
+export function ComponentIcon({ path, label, className = "h-4 w-4 shrink-0" }: { path: string; label?: string; className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      role={label ? "img" : undefined}
+      aria-label={label}
+      aria-hidden={label ? undefined : true}
+    >
+      {label && <title>{label}</title>}
+      <path d={path} />
+    </svg>
   );
 }
 

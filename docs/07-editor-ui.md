@@ -40,6 +40,7 @@ Responsibilities, top to bottom:
 | --- | --- | --- |
 | Ctrl/⌘+S | Save (works even while typing in a field) | EditorApp |
 | Ctrl/⌘+Shift+S | Save as | EditorApp |
+| Ctrl/⌘+F | Find (`SearchDialog`); works in view mode too | EditorApp |
 | B | Add a component (inside the selected container, or the selected component's container) | EditorApp |
 | C | Add a container | EditorApp |
 | Arrow keys / Shift+arrows | Nudge selection 8 px / 32 px (`nudgeNodes`) | EditorApp |
@@ -82,6 +83,46 @@ doesn't save what was typed. "Add tab" is at the end.
 
 Clicking the open tab again leaves an internal design (it calls `setActiveSection`, which clears `activeDetailId`).
 
+### Compare tabs — `CompareDialog.tsx`
+
+With two or more tabs, **Compare tabs** at the right of the tab bar opens a dialog (portalled to `<body>`, since a
+dialog doesn't belong inside a `tablist`). It works in view mode too: comparing changes nothing.
+
+- **From / To** default to the tab before the open one and the open one (or, on the first tab, the first and
+  the second), because tabs usually run from "current" to "target". A swap button reverses them.
+- The list comes from `compareSections` in `src/lib/diagram/compare.ts` (pure, tested in
+  `tests/lib/diagram/compare.test.ts`): **added**, **removed** and **changed** components and containers, then
+  connections, with each changed field as "before → after".
+- **Matched by name, not id** (trimmed, case-insensitive). Duplicating a tab gives everything fresh ids, and to an
+  architect "Billing" on both tabs is the same system. Connections match by their two ends and what flows; a
+  connection between the same ends with a different label is a change, not a removal and an addition. Two-way
+  and arrowless connections match whichever end they were drawn from.
+- **Position and size are ignored**: moving a box isn't an architecture change. A component's category,
+  container, icon, technology, owner, description, notes and internal design (compared by content, not ids) are.
+- Picking an item opens its tab (the "from" tab for removed items) with it selected and zooms to it (`goTo` in
+  `canvasFocus.ts`), and closes the dialog.
+- **Show on canvas** stores the pair in `useCompareView` (`compareView.ts`): screen state, not part of the diagram,
+  so it isn't saved, undone or counted as a change, and it carries the diagram's id so opening another diagram
+  drops it. `changeMarksForView` (in `compare.ts`) gives the view on screen its marks: added and changed items on
+  the "to" tab, removed ones on the "from" tab (where they still are), nothing in internal designs. Nodes get a
+  `bb-change-*` class (outline and tag drawn in `globals.css` with literal colours, so exports include them);
+  connections are drawn in the change's colour. `CompareBar.tsx` explains the colours, switches between the two
+  tabs and stops it. Exports taken meanwhile add the marks' legend lines (see [export](10-export.md)).
+- **Download change list (CSV)** writes `comparisonRows`: one row per added or removed item, one per changed field,
+  through the same `toCsv` as the other exports (formula-injection safe).
+
+### Find — `SearchDialog.tsx`
+
+Ctrl/⌘+F or the magnifier in the toolbar. `searchDiagram` (`src/lib/diagram/search.ts`, tested) looks through every
+tab and internal design: names starting with the query first, then names containing it, then technology, owner,
+category, icon, description, notes, and connections by what flows, protocol and description, each saying which field
+matched. A combobox with a listbox: arrows move, Enter or a click calls `goTo`, which opens the tab and internal
+design, selects the item and asks the canvas to zoom to it.
+
+**Zooming after a view change:** going to another view remounts the canvas, so `goTo` leaves a request in
+`useCanvasFocus`. The canvas waits until those nodes are measured (and a frame more, after its own fit-to-everything),
+then calls `fitView` on them and clears the request.
+
 ## `DetailBar.tsx` — the L2 bar
 
 Only rendered inside an internal design: "← Back to *tab* / *component* · L2 · Internal design". Back (or Esc with
@@ -119,7 +160,8 @@ what's on screen), a hint about C/B/? on devices with a mouse, and, inside an in
 - Components inside containers have **no `extent: "parent"`**: React Flow would otherwise clamp them inside their
   container while dragging, and they could never be dragged out. Re-parenting happens on drop instead.
 - `fromFlowNodes` converts back (React Flow's `width`/`height` or measured size → `size`).
-- `toFlowEdges` uses `smoothstep` lines, a wide (24 px) invisible hit area, the caption "What flows · Protocol",
+- `toFlowNodes` adds a `bb-change-*` class to nodes marked by a comparison shown on the canvas.
+- `toFlowEdges` uses the custom `connection` line (`edges/ConnectionEdge.tsx`, with `shape` and `bend` in `data`), a wide (24 px) invisible hit area, the caption "What flows · Protocol",
   arrowheads by `direction`, dashes by `style`, and **explicit colours instead of React Flow's CSS variables**,
   because image export renders the DOM outside the canvas, where those variables are undefined.
 - `historyKey(kind, ids)`: see [undo](05-diagram-store-and-undo.md#committing-changes-and-undo).
@@ -134,6 +176,8 @@ what's on screen), a hint about C/B/? on devices with a mouse, and, inside an in
 - Four `Handle`s (`bb-handle` class), hidden until hover, selection, or while a connection is being dragged (CSS in
   `globals.css`); always visible on touch screens.
 - Double-click to rename inline. Enter or blur saves (blank → "Untitled"); Escape cancels.
+- Its built-in icon, if it has one, left of the name in the text colour (so it reads on any category colour).
+  Inline SVG paths from `componentIcons.ts`: no icon font or CDN, so offline use and exports work.
 - `[technology]` under the name when "Show technology" is on.
 - **Notes marker:** an amber "!" corner badge. Hovering shows the notes in a card **portalled to `document.body`**
   so it isn't clipped by the canvas or scaled by zoom.
@@ -171,7 +215,7 @@ panel is showing (`PanelTitle`'s `action`).
 | Several nodes | **N items selected** | Align (6), Distribute & size (4), Color all, Duplicate, Delete all |
 | Nothing (on a tab) | **Diagram** | Show technology switch, Fit all containers (if any are nested), a how-to hint |
 | Nothing (in an internal design) | **Internal design** | The component it belongs to, its technology and description, **its connections at L1**, Back |
-| One node | **Component** / **Container** | "In *container*" link, Label (blank → default on blur), Color (legend swatches), Technology (components only), Owner, Description, Notes, then: Connections (list + "Connect to…" picker) and **Internal design (L2)** for components on a tab; Header, Outline and Layout (Tidy, Fit) for containers; Delete |
+| One node | **Component** / **Container** | "In *container*" link, Label (blank → default on blur), Color (legend swatches), Icon (components only: None plus the built-in set), Technology (components only), Owner, Description, Notes, then: Connections (list + "Connect to…" picker) and **Internal design (L2)** for components on a tab; Header, Outline and Layout (Tidy, Fit) for containers; Delete |
 
 **Why "Connect to…" exists as well as dragging:** dragging between small handles is hard on touch screens and for
 keyboard users. The picker suggests sensible sides with `suggestConnectionSides` (the sides facing each other).

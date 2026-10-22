@@ -105,6 +105,51 @@ button, a, summary, [role="button"], [role="tab"], [role="menuitem"], label {
   pointer-events: none;
 }
 
+/*
+ * Compare on the canvas: changed items are outlined and tagged in their change's colour (CHANGE_COLORS in
+ * compare.ts). Drawn with CSS on React Flow's node wrapper so image exports include them. Literal colours,
+ * not variables: exports are rendered outside the page's styles.
+ */
+.react-flow__node.bb-change {
+  outline: 3px solid;
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+/* The tag sits on the outline's top-right corner, clear of the centred name and of a box stacked above. */
+.react-flow__node.bb-change::before {
+  position: absolute;
+  top: -9px;
+  right: -3px;
+  z-index: 1;
+  border-radius: 4px;
+  padding: 0 5px;
+  color: #ffffff;
+  font: 600 9px/13px Arial, Helvetica, sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.react-flow__node.bb-change-added {
+  outline-color: #16a34a;
+}
+.react-flow__node.bb-change-added::before {
+  content: "Added";
+  background: #16a34a;
+}
+.react-flow__node.bb-change-changed {
+  outline-color: #d97706;
+}
+.react-flow__node.bb-change-changed::before {
+  content: "Changed";
+  background: #d97706;
+}
+.react-flow__node.bb-change-removed {
+  outline-color: #dc2626;
+}
+.react-flow__node.bb-change-removed::before {
+  content: "Removed";
+  background: #dc2626;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

@@ -6,10 +6,12 @@ Recipes for common changes, with the files to touch and the rules to keep. After
 ## Add a template
 
 1. Create `src/templates/<id>.ts` exporting a `TemplateDefinition` (`id`, `name`, `description`, `build`).
-   `build()` must return a **new** diagram with **fresh ids** every call (use `createId`), and copy the legend
-   (`DEFAULT_LEGEND.map((entry) => ({ ...entry }))`) so diagrams don't share it.
+   The easy way is a `CanvasSpec` per tab (columns of containers, components, connections by name; a component's
+   `detail` is its internal design) and `build: () => buildDiagram(name, tabs)` from `./build`, which mints fresh
+   ids and copies the legend. A hand-written `build()` must do both too: a **new** diagram with **fresh ids** every
+   call (use `createId`), and `DEFAULT_LEGEND.map((entry) => ({ ...entry }))` so diagrams don't share the legend.
 2. Add it to the list in `src/templates/index.ts`.
-3. Run it through the validator in a test (`parseDiagram(template.build())` should report no fixes).
+3. `tests/templates/templates.test.ts` runs every listed template through the validator and the layout checks.
 
 It appears on `/templates` and the start page automatically, with a preview drawn from `build()`.
 

@@ -11,6 +11,8 @@ import PropertiesPanel from "./PropertiesPanel";
 import LegendPanel from "./LegendPanel";
 import SectionTabs from "./SectionTabs";
 import DetailBar from "./DetailBar";
+import CompareBar from "./CompareBar";
+import SearchDialog from "./SearchDialog";
 import ShortcutsHelp from "./ShortcutsHelp";
 import { Icon } from "./Icon";
 import PanelToggle from "./PanelToggle";
@@ -54,6 +56,7 @@ export default function EditorApp() {
   const saveFailed = useFileStore((state) => state.error);
   const dirty = useIsDirty();
   const [helpOpen, setHelpOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   // Below the lg breakpoint the palette and properties panels are drawers over the canvas.
   const [drawer, setDrawer] = useState<"palette" | "properties" | null>(null);
   // On wide screens the panels sit beside the canvas and can be collapsed to give it more room.
@@ -115,6 +118,13 @@ export default function EditorApp() {
       const target = event.target as HTMLElement | null;
       // Buttons don't swallow shortcuts (Ctrl+Z right after clicking Undo should work); dialogs and menus do.
       if (target?.closest("input, textarea, select, [contenteditable='true'], [role='dialog'], [role='alertdialog'], [role='menu']")) return;
+
+      // Finding things is reading, so it works in view mode too.
+      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        setSearchOpen(true);
+        return;
+      }
 
       // View mode only looks: Esc still clears the selection and leaves an internal design.
       if (readOnlyRef.current && event.key !== "Escape") return;
@@ -221,9 +231,10 @@ export default function EditorApp() {
     <ReactFlowProvider>
       <ReadOnlyContext.Provider value={readOnly}>
       <div className="flex h-dvh w-full flex-col bg-zinc-100 pb-safe pt-safe px-safe dark:bg-zinc-900">
-        <Toolbar onShowShortcuts={() => setHelpOpen(true)} />
+        <Toolbar onShowShortcuts={() => setHelpOpen(true)} onSearch={() => setSearchOpen(true)} />
         <SectionTabs />
         <DetailBar />
+        <CompareBar />
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
           {drawer && (
             <button
@@ -307,6 +318,7 @@ export default function EditorApp() {
         </div>
       </div>
       {helpOpen && <ShortcutsHelp onClose={() => setHelpOpen(false)} />}
+      {searchOpen && <SearchDialog onClose={() => setSearchOpen(false)} />}
       </ReadOnlyContext.Provider>
     </ReactFlowProvider>
   );

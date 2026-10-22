@@ -1,3 +1,4 @@
+import { COMPONENT_ICON_KEYS } from "./componentIcons";
 import { DEFAULT_LEGEND } from "./defaultLegend";
 import { createBlankSection, createId } from "./factory";
 import type {
@@ -100,8 +101,14 @@ function parseContainerStyle(data: Raw): ContainerStyle {
   return style;
 }
 
-/** Returns null for a node that can't be used; `repaired` is set when defaults were filled in. */
-function parseNode(raw: unknown, legendKeys: Set<string>): { node: DiagramNode; repaired: boolean } | null {
+/**
+ * Returns null for a node that can't be used; `repaired` is set when defaults were filled in, and
+ * `unknownIcon` when an icon this version doesn't have was dropped.
+ */
+function parseNode(
+  raw: unknown,
+  legendKeys: Set<string>,
+): { node: DiagramNode; repaired: boolean; unknownIcon: boolean } | null {
   if (!isObject(raw)) return null;
   const id = text(raw.id);
   const type = oneOf(raw.type, ["container", "block"] as const);
@@ -121,6 +128,8 @@ function parseNode(raw: unknown, legendKeys: Set<string>): { node: DiagramNode; 
     if (value) details[key] = value;
   }
   const colorKey = text(data.colorKey);
+  const icon = type === "block" ? oneOf(data.icon, COMPONENT_ICON_KEYS) : undefined;
+  const unknownIcon = type === "block" && data.icon !== undefined && !icon;
   const label = text(data.label) ?? (type === "container" ? "Untitled Container" : "Untitled");
   const repaired =
     typeof data.label !== "string" ||
@@ -156,9 +165,10 @@ function parseNode(raw: unknown, legendKeys: Set<string>): { node: DiagramNode; 
             ...details,
             containerId: null,
             ...(colorKey && legendKeys.has(colorKey) ? { colorKey } : {}),
+            ...(icon ? { icon } : {}),
           },
   };
-  return { node, repaired };
+  return { node, repaired, unknownIcon };
 }
 
 const SIDES = ["top", "right", "bottom", "left"] as const satisfies readonly ConnectionSide[];
@@ -188,10 +198,16 @@ function parseEdges(raw: unknown, nodes: DiagramNode[], name: string, fixes: str
     const targetSide = oneOf(item.targetSide, SIDES);
     const direction = oneOf(item.direction, ["forward", "both", "none"] as const);
     const style = oneOf(item.style, ["solid", "dashed"] as const);
+    const shape = oneOf(item.shape, ["step", "curved", "straight"] as const);
+    const bend = isObject(item.bend) ? { x: finite(item.bend.x), y: finite(item.bend.y) } : undefined;
     if (sourceSide) edge.sourceSide = sourceSide;
     if (targetSide) edge.targetSide = targetSide;
     if (direction) edge.direction = direction;
     if (style) edge.style = style;
+    if (shape) edge.shape = shape;
+    if (bend?.x !== undefined && bend.y !== undefined && (bend.x || bend.y)) {
+      edge.bend = { x: clamp(bend.x, MAX_COORDINATE), y: clamp(bend.y, MAX_COORDINATE) };
+    }
     for (const key of ["label", "protocol", "description"] as const) {
       const value = text(item[key])?.trim();
       if (value) edge[key] = value;
@@ -228,6 +244,7 @@ function parseView(
   let unreadable = 0;
   let duplicates = 0;
   let repaired = 0;
+  let unknownIcons = 0;
   for (const item of rawNodes) {
     const parsed = parseNode(item, legendKeys);
     if (!parsed) unreadable += 1;
@@ -236,6 +253,7 @@ function parseView(
       ids.add(parsed.node.id);
       nodes.push(parsed.node);
       if (parsed.repaired) repaired += 1;
+      if (parsed.unknownIcon) unknownIcons += 1;
       const rawDetail = isObject(item) && isObject(item.data) ? item.data.detail : undefined;
       if (parsed.node.type === "block" && rawDetail !== undefined) rawDetails.set(parsed.node.id, rawDetail);
     }
@@ -245,6 +263,7 @@ function parseView(
   if (repaired) {
     fixes.push(`"${name}": filled in or corrected a missing or out-of-range name, size or position for ${plural(repaired, "item")}.`);
   }
+  if (unknownIcons) fixes.push(`"${name}": removed ${plural(unknownIcons, "icon")} this version doesn't have.`);
 
   // Only containers can hold components, and only one level deep.
   const containers = new Map(nodes.filter((node) => node.type === "container").map((node) => [node.id, node]));

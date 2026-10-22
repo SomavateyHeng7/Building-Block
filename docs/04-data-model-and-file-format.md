@@ -92,8 +92,10 @@ without rewriting files.
 ### `BlockNodeData`
 
 `label`, optional `colorKey` (undefined means *unassigned*: drawn white with a dashed border), the details,
-`containerId` (mirrors `parentId`; kept for older code paths and the CSV), and optional `detail`: the component's
-internal design (L2).
+`containerId` (mirrors `parentId`; kept for older code paths and the CSV), optional `icon` (a key from
+`COMPONENT_ICONS` in `componentIcons.ts`, e.g. `"database"`; absent means none), and optional `detail`: the
+component's internal design (L2). Files store the icon's **key**, so keys must never be renamed; labels and
+drawings can change.
 
 ### `ComponentDetail` (L2)
 
@@ -111,6 +113,8 @@ never have their own `detail`. Absent until something is drawn in it, and remove
 | `description` | Free text. | |
 | `direction` | `forward` (arrow at target), `both`, `none`. | `forward` |
 | `style` | `solid` or `dashed` (dashed is the usual convention for asynchronous calls). | `solid` |
+| `shape` | `step` (right angles), `curved` or `straight`. | `step` |
+| `bend` | `{ x, y }`: how far the line's middle is moved from where it's drawn by default, in canvas pixels. **Relative**, so the bend survives moving either component. Absent or `0,0` means no bend. | absent |
 
 ## Example file
 
@@ -224,10 +228,12 @@ throws `DiagramFileError`, whose message is shown to the user.
 | Size above 10,000 or position beyond ±100,000 | Capped. Larger values would stall rendering and export. | same note |
 | Detail fields (`technology` etc.) | Kept if text (numbers converted), trimmed; blanks dropped. | — |
 | `colorKey` not in the legend | Dropped (the node becomes unassigned). | — |
+| `icon` not a built-in key, or on a container | Dropped. | "removed N icons this version doesn't have" |
 | Container style values not in the allowed lists | Dropped (defaults apply). | — |
 | `parentId` naming something that isn't a container, or a container having a parent | Parent removed; position converted to canvas coordinates so the node stays where it was on screen. | "took N items out of a container…" |
 | Connection not joining two different, existing components; duplicate id; missing id | Dropped. | "skipped N connections that didn't join two components" |
 | `edges` present but not an array | All dropped. | "skipped connections that couldn't be read" |
+| Connection `shape` not in the list, or `bend` without two numbers | Dropped (defaults apply); a `bend` is capped at ±100,000. | — |
 | `detail` that isn't an object | Ignored. | "skipped the internal design of X, which couldn't be read" |
 | `detail` nested inside a `detail` | Removed (one level deep). | "removed N internal designs nested inside an internal design" |
 | Empty `detail` | Removed. | — |

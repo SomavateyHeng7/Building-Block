@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import {
   Background,
   Controls,
@@ -22,8 +22,12 @@ import { useMounted } from "@/components/theme-toggle";
 import { getActiveSection, useDiagramStore, type NodesChangeOptions } from "@/lib/diagram/store";
 import { fromFlowNodes, historyKey, toFlowEdges, toFlowNodes, type FlowNode } from "@/lib/diagram/flowAdapter";
 import { containerInsets, dropIntoContainers, growContainerToFit } from "@/lib/diagram/layout";
+import { changeMarksForView } from "@/lib/diagram/compare";
 import ContainerNode from "./nodes/ContainerNode";
 import BlockNode from "./nodes/BlockNode";
+import ConnectionEdge from "./edges/ConnectionEdge";
+import { useCanvasFocus } from "./canvasFocus";
+import { useCompareView } from "./compareView";
 import { Icon } from "./Icon";
 import { PALETTE_DATA_FORMAT, type PaletteDragPayload } from "./Sidebar";
 import { useReadOnly } from "./viewMode";
@@ -41,6 +45,7 @@ function useIsWide() {
 }
 
 const nodeTypes = { container: ContainerNode, block: BlockNode };
+const edgeTypes = { connection: ConnectionEdge };
 
 /** The top-most container under the point (later containers render above earlier ones). */
 function findContainerAtPoint(containers: FlowNode[], point: { x: number; y: number }) {
@@ -87,7 +92,9 @@ export default function Canvas() {
   const deleteNodes = useDiagramStore((state) => state.deleteNodes);
   const addContainer = useDiagramStore((state) => state.addContainer);
   const addBlock = useDiagramStore((state) => state.addBlock);
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, fitView, getNode } = useReactFlow();
+  const focus = useCanvasFocus((state) => state.target);
+  const comparePair = useCompareView((state) => state.pair);
   const { resolvedTheme } = useTheme();
   const mounted = useMounted();
   const wide = useIsWide();
@@ -105,15 +112,42 @@ export default function Canvas() {
     });
   }
 
+  // While two tabs are compared on the canvas, what changed is outlined in its change's colour.
+  const marks = useMemo(() => changeMarksForView(diagram, comparePair, section), [diagram, comparePair, section]);
+
   const flowNodes = useMemo(
-    () => toFlowNodes(section.nodes, new Set(selectedNodeIds)),
-    [section.nodes, selectedNodeIds],
+    () => toFlowNodes(section.nodes, new Set(selectedNodeIds), marks),
+    [section.nodes, selectedNodeIds, marks],
   );
 
   const flowEdges = useMemo(
-    () => toFlowEdges(section.edges ?? [], selectedEdgeId, colorMode === "dark"),
-    [section.edges, selectedEdgeId, colorMode],
+    () => toFlowEdges(section.edges ?? [], selectedEdgeId, colorMode === "dark", marks),
+    [section.edges, selectedEdgeId, colorMode, marks],
   );
+
+  // Zoom to something found by search or picked in Compare. Going to another view remounts the canvas, so
+  // this waits until those nodes are measured, and a frame more for the canvas's own fit-to-everything.
+  useEffect(() => {
+    if (!focus) return;
+    const edge = focus.kind === "edge" ? section.edges?.find((candidate) => candidate.id === focus.id) : undefined;
+    const ids = edge ? [edge.source, edge.target] : [focus.id];
+    if (!ids.every((id) => section.nodes.some((node) => node.id === id))) return;
+    let cancelled = false;
+    const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+    void (async () => {
+      for (let attempt = 0; attempt < 40 && !cancelled; attempt++) {
+        await frame();
+        if (ids.every((id) => getNode(id)?.measured?.width)) break;
+      }
+      await frame();
+      if (cancelled) return;
+      useCanvasFocus.getState().clear();
+      void fitView({ nodes: ids.map((id) => ({ id })), padding: 0.6, maxZoom: 1.25, duration: 300 });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [focus, section, fitView, getNode]);
 
   const handleConnect = useCallback(
     (connection: Connection) => {
@@ -245,6 +279,7 @@ export default function Canvas() {
       nodes={flowNodes}
       edges={flowEdges}
       nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
       connectionMode={ConnectionMode.Loose}
       isValidConnection={(connection) => connection.source !== connection.target}
       onConnect={handleConnect}

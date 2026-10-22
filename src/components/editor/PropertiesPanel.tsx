@@ -8,6 +8,7 @@ import type {
   BlockColorKey,
   ConnectionDirection,
   ConnectionLineStyle,
+  ConnectionShape,
   ContainerNodeData,
   DiagramEdge,
   ContainerStyle,
@@ -17,8 +18,10 @@ import type {
   NodeDetails,
   OutlineStyle,
 } from "@/lib/diagram/types";
+import { COMPONENT_ICONS, type ComponentIconKey } from "@/lib/diagram/componentIcons";
 import { defaultLabel } from "@/lib/diagram/factory";
 import { Icon } from "./Icon";
+import { ComponentIcon } from "./nodes/BlockNode";
 import ColorPicker from "./ColorPicker";
 
 const DETAIL_FIELDS: {
@@ -243,6 +246,37 @@ function ColorSwatches({
   );
 }
 
+/** The built-in icons for a component, plus "None". */
+function IconPicker({ value, onPick }: { value?: ComponentIconKey; onPick: (icon: ComponentIconKey | undefined) => void }) {
+  const option = (active: boolean) =>
+    `flex h-8 min-h-0 w-8 items-center justify-center rounded-md border transition-colors ${
+      active
+        ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+        : "border-zinc-300 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+    }`;
+  return (
+    <div role="radiogroup" aria-label="Icon" className="flex flex-wrap gap-1.5">
+      <button type="button" role="radio" aria-checked={!value} title="No icon" aria-label="No icon" className={option(!value)} onClick={() => onPick(undefined)}>
+        <Icon name="x" className="h-3.5 w-3.5" />
+      </button>
+      {COMPONENT_ICONS.map((icon) => (
+        <button
+          key={icon.key}
+          type="button"
+          role="radio"
+          aria-checked={value === icon.key}
+          title={icon.label}
+          aria-label={icon.label}
+          className={option(value === icon.key)}
+          onClick={() => onPick(icon.key)}
+        >
+          <ComponentIcon path={icon.path} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** The connections touching one component, plus a picker to add another without dragging. */
 function ConnectionsSection({ nodeId }: { nodeId: string }) {
   const section = useDiagramStore((state) => getActiveSection(state.diagram));
@@ -370,6 +404,12 @@ const DIRECTION_OPTIONS: { value: ConnectionDirection; label: string }[] = [
   { value: "none", label: "No arrow" },
 ];
 
+const SHAPE_OPTIONS: { value: ConnectionShape; label: string; icon: string }[] = [
+  { value: "step", label: "Right angles", icon: "M4 18h7V6h9" },
+  { value: "curved", label: "Curved", icon: "M4 18C12 18 12 6 20 6" },
+  { value: "straight", label: "Straight", icon: "M4 18 20 6" },
+];
+
 const LINE_OPTIONS: { value: ConnectionLineStyle; label: string }[] = [
   { value: "solid", label: "Solid" },
   { value: "dashed", label: "Dashed" },
@@ -436,6 +476,33 @@ function ConnectionPanel({ edge, action }: { edge: DiagramEdge; action?: ReactNo
           value={edge.direction ?? "forward"}
           onChange={(direction) => updateConnection(edge.id, { direction })}
         />
+      </div>
+      <div className={FIELD_LABEL}>
+        Route
+        <Segmented
+          label="Route"
+          options={SHAPE_OPTIONS}
+          value={edge.shape ?? "step"}
+          onChange={(shape) => updateConnection(edge.id, { shape })}
+        />
+        <span className="text-[11px] font-normal text-zinc-400">
+          Drag the blue dot on the line to move it clear of other boxes; double-click the dot to put it back.
+        </span>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            className={ACTION_BUTTON}
+            title="Attach both ends to the sides that face each other"
+            onClick={() => updateConnection(edge.id, { ...suggestConnectionSides(section.nodes, edge.source, edge.target), bend: undefined })}
+          >
+            Attach to nearest sides
+          </button>
+          {edge.bend && (
+            <button type="button" className={ACTION_BUTTON} onClick={() => updateConnection(edge.id, { bend: undefined })}>
+              Reset line
+            </button>
+          )}
+        </div>
       </div>
       <div className={FIELD_LABEL}>
         Line
@@ -519,6 +586,7 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
   const updateNodeColor = useDiagramStore((state) => state.updateNodeColor);
   const deleteNodes = useDiagramStore((state) => state.deleteNodes);
   const updateNodeDetails = useDiagramStore((state) => state.updateNodeDetails);
+  const updateNodeIcon = useDiagramStore((state) => state.updateNodeIcon);
   const fitContainer = useDiagramStore((state) => state.fitContainer);
   const tidyContainer = useDiagramStore((state) => state.tidyContainer);
   const fitAllContainers = useDiagramStore((state) => state.fitAllContainers);
@@ -625,6 +693,13 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
             activeKey={node.data.colorKey}
             onPick={(key) => updateNodeColor(node.id, key)}
           />
+        </div>
+      )}
+
+      {node.data.kind === "block" && (
+        <div className={FIELD_LABEL}>
+          Icon
+          <IconPicker value={node.data.icon} onPick={(icon) => updateNodeIcon(node.id, icon)} />
         </div>
       )}
 
