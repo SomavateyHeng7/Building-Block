@@ -223,8 +223,10 @@ interface DiagramState {
   renameDiagram: (name: string) => void;
   setSelection: (ids: string[]) => void;
   setSelectedEdge: (id: string | null) => void;
-  /** Joins two components; returns the new connection's id, or null when it isn't allowed or already exists. */
+  /** Joins two components or containers; returns the new connection's id, or null when it isn't allowed or already exists. */
   addConnection: (connection: NewConnection) => string | null;
+  /** Moves one or both ends of a connection to other boxes or sides; false when it isn't allowed. */
+  reconnectConnection: (id: string, ends: NewConnection) => boolean;
   updateConnection: (id: string, patch: ConnectionPatch) => void;
   reverseConnection: (id: string) => void;
   deleteConnections: (ids: string[]) => void;
@@ -308,8 +310,8 @@ export const useDiagramStore = create<DiagramState>((set) => ({
   addConnection: ({ source, target, sourceSide, targetSide }) => {
     const { diagram } = useDiagramStore.getState();
     const section = getActiveSection(diagram);
-    const isBlock = (id: string) => section.nodes.some((node) => node.id === id && node.type === "block");
-    if (source === target || !isBlock(source) || !isBlock(target)) return null;
+    const known = (id: string) => section.nodes.some((node) => node.id === id);
+    if (source === target || !known(source) || !known(target)) return null;
     const exists = (section.edges ?? []).some(
       (edge) =>
         edge.source === source &&
@@ -346,6 +348,31 @@ export const useDiagramStore = create<DiagramState>((set) => ({
         `edge:${id}:${Object.keys(patch).join(",")}`,
       );
     }),
+
+  // A moved end attaches to the side it was dropped on, and any bend is dropped since it was placed for the old route.
+  reconnectConnection: (id, { source, target, sourceSide, targetSide }) => {
+    const section = getActiveSection(useDiagramStore.getState().diagram);
+    const known = (nodeId: string) => section.nodes.some((node) => node.id === nodeId);
+    if (source === target || !known(source) || !known(target)) return false;
+    if (!(section.edges ?? []).some((edge) => edge.id === id)) return false;
+    set((state) =>
+      commit(
+        state,
+        mapActiveSectionFull(state.diagram, (current) => ({
+          ...current,
+          edges: (current.edges ?? []).map((edge) => {
+            if (edge.id !== id) return edge;
+            const moved: DiagramEdge = { ...edge, source, target, sourceSide, targetSide };
+            if (!sourceSide) delete moved.sourceSide;
+            if (!targetSide) delete moved.targetSide;
+            delete moved.bend;
+            return moved;
+          }),
+        })),
+      ),
+    );
+    return true;
+  },
 
   reverseConnection: (id) =>
     set((state) =>

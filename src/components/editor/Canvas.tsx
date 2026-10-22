@@ -11,6 +11,7 @@ import {
   applyNodeChanges,
   useReactFlow,
   type Connection,
+  type Edge,
   type EdgeChange,
   type OnBeforeDelete,
   type NodeChange,
@@ -89,6 +90,7 @@ export default function Canvas() {
   const setSelectedEdge = useDiagramStore((state) => state.setSelectedEdge);
   const addConnection = useDiagramStore((state) => state.addConnection);
   const deleteConnections = useDiagramStore((state) => state.deleteConnections);
+  const reconnectConnection = useDiagramStore((state) => state.reconnectConnection);
   const deleteNodes = useDiagramStore((state) => state.deleteNodes);
   const addContainer = useDiagramStore((state) => state.addContainer);
   const addBlock = useDiagramStore((state) => state.addBlock);
@@ -175,16 +177,33 @@ export default function Canvas() {
   // Delete goes through the store, which prunes connections and keeps the components of a deleted
   // container (React Flow would delete them too), and records a single undo step.
   const handleBeforeDelete: OnBeforeDelete = useCallback(
-    async ({ nodes }) => {
+    async ({ nodes, edges }) => {
       // React Flow adds a deleted container's children to the list; only delete those that were selected themselves.
       const listed = new Set(nodes.map((node) => node.id));
       const ids = nodes
         .filter((node) => !node.parentId || !listed.has(node.parentId) || selectedNodeIds.includes(node.id))
         .map((node) => node.id);
       if (ids.length) deleteNodes(ids);
+      // Returning false cancels React Flow's own delete, edges included, so a selected connection is deleted here.
+      // Only selected ones: the list also has the kept components' connections.
+      const edgeIds = edges.filter((edge) => edge.selected).map((edge) => edge.id);
+      if (edgeIds.length) deleteConnections(edgeIds);
       return false;
     },
-    [deleteNodes, selectedNodeIds],
+    [deleteConnections, deleteNodes, selectedNodeIds],
+  );
+
+  // Dragging an end of a selected connection onto another box or side moves that end.
+  const handleReconnect = useCallback(
+    (edge: Edge, connection: Connection) => {
+      reconnectConnection(edge.id, {
+        source: connection.source,
+        target: connection.target,
+        sourceSide: (connection.sourceHandle as ConnectionSide | null) ?? undefined,
+        targetSide: (connection.targetHandle as ConnectionSide | null) ?? undefined,
+      });
+    },
+    [reconnectConnection],
   );
 
   const handlePaneClick = useCallback(() => {
@@ -283,6 +302,7 @@ export default function Canvas() {
       connectionMode={ConnectionMode.Loose}
       isValidConnection={(connection) => connection.source !== connection.target}
       onConnect={handleConnect}
+      onReconnect={handleReconnect}
       onEdgesChange={handleEdgesChange}
       onBeforeDelete={handleBeforeDelete}
       onPaneClick={handlePaneClick}

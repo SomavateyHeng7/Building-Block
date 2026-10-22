@@ -173,14 +173,14 @@ function parseNode(
 
 const SIDES = ["top", "right", "bottom", "left"] as const satisfies readonly ConnectionSide[];
 
-/** Keeps connections between two different components that exist; reports what was dropped. */
+/** Keeps connections between two different components or containers that exist; reports what was dropped. */
 function parseEdges(raw: unknown, nodes: DiagramNode[], name: string, fixes: string[]): DiagramEdge[] {
   if (raw === undefined) return [];
   if (!Array.isArray(raw)) {
     fixes.push(`"${name}": skipped connections that couldn't be read.`);
     return [];
   }
-  const blockIds = new Set(nodes.filter((node) => node.type === "block").map((node) => node.id));
+  const nodeIds = new Set(nodes.map((node) => node.id));
   const ids = new Set<string>();
   const edges: DiagramEdge[] = [];
   let dropped = 0;
@@ -188,7 +188,7 @@ function parseEdges(raw: unknown, nodes: DiagramNode[], name: string, fixes: str
     const id = isObject(item) ? text(item.id) : undefined;
     const source = isObject(item) ? text(item.source) : undefined;
     const target = isObject(item) ? text(item.target) : undefined;
-    if (!isObject(item) || !id || ids.has(id) || !source || !target || source === target || !blockIds.has(source) || !blockIds.has(target)) {
+    if (!isObject(item) || !id || ids.has(id) || !source || !target || source === target || !nodeIds.has(source) || !nodeIds.has(target)) {
       dropped += 1;
       continue;
     }
@@ -214,7 +214,7 @@ function parseEdges(raw: unknown, nodes: DiagramNode[], name: string, fixes: str
     }
     edges.push(edge);
   }
-  if (dropped) fixes.push(`"${name}": skipped ${plural(dropped, "connection")} that didn't join two components.`);
+  if (dropped) fixes.push(`"${name}": skipped ${plural(dropped, "connection")} that didn't join two different boxes.`);
   return edges;
 }
 

@@ -12,7 +12,7 @@ import { useReadOnly } from "../viewMode";
 
 export type BlockFlowNode = Node<BlockNodeData, "block">;
 
-const SIDES = [
+export const SIDES = [
   { id: "top", position: Position.Top },
   { id: "right", position: Position.Right },
   { id: "bottom", position: Position.Bottom },

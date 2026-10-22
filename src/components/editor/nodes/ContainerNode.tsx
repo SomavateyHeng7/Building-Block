@@ -1,12 +1,12 @@
 "use client";
 
 import { memo, useRef, useState } from "react";
-import { NodeResizer, NodeToolbar, Position, type Node, type NodeProps } from "@xyflow/react";
+import { Handle, NodeResizer, NodeToolbar, Position, type Node, type NodeProps } from "@xyflow/react";
 import { defaultLabel } from "@/lib/diagram/factory";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { CONTAINER_MIN, containerInsets } from "@/lib/diagram/layout";
 import type { ContainerNodeData, HeaderAlign, HeaderPosition } from "@/lib/diagram/types";
-import { NotesMarker } from "./BlockNode";
+import { NotesMarker, SIDES } from "./BlockNode";
 import { useReadOnly } from "../viewMode";
 
 export type ContainerFlowNode = Node<ContainerNodeData, "container">;
@@ -96,6 +96,10 @@ function ContainerNodeComponent({ id, data, selected }: NodeProps<ContainerFlowN
         lineClassName={selected ? "" : "opacity-0 group-hover:opacity-100"}
       />
       )}
+      {/* Containers start and end connections too, like components. */}
+      {SIDES.map((side) => (
+        <Handle key={side.id} id={side.id} type="source" position={side.position} className="bb-handle" />
+      ))}
       {contentRight > 0 && !readOnly && (
         <NodeToolbar position={Position.Top} align="end" offset={6}>
           <div className="flex gap-1 rounded-md border border-zinc-200 bg-white p-1 text-[11px] font-medium shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
