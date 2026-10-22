@@ -18,6 +18,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      # Generates next-env.d.ts and the route type globals (LayoutProps, PageProps) that tsc needs.
+      - run: npx next typegen
       - run: npx tsc --noEmit
       - run: pnpm test
       - run: npx playwright install --with-deps chromium
