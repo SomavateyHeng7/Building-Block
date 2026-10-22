@@ -18,6 +18,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      # Generates the route-aware type helpers (LayoutProps, PageProps) into .next/types.
+      - run: npx next typegen
       - run: npx tsc --noEmit
       - run: pnpm test
       - run: npx playwright install --with-deps chromium
