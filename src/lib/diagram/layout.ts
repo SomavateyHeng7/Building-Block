@@ -305,6 +305,55 @@ export function dropIntoContainers(nodes: DiagramNode[], moved: { id: string; po
   return next;
 }
 
+/**
+ * Wraps components in a new container drawn around them, so nothing moves on screen; they leave any
+ * container they were in. Containers among the ids are ignored (containers can't be nested). Returns the
+ * same nodes when there is no component to group. The container is added last, so it is the top-most one
+ * where it overlaps another.
+ */
+export function groupIntoContainer(
+  nodes: DiagramNode[],
+  ids: string[],
+  container: { id: string; label: string },
+): DiagramNode[] {
+  const members = nodes
+    .filter((node) => node.type === "block" && ids.includes(node.id))
+    .map((node) => ({ node, abs: absolutePosition(node, nodes) }));
+  if (!members.length) return nodes;
+  const insets = containerInsets();
+  const position = snap({
+    x: Math.min(...members.map((m) => m.abs.x)) - insets.left,
+    y: Math.min(...members.map((m) => m.abs.y)) - insets.top,
+  });
+  const right = Math.max(...members.map((m) => m.abs.x + m.node.size.width));
+  const bottom = Math.max(...members.map((m) => m.abs.y + m.node.size.height));
+  const placed = new Map(members.map(({ node, abs }) => [node.id, { x: abs.x - position.x, y: abs.y - position.y }]));
+
+  const wrapped = nodes.map((node) => {
+    const at = placed.get(node.id);
+    if (!at) return node;
+    return {
+      ...node,
+      position: at,
+      parentId: container.id,
+      data: node.data.kind === "block" ? { ...node.data, containerId: container.id } : node.data,
+    };
+  });
+  return [
+    ...wrapped,
+    {
+      id: container.id,
+      type: "container",
+      position,
+      size: {
+        width: Math.max(CONTAINER_MIN.width, Math.ceil(right - position.x + insets.right)),
+        height: Math.max(CONTAINER_MIN.height, Math.ceil(bottom - position.y + insets.bottom)),
+      },
+      data: { kind: "container", label: container.label },
+    },
+  ];
+}
+
 /** Where a new block should go inside a container: below its lowest child. */
 export function nextSlotInContainer(nodes: DiagramNode[], containerId: string): Position {
   const children = childrenOf(nodes, containerId);

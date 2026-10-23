@@ -28,6 +28,7 @@ import ContainerNode from "./nodes/ContainerNode";
 import BlockNode from "./nodes/BlockNode";
 import ConnectionEdge from "./edges/ConnectionEdge";
 import { useCanvasFocus } from "./canvasFocus";
+import { requestDelete } from "./deletePrompt";
 import { useCompareView } from "./compareView";
 import { Icon } from "./Icon";
 import { PALETTE_DATA_FORMAT, type PaletteDragPayload } from "./Sidebar";
@@ -91,7 +92,6 @@ export default function Canvas() {
   const addConnection = useDiagramStore((state) => state.addConnection);
   const deleteConnections = useDiagramStore((state) => state.deleteConnections);
   const reconnectConnection = useDiagramStore((state) => state.reconnectConnection);
-  const deleteNodes = useDiagramStore((state) => state.deleteNodes);
   const addContainer = useDiagramStore((state) => state.addContainer);
   const addBlock = useDiagramStore((state) => state.addBlock);
   const { screenToFlowPosition, fitView, getNode } = useReactFlow();
@@ -174,8 +174,8 @@ export default function Canvas() {
     [deleteConnections, setSelectedEdge],
   );
 
-  // Delete goes through the store, which prunes connections and keeps the components of a deleted
-  // container (React Flow would delete them too), and records a single undo step.
+  // Delete goes through the store, which prunes connections and records a single undo step. A container
+  // holding components asks first whether to keep them (React Flow would delete them too).
   const handleBeforeDelete: OnBeforeDelete = useCallback(
     async ({ nodes, edges }) => {
       // React Flow adds a deleted container's children to the list; only delete those that were selected themselves.
@@ -183,14 +183,13 @@ export default function Canvas() {
       const ids = nodes
         .filter((node) => !node.parentId || !listed.has(node.parentId) || selectedNodeIds.includes(node.id))
         .map((node) => node.id);
-      if (ids.length) deleteNodes(ids);
       // Returning false cancels React Flow's own delete, edges included, so a selected connection is deleted here.
       // Only selected ones: the list also has the kept components' connections.
       const edgeIds = edges.filter((edge) => edge.selected).map((edge) => edge.id);
-      if (edgeIds.length) deleteConnections(edgeIds);
+      requestDelete(ids, edgeIds);
       return false;
     },
-    [deleteConnections, deleteNodes, selectedNodeIds],
+    [selectedNodeIds],
   );
 
   // Dragging an end of a selected connection onto another box or side moves that end.

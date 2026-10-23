@@ -30,6 +30,7 @@ import {
 import { DATA_FORMATS, IMAGE_FORMATS, describeFiles, planExport, type ExportFormat } from "@/lib/diagram/exportPlan";
 import { createZip } from "@/lib/zip";
 import ExportDialog, { type ExportChoice, type ExportPrefs } from "./ExportDialog";
+import ImportDialog, { describeImport } from "./ImportDialog";
 import { toast } from "@/lib/toast";
 import { useUnsavedGuard } from "./useUnsavedGuard";
 import { Icon } from "./Icon";
@@ -90,11 +91,14 @@ const MENU_ITEM =
 function FileMenu({
   onNew,
   onOpen,
+  onImport,
   onSave,
   onSaveAs,
 }: {
   onNew: () => void;
   onOpen: () => void;
+  /** Absent in view mode. */
+  onImport?: () => void;
   onSave: () => void;
   onSaveAs: () => void;
 }) {
@@ -106,6 +110,7 @@ function FileMenu({
   const items = [
     { label: "New diagram", run: onNew, keys: "" },
     { label: "Open…", run: onOpen, keys: "" },
+    ...(onImport ? [{ label: "Import draw.io or Mermaid…", run: onImport, keys: "" }] : []),
     { label: "Save", run: onSave, keys: `${mod}S` },
     { label: supportsFilePicker() ? "Save as…" : "Download a copy", run: onSaveAs, keys: supportsFilePicker() ? `${mod}⇧S` : "" },
   ];
@@ -222,6 +227,7 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
   const { getNodes, getNodesBounds } = useReactFlow();
   const { theme, resolvedTheme, setTheme } = useTheme();
   const [exportOpen, setExportOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const diagram = useDiagramStore((state) => state.diagram);
   const renameDiagram = useDiagramStore((state) => state.renameDiagram);
   const setSelection = useDiagramStore((state) => state.setSelection);
@@ -269,6 +275,16 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
     }
   }
 
+  /** Waits for a sequence tab's sheet to be on screen. */
+  async function waitForSequenceSheet(): Promise<HTMLElement | null> {
+    for (let attempt = 0; attempt < 40; attempt++) {
+      await nextFrames();
+      const sheet = document.querySelector<HTMLElement>(".bb-sequence-sheet");
+      if (sheet) return sheet;
+    }
+    return null;
+  }
+
   /** Puts the app in the picture style while images render (they're drawn from the live page). */
   async function inTheme<T>(style: "light" | "dark", run: () => Promise<T>): Promise<T> {
     if (resolvedTheme === style) return run();
@@ -314,12 +330,14 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
             setActiveSection(target.sectionId);
             if (target.componentId) openDetail(target.componentId);
             const view = getActiveSection(useDiagramStore.getState().diagram);
-            await waitForSection(view.nodes.length);
-            const viewport = document.querySelector<HTMLElement>(".react-flow__viewport");
+            // A sequence tab is one sheet drawn at its full size; a canvas is the area its nodes cover.
+            const sheet = view.sequence ? await waitForSequenceSheet() : null;
+            if (!view.sequence) await waitForSection(view.nodes.length);
+            const viewport = sheet ?? document.querySelector<HTMLElement>(".react-flow__viewport");
             if (!viewport) throw new Error("The canvas isn't showing");
             const options = {
               viewport,
-              bounds: getNodesBounds(getNodes()),
+              bounds: sheet ? { x: 0, y: 0, width: sheet.offsetWidth, height: sheet.offsetHeight } : getNodesBounds(getNodes()),
               title: exportTitle(diagram, view),
               // While a comparison is shown, the picture's legend says what the change colours mean.
               legend: [
@@ -425,6 +443,7 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
       <FileMenu
         onNew={handleNew}
         onOpen={handleOpen}
+        onImport={readOnly ? undefined : () => setImportOpen(true)}
         onSave={() => void saveDiagramToFile()}
         onSaveAs={() => void saveDiagramToFile({ saveAs: true })}
       />
@@ -475,6 +494,19 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
         </button>
       </div>
       {unsavedDialog}
+      {importOpen && (
+        <ImportDialog
+          legend={diagram.legend}
+          action="Add as new tabs"
+          onClose={() => setImportOpen(false)}
+          onImport={(result) => {
+            setImportOpen(false);
+            useDiagramStore.getState().addImportedSections(result.sections, result.legend);
+            const { title, details } = describeImport(result);
+            toast.success(title, { description: "Added after the other tabs. Undo removes them again.", details });
+          }}
+        />
+      )}
       {exportOpen && (
         <ExportDialog
           diagram={diagram}

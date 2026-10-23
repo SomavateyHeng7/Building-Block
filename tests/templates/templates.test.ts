@@ -17,7 +17,11 @@ describe("templates", () => {
 
       it("mints fresh ids on every build", () => {
         const ids = (diagram: ReturnType<typeof template.build>) =>
-          diagram.sections.flatMap((section) => section.nodes.map((node) => node.id));
+          diagram.sections.flatMap((section) => [
+            ...section.nodes.map((node) => node.id),
+            ...(section.sequence?.participants ?? []).map((participant) => participant.id),
+            ...(section.sequence?.steps ?? []).map((step) => step.id),
+          ]);
         const first = ids(template.build());
         expect(first.filter((id) => ids(template.build()).includes(id))).toEqual([]);
       });

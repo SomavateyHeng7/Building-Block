@@ -122,7 +122,7 @@ function ContainerNodeComponent({ id, data, selected }: NodeProps<ContainerFlowN
           </div>
         </NodeToolbar>
       )}
-      {data.notes && <NotesMarker notes={data.notes} />}
+      {data.notes && <NotesMarker id={id} notes={data.notes} />}
       <div
         data-container-header={headerPosition}
         className={`flex shrink-0 items-center text-xs font-semibold text-zinc-800 dark:text-zinc-100 ${

@@ -85,6 +85,16 @@ and the container resizes, so nothing ends up under the header.
 For the "Connect to…" picker: the sides that face each other. Horizontal (right→left or left→right) when the
 components are further apart across than down, otherwise vertical.
 
+### `groupIntoContainer(nodes, ids, container)`
+
+Group (Ctrl/⌘+G). Wraps the components among `ids` in a new container drawn around them with standard insets,
+so **nothing moves on screen**; they leave any container they were in. Containers among `ids` are ignored (no
+nesting). Never smaller than `CONTAINER_MIN`. The container is added last, so where it overlaps another it is the
+top-most one (what `dropIntoContainers` picks). Returns the same array when there is nothing to group.
+
+Ungroup (Ctrl/⌘+Shift+G, `ungroupNodes` in the store) is deleting the container while keeping its components:
+they stay where they are on screen, out of any container. Connections to the container itself go with it.
+
 ### Drag-and-drop re-parenting — `dropIntoContainers`
 
 Called when a drag ends (and by `arrangeNodes`). For each moved **component** whose container isn't also moving:

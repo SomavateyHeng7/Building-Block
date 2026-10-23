@@ -10,6 +10,9 @@ import type {
   DiagramSection,
   LegendEntry,
   NodeDetails,
+  SequenceDiagram,
+  SequenceParticipant,
+  SequenceStep,
 } from "./types";
 
 /** A file that can't be turned into a diagram at all; the message is shown to the user. */
@@ -218,9 +221,88 @@ function parseEdges(raw: unknown, nodes: DiagramNode[], name: string, fixes: str
   return edges;
 }
 
+/** A sequence tab's participants and steps; steps that name a missing participant are dropped. */
+function parseSequence(raw: unknown, name: string, legendKeys: Set<string>, fixes: string[]): SequenceDiagram {
+  const sequence = isObject(raw) ? raw : {};
+  const participants: SequenceParticipant[] = [];
+  const ids = new Set<string>();
+  let dropped = 0;
+  for (const item of Array.isArray(sequence.participants) ? sequence.participants : []) {
+    const id = isObject(item) ? text(item.id) : undefined;
+    if (!isObject(item) || !id || ids.has(id)) {
+      dropped += 1;
+      continue;
+    }
+    ids.add(id);
+    const colorKey = text(item.colorKey);
+    const description = text(item.description)?.trim();
+    participants.push({
+      id,
+      label: text(item.label)?.trim() || "Participant",
+      ...(item.shape === "actor" ? { shape: "actor" as const } : {}),
+      ...(colorKey && legendKeys.has(colorKey) ? { colorKey } : {}),
+      ...(description ? { description } : {}),
+    });
+  }
+  if (dropped) fixes.push(`"${name}": skipped ${plural(dropped, "participant")} that couldn't be read.`);
+
+  const steps: SequenceStep[] = [];
+  const stepIds = new Set<string>();
+  let droppedSteps = 0;
+  for (const item of Array.isArray(sequence.steps) ? sequence.steps : []) {
+    const id = isObject(item) ? text(item.id) : undefined;
+    if (!isObject(item) || !id || stepIds.has(id)) {
+      droppedSteps += 1;
+      continue;
+    }
+    if (item.type === "message") {
+      const from = text(item.from);
+      const to = text(item.to);
+      if (!from || !to || !ids.has(from) || !ids.has(to)) {
+        droppedSteps += 1;
+        continue;
+      }
+      const label = text(item.label)?.trim();
+      const protocol = text(item.protocol)?.trim();
+      const kind = oneOf(item.kind, ["call", "async", "reply"] as const);
+      stepIds.add(id);
+      steps.push({
+        id,
+        type: "message",
+        from,
+        to,
+        ...(label ? { label } : {}),
+        ...(protocol ? { protocol } : {}),
+        ...(kind && kind !== "call" ? { kind } : {}),
+      });
+    } else if (item.type === "note") {
+      const over = (Array.isArray(item.over) ? item.over : []).map(text).filter((value): value is string => !!value && ids.has(value)).slice(0, 2);
+      if (!over.length) {
+        droppedSteps += 1;
+        continue;
+      }
+      stepIds.add(id);
+      steps.push({ id, type: "note", over, text: text(item.text) ?? "" });
+    } else {
+      droppedSteps += 1;
+    }
+  }
+  if (droppedSteps) fixes.push(`"${name}": skipped ${plural(droppedSteps, "step")} that couldn't be read or named a missing participant.`);
+  return { participants, steps, ...(sequence.numbered === false ? { numbered: false } : {}) };
+}
+
 function parseSection(raw: unknown, index: number, legendKeys: Set<string>, fixes: string[]): DiagramSection {
   const section = isObject(raw) ? raw : {};
   const name = text(section.name) || `Section ${index + 1}`;
+  if (section.kind === "sequence") {
+    return {
+      id: text(section.id) || createId("section"),
+      name,
+      kind: "sequence",
+      nodes: [],
+      sequence: parseSequence(section.sequence, name, legendKeys, fixes),
+    };
+  }
   const { nodes, edges } = parseView(section.nodes, section.edges, name, legendKeys, fixes, 0);
   return { id: text(section.id) || createId("section"), name, nodes, ...(edges.length ? { edges } : {}) };
 }

@@ -120,12 +120,64 @@ export interface DiagramEdge {
   bend?: Position;
 }
 
+/** Someone or something taking part in a sequence: a column with a lifeline. */
+export interface SequenceParticipant {
+  id: string;
+  label: string;
+  /** A box, or a stick figure for a person. Defaults to "participant". */
+  shape?: "participant" | "actor";
+  colorKey?: BlockColorKey;
+  description?: string;
+}
+
+/** How a message is sent: a call (solid, filled arrow), asynchronous (solid, open arrow) or a reply (dashed). */
+export type SequenceMessageKind = "call" | "async" | "reply";
+
+/** One step down a sequence: a message between participants (or to itself), or a note over some of them. */
+export type SequenceStep =
+  | {
+      id: string;
+      type: "message";
+      from: string;
+      /** The same as `from` for a call to itself. */
+      to: string;
+      label?: string;
+      protocol?: string;
+      /** Defaults to "call". */
+      kind?: SequenceMessageKind;
+    }
+  | {
+      id: string;
+      type: "note";
+      /** One participant, or the first and last of a span. */
+      over: string[];
+      text: string;
+    };
+
+export type SequenceMessage = Extract<SequenceStep, { type: "message" }>;
+export type SequenceNote = Extract<SequenceStep, { type: "note" }>;
+
+/** A sequence diagram: participants left to right, and what happens between them top to bottom. */
+export interface SequenceDiagram {
+  participants: SequenceParticipant[];
+  steps: SequenceStep[];
+  /** Number the messages 1, 2, 3… Defaults to true. */
+  numbered?: boolean;
+}
+
 export interface DiagramSection {
   id: string;
   name: string;
+  /**
+   * What the tab holds: containers, components and connections (the default), or a sequence diagram. A sequence
+   * tab keeps `nodes` empty and its content in `sequence`.
+   */
+  kind?: "architecture" | "sequence";
   nodes: DiagramNode[];
   /** Connections between components. Absent in files made before connections existed. */
   edges?: DiagramEdge[];
+  /** Set on sequence tabs. */
+  sequence?: SequenceDiagram;
 }
 
 export interface Diagram {

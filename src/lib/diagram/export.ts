@@ -36,7 +36,9 @@ export interface ImageExportOptions {
 
 /** Legend entries actually used in a section, in legend order. */
 export function legendUsedIn(diagram: Diagram, section: DiagramSection): LegendEntry[] {
-  const used = new Set(section.nodes.map((node) => node.data.colorKey).filter(Boolean));
+  const used = new Set(
+    [...section.nodes.map((node) => node.data.colorKey), ...(section.sequence?.participants ?? []).map((participant) => participant.colorKey)].filter(Boolean),
+  );
   return diagram.legend.filter((entry) => used.has(entry.key));
 }
 

@@ -168,6 +168,17 @@ button, a, summary, [role="button"], [role="tab"], [role="menuitem"], label {
     transform: translate(-50%, calc(-100% + 4px));
   }
 }
+/* Near the top of the screen the card opens below its badge. */
+.bb-notes-tooltip-below {
+  transform: translate(-50%, 0);
+  animation-name: bb-notes-in-below;
+}
+@keyframes bb-notes-in-below {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -4px);
+  }
+}
 
 /* Toasts slide up into place; skipped for people who prefer reduced motion. */
 @media (prefers-reduced-motion: no-preference) {

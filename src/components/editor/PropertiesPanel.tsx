@@ -19,10 +19,12 @@ import type {
   OutlineStyle,
 } from "@/lib/diagram/types";
 import { COMPONENT_ICONS, type ComponentIconKey } from "@/lib/diagram/componentIcons";
-import { defaultLabel } from "@/lib/diagram/factory";
+import { defaultLabel, isSequenceSection } from "@/lib/diagram/factory";
 import { Icon } from "./Icon";
-import { ComponentIcon } from "./nodes/BlockNode";
+import { ComponentIcon, NOTE_KINDS, NOTES_FIELD_ID, type NoteKind } from "./nodes/BlockNode";
 import ColorPicker from "./ColorPicker";
+import { requestDelete, ungroup } from "./deletePrompt";
+import SequencePanel from "./SequencePanel";
 
 const DETAIL_FIELDS: {
   key: keyof NodeDetails;
@@ -277,7 +279,53 @@ function IconPicker({ value, onPick }: { value?: ComponentIconKey; onPick: (icon
   );
 }
 
-/** The connections touching one component, plus a picker to add another without dragging. */
+/**
+ * Notes, with one-click starters for the kinds of note architects keep. The box grows with the text, and the
+ * note badge on the canvas opens it (see NotesMarker).
+ */
+function NotesField({ value, placeholder, onChange }: { value: string; placeholder: string; onChange: (notes: string) => void }) {
+  function addLine(kind: NoteKind) {
+    const next = `${value.trimEnd()}${value.trim() ? "\n" : ""}${kind}: `;
+    onChange(next);
+    const field = document.getElementById(NOTES_FIELD_ID) as HTMLTextAreaElement | null;
+    requestAnimationFrame(() => {
+      field?.focus();
+      field?.setSelectionRange(next.length, next.length);
+    });
+  }
+
+  return (
+    <div className={FIELD_LABEL}>
+      <label htmlFor={NOTES_FIELD_ID}>Notes</label>
+      <textarea
+        id={NOTES_FIELD_ID}
+        rows={3}
+        placeholder={placeholder}
+        className={`${FIELD} field-sizing-content max-h-80 min-h-20 resize-y`}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <div className="flex flex-wrap gap-1" role="group" aria-label="Start a note">
+        {NOTE_KINDS.map((kind) => (
+          <button
+            key={kind}
+            type="button"
+            title={`Add a line starting "${kind}:"`}
+            onClick={() => addLine(kind)}
+            className="rounded-full border border-zinc-300 px-2 py-0.5 text-[11px] font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            + {kind}
+          </button>
+        ))}
+      </div>
+      <span className="text-[11px] font-normal text-zinc-400">
+        A note badge shows on the box. Hover it to read the notes; click it to come back here.
+      </span>
+    </div>
+  );
+}
+
+/** The connections touching one component or container, plus a picker to add another without dragging. */
 function ConnectionsSection({ nodeId }: { nodeId: string }) {
   const section = useDiagramStore((state) => getActiveSection(state.diagram));
   const addConnection = useDiagramStore((state) => state.addConnection);
@@ -285,7 +333,9 @@ function ConnectionsSection({ nodeId }: { nodeId: string }) {
 
   const labelOf = (id: string) => section.nodes.find((node) => node.id === id)?.data.label ?? "?";
   const mine = (section.edges ?? []).filter((edge) => edge.source === nodeId || edge.target === nodeId);
-  const others = section.nodes.filter((node) => node.type === "block" && node.id !== nodeId);
+  const others = section.nodes.filter((node) => node.id !== nodeId);
+  const components = others.filter((node) => node.type === "block");
+  const containers = others.filter((node) => node.type === "container");
 
   function connectTo(targetId: string) {
     if (!targetId) return;
@@ -317,21 +367,31 @@ function ConnectionsSection({ nodeId }: { nodeId: string }) {
         </ul>
       )}
       <select
-        aria-label="Connect to another component"
+        aria-label="Connect to another component or container"
         className={FIELD}
         value=""
         disabled={!others.length}
         onChange={(event) => connectTo(event.target.value)}
       >
-        <option value="">{others.length ? "Connect to…" : "Add another component to connect"}</option>
-        {others.map((node) => (
-          <option key={node.id} value={node.id}>
-            {node.data.label}
-          </option>
-        ))}
+        <option value="">{others.length ? "Connect to…" : "Add another box to connect"}</option>
+        {[
+          { label: "Components", nodes: components },
+          { label: "Containers", nodes: containers },
+        ].map(
+          (group) =>
+            group.nodes.length > 0 && (
+              <optgroup key={group.label} label={group.label}>
+                {group.nodes.map((node) => (
+                  <option key={node.id} value={node.id}>
+                    {node.data.label}
+                  </option>
+                ))}
+              </optgroup>
+            ),
+        )}
       </select>
       <span className="text-[11px] font-normal text-zinc-400">
-        Or drag from a dot on the edge of this component to another one.
+        Or drag from a dot on the edge of this box to another one.
       </span>
     </div>
   );
@@ -533,7 +593,11 @@ function MultiSelectionPanel({ ids, action }: { ids: string[]; action?: ReactNod
   const arrangeSelection = useDiagramStore((state) => state.arrangeSelection);
   const updateNodesColor = useDiagramStore((state) => state.updateNodesColor);
   const duplicateSelection = useDiagramStore((state) => state.duplicateSelection);
-  const deleteNodes = useDiagramStore((state) => state.deleteNodes);
+  const groupNodes = useDiagramStore((state) => state.groupNodes);
+  const nodes = useDiagramStore((state) => getActiveSection(state.diagram).nodes);
+  const selected = nodes.filter((node) => ids.includes(node.id));
+  const canGroup = selected.some((node) => node.type === "block");
+  const canUngroup = selected.some((node) => node.type === "container" || node.parentId);
 
   return (
     <div className={PANEL}>
@@ -563,11 +627,35 @@ function MultiSelectionPanel({ ids, action }: { ids: string[]; action?: ReactNod
         Color all
         <ColorSwatches legend={legend} onPick={(key) => updateNodesColor(ids, key)} />
       </div>
+      <div className={FIELD_LABEL}>
+        Grouping
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            className={ACTION_BUTTON}
+            disabled={!canGroup}
+            title="Put the selected components in a new container drawn around them (Ctrl/⌘+G)"
+            onClick={() => groupNodes(ids)}
+          >
+            Group in container
+          </button>
+          {canUngroup && (
+            <button
+              type="button"
+              className={ACTION_BUTTON}
+              title="Remove the containers, keeping their components where they are (Ctrl/⌘+Shift+G)"
+              onClick={() => ungroup(ids)}
+            >
+              Ungroup
+            </button>
+          )}
+        </div>
+      </div>
       <div className="flex gap-2">
         <button type="button" className={ACTION_BUTTON} onClick={duplicateSelection}>
           Duplicate
         </button>
-        <button type="button" onClick={() => deleteNodes(ids)} className={DELETE_BUTTON}>
+        <button type="button" onClick={() => requestDelete(ids)} className={DELETE_BUTTON}>
           <Icon name="trash" className="h-3.5 w-3.5" />
           Delete all
         </button>
@@ -584,7 +672,7 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
   const legend = useDiagramStore((state) => state.diagram.legend);
   const updateNodeLabel = useDiagramStore((state) => state.updateNodeLabel);
   const updateNodeColor = useDiagramStore((state) => state.updateNodeColor);
-  const deleteNodes = useDiagramStore((state) => state.deleteNodes);
+  const groupNodes = useDiagramStore((state) => state.groupNodes);
   const updateNodeDetails = useDiagramStore((state) => state.updateNodeDetails);
   const updateNodeIcon = useDiagramStore((state) => state.updateNodeIcon);
   const fitContainer = useDiagramStore((state) => state.fitContainer);
@@ -596,6 +684,7 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
   const showTechnology = diagram.showTechnology !== false;
 
   const section = getActiveSection(diagram);
+  if (isSequenceSection(section)) return <SequencePanel headerAction={headerAction} />;
 
   const selectedEdge = selectedEdgeId ? section.edges?.find((edge) => edge.id === selectedEdgeId) : undefined;
   if (selectedEdge) return <ConnectionPanel edge={selectedEdge} action={headerAction} />;
@@ -704,6 +793,16 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
       )}
 
       {DETAIL_FIELDS.filter((field) => node.type === "block" || !field.blockOnly).map((field) => {
+        if (field.key === "notes") {
+          return (
+            <NotesField
+              key={field.key}
+              value={node.data.notes ?? ""}
+              placeholder={field.placeholder}
+              onChange={(notes) => updateNodeDetails(node.id, { notes })}
+            />
+          );
+        }
         const Input = field.multiline ? "textarea" : "input";
         return (
           <label key={field.key} className={FIELD_LABEL}>
@@ -719,7 +818,7 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
         );
       })}
 
-      {node.type === "block" && <ConnectionsSection nodeId={node.id} />}
+      <ConnectionsSection nodeId={node.id} />
 
       {node.data.kind === "block" && !section.parent && (
         <InternalDesignSection nodeId={node.id} count={node.data.detail?.nodes.length ?? 0} />
@@ -756,14 +855,35 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
             >
               Fit to contents
             </button>
+            <button
+              type="button"
+              className={ACTION_BUTTON}
+              disabled={!childCount}
+              title={`Remove the container, keeping its ${childCount} component${childCount === 1 ? "" : "s"} where they are (Ctrl/⌘+Shift+G)`}
+              onClick={() => ungroup([node.id])}
+            >
+              Ungroup
+            </button>
           </div>
         </div>
       )}
 
-      <button type="button" onClick={() => deleteNodes([node.id])} className={`${DELETE_BUTTON} self-start`}>
-        <Icon name="trash" className="h-3.5 w-3.5" />
-        Delete {node.type === "container" ? "container" : "component"}
-      </button>
+      <div className="flex flex-wrap gap-2">
+        {node.type === "block" && !parentContainer && (
+          <button
+            type="button"
+            className={ACTION_BUTTON}
+            title="Put this component in a new container drawn around it (Ctrl/⌘+G)"
+            onClick={() => groupNodes([node.id])}
+          >
+            Group in container
+          </button>
+        )}
+        <button type="button" onClick={() => requestDelete([node.id])} className={DELETE_BUTTON}>
+          <Icon name="trash" className="h-3.5 w-3.5" />
+          Delete {node.type === "container" ? "container" : "component"}
+        </button>
+      </div>
     </div>
   );
 }

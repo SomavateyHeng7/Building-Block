@@ -5,6 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ReactFlowProvider } from "@xyflow/react";
 import Canvas from "./Canvas";
+import SequenceCanvas from "./SequenceCanvas";
+import { findSequenceItem, selectSequenceItem, useSequenceSelection } from "./sequenceSelection";
+import { moveParticipant, moveStep, removeParticipant, removeStep } from "@/lib/diagram/sequence";
+import { isSequenceSection } from "@/lib/diagram/factory";
 import Toolbar from "./Toolbar";
 import Sidebar from "./Sidebar";
 import PropertiesPanel from "./PropertiesPanel";
@@ -14,6 +18,9 @@ import DetailBar from "./DetailBar";
 import CompareBar from "./CompareBar";
 import SearchDialog from "./SearchDialog";
 import ShortcutsHelp from "./ShortcutsHelp";
+import DeleteContainerDialog from "./DeleteContainerDialog";
+import { ungroup } from "./deletePrompt";
+import { useDetailsRequest } from "./detailsPanel";
 import { Icon } from "./Icon";
 import PanelToggle from "./PanelToggle";
 import ViewSheet from "./ViewSheet";
@@ -50,6 +57,7 @@ const RAIL = "hidden w-10 shrink-0 flex-col items-center bg-white py-2 dark:bg-z
 export default function EditorApp() {
   const router = useRouter();
   const diagram = useDiagramStore((state) => state.diagram);
+  const sequenceTab = isSequenceSection(getActiveSection(diagram));
   const opened = useFileStore((state) => state.opened);
   const handle = useFileStore((state) => state.handle);
   const saving = useFileStore((state) => state.saving);
@@ -79,8 +87,10 @@ export default function EditorApp() {
     setLegendOpen(false);
   }
 
-  function togglePanel(panel: keyof HiddenPanels) {
+  /** Collapses or expands a panel on wide screens; without `hide`, toggles it. */
+  function togglePanel(panel: keyof HiddenPanels, hide?: boolean) {
     setHidden((current) => {
+      if (current[panel] === hide) return current;
       const next = { ...current, [panel]: !current[panel] };
       try {
         window.localStorage.setItem(PANELS_KEY, JSON.stringify(next));
@@ -90,6 +100,27 @@ export default function EditorApp() {
       return next;
     });
   }
+
+  // Something on the canvas (the note badge) asked for the details panel: open its drawer or expand it,
+  // then focus the field it named once the panel has rendered.
+  const wideRef = useRef(wide);
+  useEffect(() => {
+    wideRef.current = wide;
+  }, [wide]);
+  useEffect(
+    () =>
+      useDetailsRequest.subscribe(({ request }) => {
+        if (!request) return;
+        useDetailsRequest.setState({ request: null });
+        if (wideRef.current) togglePanel("properties", false);
+        else setDrawer("properties");
+        if (request.focusId) {
+          const id = request.focusId;
+          requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById(id)?.focus()));
+        }
+      }),
+    [],
+  );
 
   // The diagram lives only in memory, so a fresh load (or a direct link) has nothing to edit yet.
   useEffect(() => {
@@ -107,7 +138,6 @@ export default function EditorApp() {
     };
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setDrawer(null);
       // Save works from anywhere, including text fields.
       if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "s") {
         event.preventDefault();
@@ -118,6 +148,8 @@ export default function EditorApp() {
       const target = event.target as HTMLElement | null;
       // Buttons don't swallow shortcuts (Ctrl+Z right after clicking Undo should work); dialogs and menus do.
       if (target?.closest("input, textarea, select, [contenteditable='true'], [role='dialog'], [role='alertdialog'], [role='menu']")) return;
+      // After that check, so Esc while typing in a drawer (say, cancelling a rename) leaves the drawer open.
+      if (event.key === "Escape") setDrawer(null);
 
       // Finding things is reading, so it works in view mode too.
       if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === "f") {
@@ -131,6 +163,25 @@ export default function EditorApp() {
 
       const store = useDiagramStore.getState();
       const hasSelection = store.selectedNodeIds.length > 0;
+
+      // A sequence tab has its own selection: arrows move it along, Delete removes it, Esc clears it.
+      const sequence = getActiveSection(store.diagram).sequence;
+      const item = findSequenceItem(sequence, useSequenceSelection.getState().id);
+      if (item && !(event.metaKey || event.ctrlKey)) {
+        const id = item.kind === "participant" ? item.participant.id : item.step.id;
+        const [back, forward] = item.kind === "participant" ? ["ArrowLeft", "ArrowRight"] : ["ArrowUp", "ArrowDown"];
+        if (event.key === "Escape") selectSequenceItem(null);
+        else if (readOnlyRef.current) return;
+        else if (event.key === back || event.key === forward) {
+          const to = item.index + (event.key === back ? -1 : 1);
+          store.updateSequence((current) => (item.kind === "participant" ? moveParticipant(current, id, to) : moveStep(current, id, to)));
+        } else if (event.key === "Delete" || event.key === "Backspace") {
+          store.updateSequence((current) => (item.kind === "participant" ? removeParticipant(current, id) : removeStep(current, id)));
+          selectSequenceItem(null);
+        } else return;
+        event.preventDefault();
+        return;
+      }
 
       if (!(event.metaKey || event.ctrlKey)) {
         const section = getActiveSection(store.diagram);
@@ -168,8 +219,12 @@ export default function EditorApp() {
       else if ((key === "z" && event.shiftKey) || key === "y") store.redo();
       else if (key === "c" && hasSelection) store.copySelection();
       else if (key === "x" && hasSelection) {
+        // The copy includes a container's components, so they go with it.
         store.copySelection();
-        store.deleteNodes(store.selectedNodeIds);
+        store.deleteNodes(store.selectedNodeIds, { withContents: true });
+      } else if (key === "g" && hasSelection) {
+        if (event.shiftKey) ungroup(store.selectedNodeIds);
+        else if (!store.groupNodes(store.selectedNodeIds)) toast.info("Select one or more components to group");
       } else if (key === "v") store.paste();
       else if (key === "d" && hasSelection) store.duplicateSelection();
       else if (key === "a") store.selectAll();
@@ -256,7 +311,7 @@ export default function EditorApp() {
             className={`${drawer === "palette" ? "flex" : "hidden"} absolute inset-y-0 left-0 z-30 w-72 max-w-[85%] shadow-xl lg:static lg:z-auto ${hidden.palette ? "lg:hidden" : "lg:flex"} lg:w-60 lg:shrink-0 lg:shadow-none`}
           />
           <div className={`relative min-w-0 flex-1 ${readOnly ? "bb-readonly" : ""}`}>
-            <Canvas />
+            {sequenceTab ? <SequenceCanvas /> : <Canvas />}
             <div className="absolute left-3 top-3 z-10 flex gap-2 lg:hidden">
               {readOnly ? (
                 <button type="button" className={CANVAS_BUTTON} onClick={() => switchMode("edit")}>
@@ -319,6 +374,7 @@ export default function EditorApp() {
       </div>
       {helpOpen && <ShortcutsHelp onClose={() => setHelpOpen(false)} />}
       {searchOpen && <SearchDialog onClose={() => setSearchOpen(false)} />}
+      <DeleteContainerDialog />
       </ReadOnlyContext.Provider>
     </ReactFlowProvider>
   );

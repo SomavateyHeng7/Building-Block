@@ -44,11 +44,13 @@ Responsibilities, top to bottom:
 | B | Add a component (inside the selected container, or the selected component's container) | EditorApp |
 | C | Add a container | EditorApp |
 | Arrow keys / Shift+arrows | Nudge selection 8 px / 32 px (`nudgeNodes`) | EditorApp |
-| Delete / Backspace | Delete selected nodes or connection | React Flow (`deleteKeyCode`) |
-| Esc | Close a drawer; clear the selection; with nothing selected, leave an internal design | EditorApp |
+| Delete / Backspace | Delete selected nodes or connection; a container holding components asks first (`requestDelete`) | React Flow (`deleteKeyCode`) |
+| Esc | Close a drawer (not while typing in a field or in a dialog); clear the selection; with nothing selected, leave an internal design | EditorApp |
 | Ctrl/⌘+A | Select everything in the view | EditorApp |
-| Ctrl/⌘+C / X / V | Copy / cut / paste | EditorApp |
+| Ctrl/⌘+C / X / V | Copy / cut / paste (cut takes a container's components with it, as the copy does) | EditorApp |
 | Ctrl/⌘+D | Duplicate | EditorApp |
+| Ctrl/⌘+G | Group the selected components in a new container (`groupNodes`) | EditorApp |
+| Ctrl/⌘+Shift+G | Ungroup: remove the selected containers, or the ones holding selected components, keeping the components (`ungroup` in `deletePrompt.ts`, which says when connections to a container went with it) | EditorApp |
 | Ctrl/⌘+Z, Ctrl/⌘+Shift+Z or Ctrl/⌘+Y | Undo, redo | EditorApp |
 | ? | Show/hide the shortcuts list | EditorApp |
 | ←/→, Home/End on a focused tab | Move between tabs | SectionTabs |
@@ -142,7 +144,7 @@ and every change React Flow reports is turned into a store action.
 | `isValidConnection` | Rejects connecting a component to itself while dragging. |
 | `connectionMode={Loose}` | Every handle can start and end a connection, so there are 4 handles per component instead of 8. |
 | `onEdgesChange` | Delete key → `deleteConnections`; clicking a connection → `setSelectedEdge`. |
-| `onBeforeDelete` | When nodes are deleted, React Flow also reports their connections as deleted. The store already removes those, so they're filtered out here to keep it **one** undo step. |
+| `onBeforeDelete` | When nodes are deleted, React Flow also reports their connections as deleted. The store already removes those, so they're filtered out here to keep it **one** undo step. Goes through `requestDelete` (`deletePrompt.ts`): when a container that holds components is among the nodes, `DeleteContainerDialog` asks **Keep components** (the default) or **Delete everything** first. Nodes and selected connections are deleted in one undo step (`deleteNodes` with `edgeIds`). A box selection or Select all picks up a container's components with it, so deleting them silently was easy to do by accident. |
 | `onPaneClick` | Clears the selection. |
 | `onDragOver` / `onDrop` | Palette drag-and-drop: drops a container centred on the cursor, or a component into the top-most container under the cursor (`findContainerAtPoint`), kept clear of its header. |
 | `snapToGrid`, `snapGrid={[8, 8]}` | Tidy positions; matches the 8 px nudge step. |
@@ -166,6 +168,30 @@ what's on screen), a hint about C/B/? on devices with a mouse, and, inside an in
   because image export renders the DOM outside the canvas, where those variables are undefined.
 - `historyKey(kind, ids)`: see [undo](05-diagram-store-and-undo.md#committing-changes-and-undo).
 
+## `SequenceCanvas.tsx` — sequence tabs
+
+Shown instead of `Canvas` when the open tab has `kind: "sequence"`. An SVG at 1:1, laid out by `layoutSequence`:
+participant boxes (or a stick figure for an actor) across the top, dashed lifelines, then one row per step.
+
+- **Adding a message:** press on a lifeline and drag to another (or back onto the same one for a call to itself);
+  a dashed preview follows the pointer. It goes in between the rows around where you pressed, is selected, and the
+  panel's "What's sent" field gets the cursor. Without a drag, "Add message" in the panel does the same at the end.
+- **Selecting:** click a participant, message or note (selection is `sequenceSelection.ts`, separate from the
+  canvas selection). Double-click puts the cursor in its main field. ←/→ move a selected participant, ↑/↓ a
+  selected step; Delete removes it (a participant with its messages); Esc clears.
+- **Colours are SVG attributes**, chosen from the theme, not Tailwind classes: the picture export copies
+  `.bb-sequence-sheet`, and classes on SVG elements don't survive the copy.
+- The sidebar becomes a list of participants to add (Actor, Participant, one per legend category) and Note; the
+  details panel is `SequencePanel`. Box shortcuts (B, C, paste, duplicate) do nothing on a sequence tab.
+- "Sequence" beside "Add tab" adds one; sequence tabs have a small icon and aren't offered in Compare tabs.
+
+## Import — `ImportDialog.tsx`
+
+From **Import from draw.io or Mermaid** on the start page (opens a new diagram; dropping a `.drawio`, `.xml`,
+`.mmd` or `.md` file there does the same) or **File › Import draw.io or Mermaid…** in the editor (adds tabs to the
+open diagram, one undo step). Choose a file or paste text. A toast says what came in and lists anything simplified.
+See the [decision log](17-decision-log.md#import-drawio-for-architecture-mermaid-for-sequences).
+
 ## Node components — `nodes/`
 
 ### `BlockNode.tsx` (a component)
@@ -179,8 +205,11 @@ what's on screen), a hint about C/B/? on devices with a mouse, and, inside an in
 - Its built-in icon, if it has one, left of the name in the text colour (so it reads on any category colour).
   Inline SVG paths from `componentIcons.ts`: no icon font or CDN, so offline use and exports work.
 - `[technology]` under the name when "Show technology" is on.
-- **Notes marker:** an amber "!" corner badge. Hovering shows the notes in a card **portalled to `document.body`**
-  so it isn't clipped by the canvas or scaled by zoom.
+- **Notes marker:** an amber note badge (a button). Hovering or focusing it shows the notes in a card **portalled to
+  `document.body`** so it isn't clipped by the canvas or scaled by zoom; near the top of the screen the card opens
+  below. Lines starting `Assumption:`, `Risk:`, `Open question:` or `Decision:` show as tags. Clicking the badge
+  selects the node, shows the details panel (opening its drawer or expanding it, via `showDetails` in
+  `detailsPanel.ts`) and focuses its Notes field; in view mode it pins the card open instead.
 - **L2 badge:** a blue "L2" pill when the component has an internal design; clicking it opens it. It stops click and
   double-click from reaching the node (which would select or rename it).
 
@@ -212,20 +241,27 @@ panel is showing (`PanelTitle`'s `action`).
 | Selection | Panel | Contents |
 | --- | --- | --- |
 | A connection | **Connection** | From → To (click to select either end), What flows, Protocol, Description, Arrows (one way / both / none), Line (solid / dashed), Reverse, Delete |
-| Several nodes | **N items selected** | Align (6), Distribute & size (4), Color all, Duplicate, Delete all |
+| Several nodes | **N items selected** | Align (6), Distribute & size (4), Color all, Grouping (Group in container; Ungroup when a container is involved), Duplicate, Delete all |
 | Nothing (on a tab) | **Diagram** | Show technology switch, Fit all containers (if any are nested), a how-to hint |
 | Nothing (in an internal design) | **Internal design** | The component it belongs to, its technology and description, **its connections at L1**, Back |
-| One node | **Component** / **Container** | "In *container*" link, Label (blank → default on blur), Color (legend swatches), Icon (components only: None plus the built-in set), Technology (components only), Owner, Description, Notes, then: Connections (list + "Connect to…" picker) and **Internal design (L2)** for components on a tab; Header, Outline and Layout (Tidy, Fit) for containers; Delete |
+| One node | **Component** / **Container** | "In *container*" link, Label (blank → default on blur), Color (legend swatches), Icon (components only: None plus the built-in set), Technology (components only), Owner, Description, Notes (grows with the text; + Assumption / Risk / Open question / Decision starters), then: Connections (list + "Connect to…" picker, with Components and Containers groups; containers have it too) and **Internal design (L2)** for components on a tab; Header, Outline and Layout (Tidy, Fit, Ungroup) for containers; Group in container (components not in one); Delete |
 
 **Why "Connect to…" exists as well as dragging:** dragging between small handles is hard on touch screens and for
 keyboard users. The picker suggests sensible sides with `suggestConnectionSides` (the sides facing each other).
 
 ## `LegendPanel.tsx` — categories
 
-Each entry: a [ColorPicker](#colorpickertsx), an editable name (blank → "Untitled category" on blur), a usage count
-(across every tab and internal design, via `everyNode`), and remove. Removing an entry that's in use asks
-"Remove?" first (cancelled by moving away), because its components become unassigned. "Add" creates an entry with
-the next unused palette colour and focuses its name.
+Each entry: a drag handle, a [ColorPicker](#colorpickertsx), a name renamed by double-clicking it (or Enter/F2 when
+focused; Enter or clicking away saves, Esc cancels, blank → "Untitled category"), a usage count (across every tab and
+internal design, via `everyNode`), and remove. "Add" creates an entry with the next unused palette colour and opens
+its name for editing.
+
+- **Order** is the order the palette and exports show. Drag an entry by its handle (pointer events with pointer
+  capture, so mouse and touch both work; a blue line marks where it will land), or focus the handle and press ↑/↓.
+  Either is one undo step (`moveLegendEntry`). **Why not HTML drag-and-drop:** it doesn't work with touch.
+- **Removing an entry that's in use** opens a box under it: how many items use it, and "Move them to" another
+  category or "No category (unassigned)". `removeLegendEntry(key, replacement)` recolours every item, in every tab
+  and internal design, in the same undo step. Esc or Cancel closes the box. Unused entries are removed at once.
 
 ## `ColorPicker.tsx`
 
@@ -251,6 +287,7 @@ Used by the legend (with "already used" hints) and container outlines.
 | `UnsavedChangesDialog.tsx` | `alertdialog` | Save / Don't save / Cancel; second "Saved — Open…" step (see [files](06-files-saving-and-unsaved-changes.md#the-unsaved-changes-guard)). Esc and clicking outside cancel. |
 | `ExportDialog.tsx` | `dialog` | See [Export](10-export.md#the-export-dialog--exportdialogtsx). |
 | `ShortcutsHelp.tsx` | `dialog` | The shortcut list. Esc or clicking outside closes. |
+| `DeleteContainerDialog.tsx` | `alertdialog` | Keep components / Delete everything / Cancel before deleting a container that holds components. Esc and clicking outside cancel. |
 | `ConsentGate.tsx` (in `src/components/`) | `dialog` | See [consent](11-privacy-consent-and-forms.md#the-consent-gate). |
 
 ## Other pieces

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { Diagram, DiagramNode } from "@/lib/diagram/types";
+import { layoutSequence } from "@/lib/diagram/sequence";
+import type { Diagram, DiagramNode, SequenceDiagram } from "@/lib/diagram/types";
 
 const PADDING = 24;
 /** Legend colours dark enough to need light text. */
@@ -19,6 +20,7 @@ export default function TemplatePreview({ build, name }: { build: () => Diagram;
   // build() mints fresh ids, so run it once per card rather than on every render.
   const [diagram] = useState(build);
   const section = diagram.sections[0];
+  if (section?.sequence) return <SequencePreview diagram={diagram} sequence={section.sequence} name={name} />;
 
   const layout = (() => {
     const nodes = section?.nodes ?? [];
@@ -126,6 +128,53 @@ export default function TemplatePreview({ build, name }: { build: () => Diagram;
           );
         })}
       </g>
+    </svg>
+  );
+}
+
+/** A sequence template: the participants' boxes, their lifelines and the messages between them, without text. */
+function SequencePreview({ diagram, sequence, name }: { diagram: Diagram; sequence: SequenceDiagram; name: string }) {
+  const layout = layoutSequence(sequence);
+  const colorOf = (key?: string) => diagram.legend.find((entry) => entry.key === key)?.color ?? "#ffffff";
+  const xOf = (id: string) => layout.columns.find((column) => column.participant.id === id)?.x ?? 0;
+  return (
+    <svg
+      role="img"
+      aria-label={`${name} preview`}
+      viewBox={`0 0 ${layout.width} ${layout.height}`}
+      className="w-full rounded-md border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900"
+    >
+      {layout.columns.map((column) => (
+        <g key={column.participant.id}>
+          <line x1={column.x} x2={column.x} y1={layout.lifelineTop} y2={layout.lifelineBottom} strokeWidth={2} strokeDasharray="6 6" className="stroke-zinc-300 dark:stroke-zinc-700" />
+          <rect
+            x={column.x - column.width / 2}
+            y={32}
+            width={column.width}
+            height={44}
+            rx={6}
+            fill={column.participant.shape === "actor" ? "transparent" : colorOf(column.participant.colorKey)}
+            stroke="rgba(0,0,0,0.25)"
+            strokeWidth={1.5}
+          />
+          <text x={column.x} y={54} textAnchor="middle" dominantBaseline="central" fontSize={14} fontWeight={600} fill={textColorFor(colorOf(column.participant.colorKey))}>
+            {column.participant.label}
+          </text>
+        </g>
+      ))}
+      {layout.rows.map((row) => {
+        if (row.step.type === "note") {
+          const x = xOf(row.step.over[0]);
+          return <rect key={row.step.id} x={x - 70} y={row.y} width={140} height={row.height - 20} rx={4} className="fill-amber-100 stroke-amber-300 dark:fill-amber-950 dark:stroke-amber-800" />;
+        }
+        const from = xOf(row.step.from);
+        const to = xOf(row.step.to);
+        const dashed = row.step.kind === "reply" ? "8 6" : undefined;
+        if (from === to) {
+          return <path key={row.step.id} d={`M${from} ${row.y}h36v24h-36`} fill="none" strokeWidth={2} strokeDasharray={dashed} className="stroke-zinc-500" />;
+        }
+        return <line key={row.step.id} x1={from} x2={to} y1={row.y} y2={row.y} strokeWidth={2} strokeDasharray={dashed} className="stroke-zinc-500" />;
+      })}
     </svg>
   );
 }

@@ -5,6 +5,7 @@ import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { connectionCaption } from "@/lib/diagram/flowAdapter";
 import { legendUsedIn } from "@/lib/diagram/export";
 import { Icon } from "./Icon";
+import { NoteLines } from "./nodes/BlockNode";
 
 const DIRECTIONS = { forward: "One way", both: "Both ways", none: "No arrow" };
 
@@ -70,7 +71,9 @@ export default function ViewSheet({ legendOpen, onCloseLegend }: { legendOpen: b
         {node.data.description && <Field label="Description">{node.data.description}</Field>}
         {node.data.notes && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/50">
-            <Field label="Notes">{node.data.notes}</Field>
+            <Field label="Notes">
+              <NoteLines notes={node.data.notes} />
+            </Field>
           </div>
         )}
         {links.length > 0 && (

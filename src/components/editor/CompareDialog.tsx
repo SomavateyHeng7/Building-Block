@@ -38,7 +38,9 @@ export default function CompareDialog({ onClose }: { onClose: () => void }) {
   const diagram = useDiagramStore((state) => state.diagram);
   const setActiveSection = useDiagramStore((state) => state.setActiveSection);
   const showCompare = useCompareView((state) => state.show);
-  const { sections, activeSectionId } = diagram;
+  const { activeSectionId } = diagram;
+  // Comparing is about boxes and connections, so sequence tabs aren't offered.
+  const sections = useMemo(() => diagram.sections.filter((section) => section.kind !== "sequence"), [diagram.sections]);
 
   // Tabs usually run from "current" to "target": compare the tab on screen with the one before it, or, on
   // the first tab, with the one after it.
