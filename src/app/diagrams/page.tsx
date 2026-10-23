@@ -20,6 +20,8 @@ import { clearRecoveryCopy, setRecoveryEnabled, useRecoveryCopy, useRecoveryEnab
 import { downloadLegacyItem, readLegacyItems, removeLegacyItems, type LegacyItem } from "@/lib/diagram/legacy";
 import { toast } from "@/lib/toast";
 import { templates } from "@/templates";
+import ImportDialog, { describeImport } from "@/components/editor/ImportDialog";
+import { ImportError, diagramFromImport, importDiagramText, isImportable, type ImportResult } from "@/lib/diagram/importFile";
 
 const noopSubscribe = () => () => {};
 const NO_ITEMS: LegacyItem[] = [];
@@ -37,6 +39,7 @@ const ICONS = {
   template: "M4 4h16v5H4zM4 13h7v7H4zM15 13h5v7h-5z",
   lock: "M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3",
   arrow: "M5 12h14M13 6l6 6-6 6",
+  import: "M12 3v12M7 10l5 5 5-5M5 21h14",
 };
 
 function Icon({ path, className = "h-5 w-5" }: { path: string; className?: string }) {
@@ -64,10 +67,12 @@ function ActionCard({
   disabled,
   onClick,
   children,
+  className = "",
 }: {
   icon: string;
   title: string;
   body: string;
+  className?: string;
   primary?: boolean;
   disabled?: boolean;
   onClick: () => void;
@@ -78,7 +83,7 @@ function ActionCard({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={primary ? `${CARD} border-transparent bg-foreground text-background hover:bg-[#383838] dark:hover:bg-[#ccc]` : CARD_PLAIN}
+      className={`${primary ? `${CARD} border-transparent bg-foreground text-background hover:bg-[#383838] dark:hover:bg-[#ccc]` : CARD_PLAIN} ${className}`}
     >
       <span className={`${ICON_BOX} ${primary ? "bg-background/15" : "bg-zinc-100 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"}`}>
         <Icon path={icon} />
@@ -154,6 +159,7 @@ export default function StartPage() {
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [opening, setOpening] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [importing, setImporting] = useState(false);
   // Which browser this is is only known on the client.
   const mounted = useMounted();
   const legacy = removed ? NO_ITEMS : found;
@@ -217,7 +223,32 @@ export default function StartPage() {
     setDragging(false);
     // Starts reading synchronously, while the browser still allows access to the dropped file.
     const dropped = takeDroppedFile(event.dataTransfer);
-    guard(() => void openDiagram(async () => openDroppedDiagram(await dropped)));
+    guard(() =>
+      void openDiagram(async () => {
+        const file = await dropped;
+        // draw.io and Mermaid files are imported into a new diagram; anything else is opened as a diagram file.
+        if (file && isImportable(file.file.name)) {
+          try {
+            return startImported(await importDiagramText(await file.file.text(), file.file.name));
+          } catch (problem) {
+            toast.error(`Couldn't import "${file.file.name}"`, {
+              description: problem instanceof ImportError ? problem.message : "Check it's a draw.io file or a Mermaid sequence diagram.",
+            });
+            return null;
+          }
+        }
+        return openDroppedDiagram(file);
+      }),
+    );
+  }
+
+  /** Opens an import as a new diagram and says what came in. */
+  function startImported(result: ImportResult) {
+    const diagram = diagramFromImport(result);
+    startDiagram(diagram);
+    const { title, details } = describeImport(result);
+    toast.success(title, { description: "Save it to keep it as a Building Block diagram.", details });
+    return diagram;
   }
 
   return (
@@ -310,6 +341,13 @@ export default function StartPage() {
             >
               <span className="mt-auto text-xs text-zinc-500">Or drop the file anywhere on this page</span>
             </ActionCard>
+            <ActionCard
+              icon={ICONS.import}
+              title="Import from draw.io or Mermaid"
+              body="Bring in a .drawio file as architecture tabs, or a Mermaid sequence diagram as a sequence tab. You can drop those here too."
+              className="sm:col-span-2"
+              onClick={() => guard(() => setImporting(true))}
+            />
           </div>
         </section>
 
@@ -432,6 +470,17 @@ export default function StartPage() {
       <Footer />
 
       {unsavedDialog}
+      {importing && (
+        <ImportDialog
+          action="Open"
+          onClose={() => setImporting(false)}
+          onImport={(result) => {
+            setImporting(false);
+            startImported(result);
+            router.push("/editor");
+          }}
+        />
+      )}
 
       {dragging && (
         // Covers the page while a file is dragged over it, so leaving it means the drag left the window.
@@ -447,7 +496,7 @@ export default function StartPage() {
           <div className="pointer-events-none flex w-full max-w-md flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-zinc-400 p-10 text-center dark:border-zinc-600">
             <Icon path={ICONS.folder} className="h-8 w-8 text-zinc-500" />
             <p className="font-semibold text-zinc-900 dark:text-zinc-100">Drop to open your diagram</p>
-            <p className="text-sm text-zinc-500">A .json file saved from Building Block</p>
+            <p className="text-sm text-zinc-500">A .json file saved from Building Block, or a draw.io or Mermaid file to import</p>
           </div>
         </div>
       )}

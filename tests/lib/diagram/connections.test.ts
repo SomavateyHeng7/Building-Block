@@ -59,7 +59,7 @@ describe("reading connections from a file", () => {
     expect(fixes).toEqual([]);
   });
 
-  it("drops connections that don't join two different components, and says so", () => {
+  it("drops connections that don't join two different boxes, and says so", () => {
     const container = { ...block("box"), type: "container", data: { kind: "container", label: "Box" } };
     const edges = [
       { id: "ok", source: "a", target: "b" },
@@ -71,8 +71,8 @@ describe("reading connections from a file", () => {
       "nonsense",
     ];
     const { diagram, fixes } = parseDiagram(fileWith([block("a"), block("b"), container as DiagramNode], edges));
-    expect(diagram.sections[0].edges?.map((edge) => edge.id)).toEqual(["ok"]);
-    expect(fixes).toContain('"One": skipped 6 connections that didn\'t join two components.');
+    expect(diagram.sections[0].edges?.map((edge) => edge.id)).toEqual(["ok", "box"]);
+    expect(fixes).toContain('"One": skipped 5 connections that didn\'t join two different boxes.');
   });
 
   it("ignores unknown values for sides, direction and line style", () => {
@@ -102,11 +102,42 @@ describe("connections in the editor", () => {
     expect(store().selectedNodeIds).toEqual([]);
   });
 
-  it("refuses self-connections, containers, unknown ids and exact duplicates", () => {
+  it("joins a component to a container", () => {
     store().addContainer({ x: 0, y: 400 });
     const container = store().selectedNodeIds[0];
+    const id = store().addConnection({ source: a, target: container, sourceSide: "bottom", targetSide: "top" });
+    expect(id).not.toBeNull();
+    expect(active().edges).toEqual([{ id, source: a, target: container, sourceSide: "bottom", targetSide: "top" }]);
+  });
+
+  it("drops a container's connections when the container is deleted, keeping its components'", () => {
+    store().addContainer({ x: 0, y: 400 });
+    const container = store().selectedNodeIds[0];
+    store().addConnection({ source: a, target: container });
+    const kept = store().addConnection({ source: a, target: b });
+    store().deleteNodes([container]);
+    expect(active().edges?.map((edge) => edge.id)).toEqual([kept]);
+  });
+
+  it("moves an end of a connection to another box and side, dropping its bend", () => {
+    const id = store().addConnection({ source: a, target: b, sourceSide: "right", targetSide: "left" })!;
+    store().updateConnection(id, { bend: { x: 16, y: 8 }, label: "Orders" });
+    expect(store().reconnectConnection(id, { source: a, target: c, sourceSide: "bottom", targetSide: "top" })).toBe(true);
+    expect(active().edges).toEqual([{ id, source: a, target: c, sourceSide: "bottom", targetSide: "top", label: "Orders" }]);
+    store().undo();
+    expect(active().edges![0]).toMatchObject({ target: b, bend: { x: 16, y: 8 } });
+  });
+
+  it("refuses to move an end onto its own box or a missing one", () => {
+    const id = store().addConnection({ source: a, target: b })!;
+    expect(store().reconnectConnection(id, { source: a, target: a })).toBe(false);
+    expect(store().reconnectConnection(id, { source: a, target: "nope" })).toBe(false);
+    expect(store().reconnectConnection("nope", { source: a, target: c })).toBe(false);
+    expect(active().edges![0]).toMatchObject({ source: a, target: b });
+  });
+
+  it("refuses self-connections, unknown ids and exact duplicates", () => {
     expect(store().addConnection({ source: a, target: a })).toBeNull();
-    expect(store().addConnection({ source: a, target: container })).toBeNull();
     expect(store().addConnection({ source: a, target: "nope" })).toBeNull();
     expect(store().addConnection({ source: a, target: b })).not.toBeNull();
     expect(store().addConnection({ source: a, target: b })).toBeNull();

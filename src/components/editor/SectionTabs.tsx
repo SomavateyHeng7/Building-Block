@@ -101,7 +101,11 @@ export default function SectionTabs() {
                 title={readOnly ? undefined : "Double-click to rename"}
                 className="min-h-0 pr-1"
               >
+                {section.kind === "sequence" && (
+                  <Icon name="sequence" className="-mt-0.5 mr-1 inline h-3.5 w-3.5 text-zinc-400" />
+                )}
                 {section.name}
+                {section.kind === "sequence" && <span className="sr-only"> (sequence diagram)</span>}
               </button>
             )}
             {active && !readOnly && editingId !== section.id && (
@@ -166,7 +170,19 @@ export default function SectionTabs() {
         <span className="hidden sm:inline">Add tab</span>
       </button>
       )}
-      {sections.length > 1 && (
+      {!readOnly && (
+        <button
+          type="button"
+          title="Add a sequence diagram tab, to show a flow step by step"
+          aria-label="Add a sequence tab"
+          className="mb-1 inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-sm text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          onClick={() => addSection(undefined, "sequence")}
+        >
+          <Icon name="sequence" className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Sequence</span>
+        </button>
+      )}
+      {sections.filter((section) => section.kind !== "sequence").length > 1 && (
         <button
           type="button"
           title="Compare two tabs: what is added, removed and changed"

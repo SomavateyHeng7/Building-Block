@@ -63,6 +63,36 @@ form.
 `nodes` holds containers and components in one array; `edges` holds connections. `edges` is optional because
 files from before connections existed don't have it.
 
+`kind` says what the tab holds: absent (or `"architecture"`) for boxes and connections, or `"sequence"` for a
+sequence diagram. A sequence tab keeps `nodes: []` and its content in `sequence`, so code that walks nodes needs
+no special case; files from before sequence tabs have no `kind` and open unchanged.
+
+### `SequenceDiagram` (a sequence tab)
+
+```json
+{
+  "participants": [
+    { "id": "participant_a1", "label": "Customer", "shape": "actor" },
+    { "id": "participant_b2", "label": "Orders Service", "colorKey": "microservice", "description": "Owns orders" }
+  ],
+  "steps": [
+    { "id": "message_c3", "type": "message", "from": "participant_a1", "to": "participant_b2", "label": "Place order", "protocol": "REST" },
+    { "id": "message_d4", "type": "message", "from": "participant_b2", "to": "participant_a1", "label": "Order number", "kind": "reply" },
+    { "id": "note_e5", "type": "note", "over": ["participant_b2"], "text": "Retries twice" }
+  ],
+  "numbered": false
+}
+```
+
+| Field | Meaning | Default |
+| --- | --- | --- |
+| `participants` | Left to right. `shape` is `participant` (a box) or `actor` (a person); `colorKey` uses the same legend as components. | `participant` |
+| `steps` | Top to bottom. A **message** goes `from` → `to` (the same id for a call to itself), with `label` (what's sent), `protocol` and `kind`: `call` (solid line, filled arrow), `async` (open arrow) or `reply` (dashed). A **note** sits `over` one participant, or spans the first and last of two. | `call` |
+| `numbered` | Number the messages 1, 2, 3… | `true` |
+
+**No positions are stored:** `layoutSequence` (`sequence.ts`) works the picture out from the order, so a sequence
+always reads top to bottom and never needs tidying.
+
 ### `DiagramNode`
 
 | Field | Meaning |
@@ -185,6 +215,9 @@ The store and the validator together keep these true. Code may rely on them.
    inside internal designs.
 7. Internal designs are one level deep and never empty (an emptied one is removed).
 8. Colours are `#rrggbb`.
+9. A sequence tab has `kind: "sequence"`, `nodes: []` and a `sequence`. Participant and step ids are unique within
+   it; every message names participants that exist; every note is over one or two of them. Removing a participant
+   removes its messages (`removeParticipant`). Removing a legend entry recolours participants too.
 
 ## Ids — `createId()` in `src/lib/diagram/factory.ts`
 

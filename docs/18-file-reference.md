@@ -81,8 +81,14 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 | `UnsavedChangesDialog.tsx` | Save / Don't save / Cancel, and the "Saved — Open…" step |
 | `useUnsavedGuard.tsx` | Hook that runs an action now or after the dialog |
 | `ShortcutsHelp.tsx` | Keyboard shortcuts dialog |
+| `DeleteContainerDialog.tsx` / `deletePrompt.ts` | Asks whether to keep a deleted container's components; `requestDelete` is the one way the UI deletes nodes; `ungroup` says when connections to a container were removed |
+| `detailsPanel.ts` | `showDetails`: asks EditorApp to show the details panel (drawer or collapsed) and focus a field in it |
 | `PanelToggle.tsx` | Collapse/expand button for side panels |
 | `Icon.tsx` | Editor icon set |
+| `SequenceCanvas.tsx` | A sequence tab: SVG drawing, drag between lifelines to add a message (`.bb-sequence-sheet` is what exports picture) |
+| `SequencePanel.tsx` | Details panel on a sequence tab: participant, message, note, or the tab |
+| `sequenceSelection.ts` | What's selected on a sequence tab |
+| `ImportDialog.tsx` | Import from a file or pasted text; used by the start page and File menu |
 | `nodes/BlockNode.tsx` | A component on the canvas: colour, handles, rename, notes marker, L2 badge |
 | `nodes/ContainerNode.tsx` | A container: header placement, outline, resize limits, Fit/Tidy toolbar |
 
@@ -105,6 +111,11 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 | `diagram/componentIcons.ts` | The built-in component icons (key, label, SVG path); keys are stored in files |
 | `diagram/compare.ts` | Comparing two tabs by name; change counts and the change-list CSV rows |
 | `diagram/legacy.ts` | Finds, downloads and removes diagrams left by earlier versions |
+| `diagram/sequence.ts` | Sequence diagrams: editing helpers (pure) and `layoutSequence` |
+| `diagram/importFile.ts` | Import entry point: picks draw.io or Mermaid, checks the result with `parseDiagram` |
+| `diagram/importDrawio.ts` | draw.io (.drawio/.xml, compressed or not) → architecture tabs |
+| `diagram/importMermaid.ts` | Mermaid `sequenceDiagram` → a sequence; `ImportError` |
+| `diagram/xml.ts` | Small XML reader used by the draw.io import |
 | `zip.ts` | Minimal ZIP writer |
 | `toast.ts` | Toast store and API |
 | `consent.ts` | Privacy-notice acceptance, versioned |
@@ -123,6 +134,7 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 | `three-tier.ts` | Three-tier web application |
 | `event-driven.ts` | Event-driven microservices, with an internal design (L2) |
 | `current-vs-target.ts` | Two tabs, current and target, for Compare tabs |
+| `sequence.ts` | A checkout flow as a sequence tab |
 
 ## `src/types/`
 

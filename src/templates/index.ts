@@ -2,6 +2,7 @@ import { blankTemplate } from "./blank";
 import { currentVsTargetTemplate } from "./current-vs-target";
 import { eventDrivenTemplate } from "./event-driven";
 import { l0ArchitectureTemplate } from "./l0-architecture";
+import { sequenceTemplate } from "./sequence";
 import { threeTierTemplate } from "./three-tier";
 import type { TemplateDefinition } from "./types";
 
@@ -11,6 +12,7 @@ export const templates: TemplateDefinition[] = [
   threeTierTemplate,
   eventDrivenTemplate,
   currentVsTargetTemplate,
+  sequenceTemplate,
 ];
 
 export function getTemplate(id: string): TemplateDefinition | undefined {

@@ -3,7 +3,10 @@
 import { useReactFlow } from "@xyflow/react";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { nextSlotInContainer } from "@/lib/diagram/layout";
-import type { BlockColorKey } from "@/lib/diagram/types";
+import { addParticipant, addStep, newNote, newParticipant } from "@/lib/diagram/sequence";
+import type { BlockColorKey, SequenceParticipant } from "@/lib/diagram/types";
+import { showDetails } from "./detailsPanel";
+import { SEQUENCE_LABEL_FIELD_ID, findSequenceItem, selectSequenceItem, useSequenceSelection } from "./sequenceSelection";
 import { Icon } from "./Icon";
 import PanelToggle from "./PanelToggle";
 
@@ -39,6 +42,8 @@ export default function Sidebar({ className = "", onAdded, onCollapse }: Sidebar
   const addContainer = useDiagramStore((state) => state.addContainer);
   const addBlock = useDiagramStore((state) => state.addBlock);
   const { screenToFlowPosition } = useReactFlow();
+  const sequence = useDiagramStore((state) => getActiveSection(state.diagram).sequence);
+  const updateSequence = useDiagramStore((state) => state.updateSequence);
 
   /** Touch screens can't drag from here, so tapping adds at the middle of what's on screen. */
   function canvasCenter() {
@@ -83,6 +88,74 @@ export default function Sidebar({ className = "", onAdded, onCollapse }: Sidebar
         }
       },
     } as const;
+  }
+
+  if (sequence) {
+    /** Adds a participant at the end (or a note under the selected participant), then opens it for naming. */
+    const add = (participant: SequenceParticipant) => {
+      updateSequence((current) => addParticipant(current, participant));
+      selectSequenceItem(participant.id);
+      showDetails(SEQUENCE_LABEL_FIELD_ID);
+      onAdded?.();
+    };
+    const addNote = () => {
+      const selected = findSequenceItem(sequence, useSequenceSelection.getState().id);
+      const over =
+        selected?.kind === "participant"
+          ? selected.participant.id
+          : selected?.step.type === "message"
+            ? selected.step.from
+            : sequence.participants[0]?.id;
+      if (!over) return;
+      const note = newNote([over], "");
+      // Just after the selected step, or at the end.
+      const at = selected?.kind === "step" ? selected.index + 1 : sequence.steps.length;
+      updateSequence((current) => addStep(current, note, at));
+      selectSequenceItem(note.id);
+      showDetails(SEQUENCE_LABEL_FIELD_ID);
+      onAdded?.();
+    };
+    const button = (onClick: () => void) => ({
+      type: "button" as const,
+      onClick,
+      className: `${ITEM} w-full cursor-pointer text-left`,
+    });
+    return (
+      <aside className={`flex flex-col gap-5 overflow-y-auto border-r border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950 ${className}`}>
+        <section>
+          <div className="mb-2 flex items-center gap-2">
+            <h2 className={`${HEADING_TEXT} flex-1`}>Participants</h2>
+            {onCollapse && <PanelToggle side="left" expanded label="the components panel" onClick={onCollapse} />}
+          </div>
+          <div className="flex flex-col gap-1">
+            <button {...button(() => add(newParticipant("User", "actor")))}>
+              <Icon name="user" className="h-5 w-7 shrink-0 text-zinc-500" />
+              <span className="flex-1 truncate">Actor (person)</span>
+            </button>
+            <button {...button(() => add(newParticipant("New participant")))}>
+              <span aria-hidden className="h-5 w-7 shrink-0 rounded border border-dashed border-zinc-400 dark:border-zinc-500" />
+              <span className="flex-1 truncate">Participant</span>
+            </button>
+            {legend.map((entry) => (
+              <button key={entry.key} {...button(() => add(newParticipant(entry.label, "participant", entry.key)))}>
+                <span aria-hidden className="h-5 w-7 shrink-0 rounded border border-black/15 dark:border-white/15" style={{ backgroundColor: entry.color }} />
+                <span className="flex-1 truncate" title={entry.label}>{entry.label}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+        <section>
+          <h2 className={HEADING}>Steps</h2>
+          <button {...button(addNote)} disabled={!sequence.participants.length}>
+            <span aria-hidden className="h-5 w-7 shrink-0 rounded-sm border border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950" />
+            <span className="flex-1 truncate">Note</span>
+          </button>
+        </section>
+        <p className="mt-auto rounded-lg bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+          Click to add. To add a message, drag from one participant&apos;s dashed lifeline to another&apos;s.
+        </p>
+      </aside>
+    );
   }
 
   return (

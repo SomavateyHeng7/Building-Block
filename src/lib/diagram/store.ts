@@ -1,10 +1,11 @@
 import { create } from "zustand";
-import { createBlankDiagram, createBlankSection, createId } from "./factory";
+import { createBlankDiagram, createBlankSection, createId, isSequenceSection } from "./factory";
 import { nextLegendColor } from "./palette";
 import {
   absolutePosition,
   arrangeNodes,
   fitContainerToContents,
+  groupIntoContainer,
   growContainerToFit,
   restyleContainer,
   tidyContainer,
@@ -23,6 +24,7 @@ import type {
   LegendEntry,
   NodeDetails,
   Position,
+  SequenceDiagram,
 } from "./types";
 
 function touch(diagram: Diagram): Diagram {
@@ -128,6 +130,11 @@ function commit(state: DiagramState, diagram: Diagram, coalesceKey?: string) {
   };
 }
 
+/** Boxes and connections can't be added to a sequence tab: it has no canvas for them. */
+function onSequenceTab(diagram: Diagram): boolean {
+  return isSequenceSection(getActiveSection(diagram));
+}
+
 /** Drops selected ids that no longer exist in the diagram's active section. */
 function keepExisting(diagram: Diagram, ids: string[]): string[] {
   const nodes = getActiveSection(diagram).nodes;
@@ -150,6 +157,22 @@ function withDescendants(nodes: DiagramNode[], ids: string[]): DiagramNode[] {
   const included = new Set(ids);
   for (const node of nodes) if (node.parentId && included.has(node.parentId)) included.add(node.id);
   return nodes.filter((node) => included.has(node.id));
+}
+
+/** Drops the `removed` nodes; components of a removed container stay where they are on screen, out of it. */
+function withoutNodes(nodes: DiagramNode[], removed: ReadonlySet<string>): DiagramNode[] {
+  return nodes
+    .filter((node) => !removed.has(node.id))
+    .map((node) => {
+      if (!node.parentId || !removed.has(node.parentId)) return node;
+      const rest = { ...node };
+      delete rest.parentId;
+      return {
+        ...rest,
+        position: absolutePosition(node, nodes),
+        data: node.data.kind === "block" ? { ...node.data, containerId: null } : node.data,
+      };
+    });
 }
 
 interface ClipboardEntry {
@@ -223,8 +246,10 @@ interface DiagramState {
   renameDiagram: (name: string) => void;
   setSelection: (ids: string[]) => void;
   setSelectedEdge: (id: string | null) => void;
-  /** Joins two components; returns the new connection's id, or null when it isn't allowed or already exists. */
+  /** Joins two components or containers; returns the new connection's id, or null when it isn't allowed or already exists. */
   addConnection: (connection: NewConnection) => string | null;
+  /** Moves one or both ends of a connection to other boxes or sides; false when it isn't allowed. */
+  reconnectConnection: (id: string, ends: NewConnection) => boolean;
   updateConnection: (id: string, patch: ConnectionPatch) => void;
   reverseConnection: (id: string) => void;
   deleteConnections: (ids: string[]) => void;
@@ -232,7 +257,18 @@ interface DiagramState {
   copySelection: () => void;
   paste: () => void;
   duplicateSelection: () => void;
-  deleteNodes: (ids: string[]) => void;
+  /**
+   * Deletes nodes. A deleted container's components are kept, out of it, unless they are deleted too:
+   * listed in `ids`, or with `withContents`. `edgeIds` are connections deleted in the same undo step.
+   */
+  deleteNodes: (ids: string[], options?: { withContents?: boolean; edgeIds?: string[] }) => void;
+  /** Wraps the components among `ids` in a new container and selects it; returns its id, or null with no component. */
+  groupNodes: (ids: string[]) => string | null;
+  /**
+   * Removes the containers among `ids`, and those holding components among them, keeping every component
+   * where it is on screen. The released components are selected.
+   */
+  ungroupNodes: (ids: string[]) => void;
   arrangeSelection: (op: ArrangeOp) => void;
   fitContainer: (id: string) => void;
   /** Fits every container in the active section that has components. */
@@ -251,13 +287,21 @@ interface DiagramState {
   updateContainerStyle: (id: string, patch: ContainerStyle) => void;
   updateLegendEntry: (key: BlockColorKey, patch: Partial<LegendEntry>) => void;
   addLegendEntry: () => BlockColorKey;
-  removeLegendEntry: (key: BlockColorKey) => void;
+  /** Removes a category. Items using it move to `replacement`, or become unassigned without one. */
+  removeLegendEntry: (key: BlockColorKey, replacement?: BlockColorKey) => void;
+  /** Moves a category to `index` in the legend, the order the palette and exports show. */
+  moveLegendEntry: (key: BlockColorKey, index: number) => void;
   setActiveSection: (id: string) => void;
   /** Opens a component's internal design (L2). Navigation, like switching tabs: not an edit. */
   openDetail: (componentId: string) => void;
   /** Back from an internal design to the tab it belongs to, with its component selected. */
   closeDetail: () => void;
-  addSection: (name?: string) => void;
+  /** Adds a tab of either kind and opens it. */
+  addSection: (name?: string, kind?: DiagramSection["kind"]) => void;
+  /** Changes the sequence diagram on the open sequence tab; does nothing on other tabs. */
+  updateSequence: (fn: (sequence: SequenceDiagram) => SequenceDiagram, coalesceKey?: string) => void;
+  /** Adds imported tabs (and the legend entries they use) after the others, and opens the first. */
+  addImportedSections: (sections: DiagramSection[], legend: LegendEntry[]) => void;
   renameSection: (id: string, name: string) => void;
   deleteSection: (id: string) => void;
   duplicateSection: (id: string) => void;
@@ -308,8 +352,8 @@ export const useDiagramStore = create<DiagramState>((set) => ({
   addConnection: ({ source, target, sourceSide, targetSide }) => {
     const { diagram } = useDiagramStore.getState();
     const section = getActiveSection(diagram);
-    const isBlock = (id: string) => section.nodes.some((node) => node.id === id && node.type === "block");
-    if (source === target || !isBlock(source) || !isBlock(target)) return null;
+    const known = (id: string) => section.nodes.some((node) => node.id === id);
+    if (source === target || !known(source) || !known(target)) return null;
     const exists = (section.edges ?? []).some(
       (edge) =>
         edge.source === source &&
@@ -346,6 +390,31 @@ export const useDiagramStore = create<DiagramState>((set) => ({
         `edge:${id}:${Object.keys(patch).join(",")}`,
       );
     }),
+
+  // A moved end attaches to the side it was dropped on, and any bend is dropped since it was placed for the old route.
+  reconnectConnection: (id, { source, target, sourceSide, targetSide }) => {
+    const section = getActiveSection(useDiagramStore.getState().diagram);
+    const known = (nodeId: string) => section.nodes.some((node) => node.id === nodeId);
+    if (source === target || !known(source) || !known(target)) return false;
+    if (!(section.edges ?? []).some((edge) => edge.id === id)) return false;
+    set((state) =>
+      commit(
+        state,
+        mapActiveSectionFull(state.diagram, (current) => ({
+          ...current,
+          edges: (current.edges ?? []).map((edge) => {
+            if (edge.id !== id) return edge;
+            const moved: DiagramEdge = { ...edge, source, target, sourceSide, targetSide };
+            if (!sourceSide) delete moved.sourceSide;
+            if (!targetSide) delete moved.targetSide;
+            delete moved.bend;
+            return moved;
+          }),
+        })),
+      ),
+    );
+    return true;
+  },
 
   reverseConnection: (id) =>
     set((state) =>
@@ -400,7 +469,7 @@ export const useDiagramStore = create<DiagramState>((set) => ({
 
   paste: () =>
     set((state) => {
-      if (!clipboard.length) return state;
+      if (!clipboard.length || onSequenceTab(state.diagram)) return state;
       pasteCount += 1;
       const current = getActiveSection(state.diagram).nodes;
       const { nodes: pasted, idMap } = materialize(clipboard, current, PASTE_OFFSET * pasteCount);
@@ -419,7 +488,7 @@ export const useDiagramStore = create<DiagramState>((set) => ({
   duplicateSelection: () =>
     set((state) => {
       const current = getActiveSection(state.diagram).nodes;
-      if (!state.selectedNodeIds.length) return state;
+      if (!state.selectedNodeIds.length || onSequenceTab(state.diagram)) return state;
       const { nodes: copies, idMap } = materialize(toClipboard(current, state.selectedNodeIds), current, PASTE_OFFSET);
       const edges = copyEdges(getActiveSection(state.diagram).edges, idMap);
       return {
@@ -432,30 +501,61 @@ export const useDiagramStore = create<DiagramState>((set) => ({
       };
     }),
 
-  // Deleting a container keeps its components: they stay where they are on the canvas, no longer inside it.
-  deleteNodes: (ids) =>
+  // Kept components stay where they are on the canvas, no longer inside a container.
+  deleteNodes: (ids, options) =>
     set((state) => {
       const nodes = getActiveSection(state.diagram).nodes;
-      const removed = new Set(ids.filter((id) => nodes.some((node) => node.id === id)));
+      const listed = options?.withContents ? withDescendants(nodes, ids).map((node) => node.id) : ids;
+      const removed = new Set(listed.filter((id) => nodes.some((node) => node.id === id)));
       if (!removed.size) return state;
-      const kept = nodes
-        .filter((node) => !removed.has(node.id))
-        .map((node) => {
-          if (!node.parentId || !removed.has(node.parentId)) return node;
-          const rest = { ...node };
-          delete rest.parentId;
-          return {
-            ...rest,
-            position: absolutePosition(node, nodes),
-            data: node.data.kind === "block" ? { ...node.data, containerId: null } : node.data,
-          };
-        });
+      const edgeIds = new Set(options?.edgeIds);
       return {
         ...commit(
           state,
-          mapActiveSectionFull(state.diagram, (section) => withoutDanglingEdges({ ...section, nodes: kept })),
+          mapActiveSectionFull(state.diagram, (section) =>
+            withoutDanglingEdges({
+              ...section,
+              nodes: withoutNodes(nodes, removed),
+              ...(edgeIds.size && section.edges ? { edges: section.edges.filter((edge) => !edgeIds.has(edge.id)) } : {}),
+            }),
+          ),
         ),
         selectedNodeIds: state.selectedNodeIds.filter((id) => !removed.has(id)),
+        selectedEdgeId: state.selectedEdgeId && edgeIds.has(state.selectedEdgeId) ? null : state.selectedEdgeId,
+      };
+    }),
+
+  groupNodes: (ids) => {
+    const nodes = getActiveSection(useDiagramStore.getState().diagram).nodes;
+    const id = createId("container");
+    const grouped = groupIntoContainer(nodes, ids, { id, label: "New Container" });
+    if (grouped === nodes) return null;
+    set((state) => ({
+      ...commit(state, mapActiveSection(state.diagram, () => grouped)),
+      selectedNodeIds: [id],
+      selectedEdgeId: null,
+    }));
+    return id;
+  },
+
+  ungroupNodes: (ids) =>
+    set((state) => {
+      const nodes = getActiveSection(state.diagram).nodes;
+      const containers = new Set(
+        nodes.flatMap((node) =>
+          !ids.includes(node.id) ? [] : node.type === "container" ? [node.id] : node.parentId ? [node.parentId] : [],
+        ),
+      );
+      if (!containers.size) return state;
+      return {
+        ...commit(
+          state,
+          mapActiveSectionFull(state.diagram, (section) =>
+            withoutDanglingEdges({ ...section, nodes: withoutNodes(nodes, containers) }),
+          ),
+        ),
+        selectedNodeIds: nodes.filter((node) => node.parentId && containers.has(node.parentId)).map((node) => node.id),
+        selectedEdgeId: null,
       };
     }),
 
@@ -503,6 +603,7 @@ export const useDiagramStore = create<DiagramState>((set) => ({
 
   addContainer: (position) =>
     set((state) => {
+      if (onSequenceTab(state.diagram)) return state;
       const id = createId("container");
       return {
         ...commit(
@@ -525,6 +626,7 @@ export const useDiagramStore = create<DiagramState>((set) => ({
   // Adding into a container grows the container so the new block is never clipped.
   addBlock: (position, parentId = null, colorKey) =>
     set((state) => {
+      if (onSequenceTab(state.diagram)) return state;
       const id = createId("block");
       return {
         ...commit(
@@ -647,9 +749,10 @@ export const useDiagramStore = create<DiagramState>((set) => ({
       };
     }),
 
-  addSection: (name) =>
+  addSection: (name, kind) =>
     set((state) => {
-      const section = createBlankSection(name ?? `Section ${state.diagram.sections.length + 1}`);
+      const fallback = kind === "sequence" ? "Sequence" : "Section";
+      const section = createBlankSection(name ?? `${fallback} ${state.diagram.sections.length + 1}`, kind);
       return {
         ...commit(
           state,
@@ -722,12 +825,44 @@ export const useDiagramStore = create<DiagramState>((set) => ({
               : { ...node.data },
         })),
         ...(source.edges?.length ? { edges: copyEdges(source.edges, idMap) } : {}),
+        // Ids only need to be unique within a tab, so a sequence is copied as it is.
+        ...(source.kind ? { kind: source.kind } : {}),
+        ...(source.sequence ? { sequence: source.sequence } : {}),
       };
       const index = state.diagram.sections.findIndex((section) => section.id === id);
       const sections = [...state.diagram.sections];
       sections.splice(index + 1, 0, copy);
       return {
         ...commit(state, touch({ ...state.diagram, sections, activeSectionId: copy.id, activeDetailId: undefined })),
+        selectedNodeIds: [],
+        selectedEdgeId: null,
+      };
+    }),
+
+  updateSequence: (fn, coalesceKey) =>
+    set((state) => {
+      const view = getActiveSection(state.diagram);
+      if (!view.sequence) return state;
+      const sequence = fn(view.sequence);
+      if (sequence === view.sequence) return state;
+      return commit(state, mapActiveSectionFull(state.diagram, (section) => ({ ...section, sequence })), coalesceKey);
+    }),
+
+  addImportedSections: (sections, legend) =>
+    set((state) => {
+      if (!sections.length) return state;
+      const known = new Set(state.diagram.legend.map((entry) => entry.key));
+      return {
+        ...commit(
+          state,
+          touch({
+            ...state.diagram,
+            legend: [...state.diagram.legend, ...legend.filter((entry) => !known.has(entry.key))],
+            sections: [...state.diagram.sections, ...sections],
+            activeSectionId: sections[0].id,
+            activeDetailId: undefined,
+          }),
+        ),
         selectedNodeIds: [],
         selectedEdgeId: null,
       };
@@ -773,20 +908,46 @@ export const useDiagramStore = create<DiagramState>((set) => ({
     return key;
   },
 
-  // Nodes in every section that used the removed entry become unassigned.
-  removeLegendEntry: (key) =>
-    set((state) =>
-      commit(
+  // Nodes in every section (and internal design) that used the removed entry move to the replacement in the
+  // same undo step, or become unassigned.
+  removeLegendEntry: (key, replacement) =>
+    set((state) => {
+      const { legend } = state.diagram;
+      const into = replacement !== key && legend.some((entry) => entry.key === replacement) ? replacement : undefined;
+      return commit(
         state,
         touch({
           ...state.diagram,
-          legend: state.diagram.legend.filter((entry) => entry.key !== key),
+          legend: legend.filter((entry) => entry.key !== key),
           sections: mapEveryNode(state.diagram, (node) =>
-            node.data.colorKey === key ? { ...node, data: { ...node.data, colorKey: undefined } } : node,
+            node.data.colorKey === key ? { ...node, data: { ...node.data, colorKey: into } } : node,
+          ).map((section) =>
+            section.sequence
+              ? {
+                  ...section,
+                  sequence: {
+                    ...section.sequence,
+                    participants: section.sequence.participants.map((participant) =>
+                      participant.colorKey === key ? { ...participant, colorKey: into } : participant,
+                    ),
+                  },
+                }
+              : section,
           ),
         }),
-      ),
-    ),
+      );
+    }),
+
+  moveLegendEntry: (key, index) =>
+    set((state) => {
+      const { legend } = state.diagram;
+      const from = legend.findIndex((entry) => entry.key === key);
+      const to = Math.max(0, Math.min(legend.length - 1, index));
+      if (from === -1 || from === to) return state;
+      const next = [...legend];
+      next.splice(to, 0, ...next.splice(from, 1));
+      return commit(state, touch({ ...state.diagram, legend: next }));
+    }),
 }));
 
 /** What the canvas shows: a tab, or (with `parent` set) the internal design of one of its components. */

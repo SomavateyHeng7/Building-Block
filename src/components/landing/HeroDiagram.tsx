@@ -78,8 +78,10 @@ export default function HeroDiagram() {
                     <div className="text-[11px] font-semibold leading-tight">{block.label}</div>
                     {block.tech && <div className="mt-0.5 text-[10px] leading-tight opacity-75">{block.tech}</div>}
                     {block.notes && (
-                      <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-amber-400 text-[10px] font-bold text-amber-950">
-                        !
+                      <span className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-amber-400 text-amber-950 dark:border-zinc-900">
+                        <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                          <path d="M5 4h14v11l-5 5H5zM14 20v-5h5M9 9h6M9 13h3" />
+                        </svg>
                       </span>
                     )}
                   </div>

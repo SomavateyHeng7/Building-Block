@@ -151,6 +151,27 @@ want to reverse.
 - **Decision:** `BlockNodeData.detail = { nodes, edges }`, one level, absent until used.
 - **Consequence:** files with large internal designs grow; copying a component copies its design.
 
+### Sequence diagrams are a kind of tab, offered as a template
+
+- **Alternatives:** a separate kind of file (can't sit beside the L0 it explains), or a sequence behind each
+  connection (limited to the two ends).
+- **Decision:** `DiagramSection.kind = "sequence"` with the content in `sequence`, `nodes` left empty. Offered as
+  the "Sequence diagram" template and as "Sequence" next to "Add tab". Participants are free-standing but take
+  legend colours, so they read like the components they stand for.
+- **Layout is computed, not stored:** messages are ordered steps, so positions would only drift out of order.
+
+### Import draw.io for architecture, Mermaid for sequences
+
+- **Why split by type:** draw.io files carry positions, containers and colours, so architecture keeps its layout;
+  Mermaid flowcharts have no positions and would need an auto-layout step. Mermaid's `sequenceDiagram` is how most
+  people already write sequences, and maps directly onto steps.
+- **Lossy on purpose, and says so:** nested containers are lifted (one level here), groups dissolved, free text and
+  loose arrows left out, `loop`/`alt` blocks flattened. Each import lists what it changed in its toast.
+- **Fill colours become "Imported #…" categories** rather than matching default categories by colour, which would
+  give shapes a meaning nobody chose. A later import reuses them.
+- **Our own XML reader** (`xml.ts`), not DOMParser: imports then run the same in the browser and in unit tests.
+- **Everything goes through `parseDiagram`** afterwards, so an import can never break an invariant.
+
 ### "The active section" means the active view
 
 - Making `getActiveSection` return an internal design when one is open made every existing action work at L2

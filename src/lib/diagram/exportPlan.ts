@@ -45,7 +45,14 @@ export function exportViews(diagram: Diagram): ExportView[] {
   return diagram.sections.flatMap((section) => {
     const tabStem = severalTabs ? `${base}-${fileBaseName(section.name)}` : base;
     return [
-      { id: section.id, sectionId: section.id, label: section.name, nodeCount: section.nodes.length, stem: tabStem },
+      {
+        id: section.id,
+        sectionId: section.id,
+        label: section.name,
+        // A sequence tab has something to picture once it has a participant.
+        nodeCount: section.sequence ? section.sequence.participants.length : section.nodes.length,
+        stem: tabStem,
+      },
       ...componentsWithDetail(section).map((component) => ({
         id: `${section.id}/${component.id}`,
         sectionId: section.id,

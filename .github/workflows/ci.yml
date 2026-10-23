@@ -18,7 +18,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
-      # Generates the route-aware type helpers (LayoutProps, PageProps) into .next/types.
+      # Generates next-env.d.ts and the route type globals (LayoutProps, PageProps) that tsc needs.
       - run: npx next typegen
       - run: npx tsc --noEmit
       - run: pnpm test
