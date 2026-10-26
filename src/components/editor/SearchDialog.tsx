@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useDeferredValue, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useDiagramStore } from "@/lib/diagram/store";
 import { searchDiagram, type SearchResult } from "@/lib/diagram/search";
 import { goTo } from "./canvasFocus";
@@ -25,7 +25,9 @@ export default function SearchDialog({ onClose }: { onClose: () => void }) {
   const [active, setActive] = useState(0);
   const listId = useId();
   const list = useRef<HTMLUListElement>(null);
-  const results = useMemo(() => searchDiagram(diagram, query), [diagram, query]);
+  // On a big diagram a search takes longer than a frame, so the list catches up after typing rather than slowing it.
+  const deferredQuery = useDeferredValue(query);
+  const results = useMemo(() => searchDiagram(diagram, deferredQuery), [diagram, deferredQuery]);
 
   useEffect(() => {
     list.current?.querySelector(`[data-index="${active}"]`)?.scrollIntoView({ block: "nearest" });
@@ -48,7 +50,11 @@ export default function SearchDialog({ onClose }: { onClose: () => void }) {
     if (event.key === "Escape") onClose();
     else if (event.key === "ArrowDown") setActive((index) => Math.min(index + 1, results.length - 1));
     else if (event.key === "ArrowUp") setActive((index) => Math.max(index - 1, 0));
-    else if (event.key === "Enter" && results[active]) open(results[active]);
+    else if (event.key === "Enter") {
+      // Enter pressed before the list caught up opens what matches what's typed now.
+      const current = deferredQuery === query ? results : searchDiagram(diagram, query);
+      if (current[active]) open(current[active]);
+    }
     else return;
     event.preventDefault();
   }

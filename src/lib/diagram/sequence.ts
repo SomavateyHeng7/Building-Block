@@ -327,6 +327,26 @@ export function linkableComponents(diagram: Pick<Diagram, "sections">): { sectio
     .filter((group) => group.components.length);
 }
 
+/**
+ * A component's key in pickers and sets: ids are only unique within a tab and can hold any character, so the
+ * tab is part of it and it isn't joined with a separator.
+ */
+export function linkKey(link: NonNullable<SequenceParticipant["component"]>): string {
+  return JSON.stringify([link.sectionId, link.id]);
+}
+
+/** The component (and its tab) a `linkKey` picks out of `linkableComponents`. */
+export function findLinkable(
+  groups: ReturnType<typeof linkableComponents>,
+  key: string,
+): { sectionId: string; component: DiagramNode } | undefined {
+  for (const { section, components } of groups) {
+    const component = components.find((node) => linkKey({ sectionId: section.id, id: node.id }) === key);
+    if (component) return { sectionId: section.id, component };
+  }
+  return undefined;
+}
+
 /** A participant standing for a component, named and coloured after it. */
 export function participantFor(sectionId: string, component: DiagramNode): SequenceParticipant {
   return {

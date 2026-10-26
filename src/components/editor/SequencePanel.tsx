@@ -4,7 +4,9 @@ import { useState, type ReactNode } from "react";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import {
   addStep,
+  findLinkable,
   linkableComponents,
+  linkKey,
   moveParticipant,
   moveStep,
   newMessage,
@@ -174,12 +176,17 @@ function ParticipantPanel({ sequence, participant, index, action }: { sequence: 
           Stands for
           <select
             className={FIELD}
-            value={link ? `${link.sectionId}/${link.id}` : ""}
+            value={link ? linkKey(link) : ""}
             onChange={(event) => {
-              const [sectionId, id] = event.target.value.split("/");
-              const component = groups.find((group) => group.section.id === sectionId)?.components.find((node) => node.id === id);
+              const found = findLinkable(groups, event.target.value);
               edit((current) =>
-                updateParticipant(current, participant.id, component ? { component: { sectionId, id }, label: component.data.label, colorKey: component.data.colorKey } : { component: undefined }),
+                updateParticipant(
+                  current,
+                  participant.id,
+                  found
+                    ? { component: { sectionId: found.sectionId, id: found.component.id }, label: found.component.data.label, colorKey: found.component.data.colorKey }
+                    : { component: undefined },
+                ),
               );
             }}
           >
@@ -187,7 +194,7 @@ function ParticipantPanel({ sequence, participant, index, action }: { sequence: 
             {groups.map(({ section, components }) => (
               <optgroup key={section.id} label={section.name}>
                 {components.map((component) => (
-                  <option key={component.id} value={`${section.id}/${component.id}`}>
+                  <option key={component.id} value={linkKey({ sectionId: section.id, id: component.id })}>
                     {component.data.label}
                   </option>
                 ))}

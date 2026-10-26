@@ -5,7 +5,10 @@ import {
   addStep,
   columnAt,
   emptySequence,
+  findLinkable,
   layoutSequence,
+  linkableComponents,
+  linkKey,
   messageNumbers,
   moveParticipant,
   moveStep,
@@ -17,11 +20,11 @@ import {
   updateStep,
 } from "@/lib/diagram/sequence";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
-import { createBlankDiagram } from "@/lib/diagram/factory";
+import { createBlankDiagram, createBlankSection } from "@/lib/diagram/factory";
 import { parseDiagram } from "@/lib/diagram/validate";
 import { legendUsedIn } from "@/lib/diagram/export";
 import { exportViews } from "@/lib/diagram/exportPlan";
-import type { SequenceDiagram } from "@/lib/diagram/types";
+import type { DiagramNode, SequenceDiagram } from "@/lib/diagram/types";
 
 const store = () => useDiagramStore.getState();
 const active = () => getActiveSection(store().diagram);
@@ -148,5 +151,27 @@ describe("sequence tabs", () => {
     store().updateSequence(() => sequence);
     expect(exportViews(store().diagram).find((view) => view.label === "Flow")?.nodeCount).toBe(3);
     expect(legendUsedIn(store().diagram, active()).map((entry) => entry.key)).toEqual(["microservice"]);
+  });
+});
+
+describe("picking a component for a participant", () => {
+  const block = (id: string, label: string): DiagramNode => ({
+    id,
+    type: "block",
+    position: { x: 0, y: 0 },
+    size: { width: 160, height: 56 },
+    data: { kind: "block", label, containerId: null },
+  });
+  const sections = [
+    { ...createBlankSection("Current"), id: "tab/1", nodes: [block("orders/api", "Orders")] },
+    { ...createBlankSection("Target"), id: "tab/2", nodes: [block("orders/api", "Orders v2")] },
+  ];
+
+  it("tells apart the same id on two tabs, and ids with any character", () => {
+    const groups = linkableComponents({ sections });
+    const second = linkKey({ sectionId: "tab/2", id: "orders/api" });
+    expect(linkKey({ sectionId: "tab/1", id: "orders/api" })).not.toBe(second);
+    expect(findLinkable(groups, second)).toMatchObject({ sectionId: "tab/2", component: { data: { label: "Orders v2" } } });
+    expect(findLinkable(groups, "")).toBeUndefined();
   });
 });
