@@ -60,7 +60,7 @@ function dragFrame(ids: string[], step: number) {
     const { x, y } = byId.get(id)!.position;
     return { id, type: "position", position: { x: x + step, y }, dragging: true };
   });
-  const updated = fromFlowNodes(applyNodeChanges(changes, flowNodes) as FlowNode[]);
+  const updated = fromFlowNodes(applyNodeChanges(changes, flowNodes) as FlowNode[], section.nodes);
   store().setActiveSectionNodes(updated, { coalesceKey: historyKey("move", ids) });
   // The next render converts the store's nodes and connections again.
   const next = getActiveSection(store().diagram);

@@ -1,5 +1,8 @@
 import { createId } from "./factory";
 import type {
+  Diagram,
+  DiagramNode,
+  DiagramSection,
   SequenceDiagram,
   SequenceMessage,
   SequenceNote,
@@ -274,4 +277,60 @@ export function columnAt(layout: SequenceLayout, x: number): SequenceColumn | un
     if (!best || Math.abs(column.x - x) < Math.abs(best.x - x)) best = column;
   }
   return best;
+}
+
+/** The component a participant stands for, if it's still there (a component on an architecture tab). */
+export function linkedComponent(diagram: Pick<Diagram, "sections">, link: SequenceParticipant["component"]): DiagramNode | undefined {
+  if (!link) return undefined;
+  const section = diagram.sections.find((candidate) => candidate.id === link.sectionId && !candidate.sequence);
+  return section?.nodes.find((node) => node.id === link.id && node.type === "block");
+}
+
+/**
+ * Gives every linked participant its component's current name and colour, and unlinks those whose component has
+ * gone (they keep the last name). Returns the same diagram when nothing changes.
+ */
+export function syncLinkedParticipants<T extends Pick<Diagram, "sections">>(diagram: T): T {
+  let changed = false;
+  const sections = diagram.sections.map((section) => {
+    if (!section.sequence?.participants.some((participant) => participant.component)) return section;
+    let touched = false;
+    const participants = section.sequence.participants.map((participant) => {
+      if (!participant.component) return participant;
+      const component = linkedComponent(diagram, participant.component);
+      if (!component) {
+        touched = true;
+        const unlinked = { ...participant };
+        delete unlinked.component;
+        return unlinked;
+      }
+      const { label, colorKey } = component.data;
+      if (participant.label === label && participant.colorKey === colorKey) return participant;
+      touched = true;
+      const next = { ...participant, label };
+      if (colorKey) next.colorKey = colorKey;
+      else delete next.colorKey;
+      return next;
+    });
+    if (!touched) return section;
+    changed = true;
+    return { ...section, sequence: { ...section.sequence, participants } };
+  });
+  return changed ? { ...diagram, sections } : diagram;
+}
+
+/** Components a participant can stand for: those on architecture tabs (not inside internal designs), by tab. */
+export function linkableComponents(diagram: Pick<Diagram, "sections">): { section: DiagramSection; components: DiagramNode[] }[] {
+  return diagram.sections
+    .filter((section) => !section.sequence)
+    .map((section) => ({ section, components: section.nodes.filter((node) => node.type === "block") }))
+    .filter((group) => group.components.length);
+}
+
+/** A participant standing for a component, named and coloured after it. */
+export function participantFor(sectionId: string, component: DiagramNode): SequenceParticipant {
+  return {
+    ...newParticipant(component.data.label, "participant", component.data.colorKey),
+    component: { sectionId, id: component.id },
+  };
 }

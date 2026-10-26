@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { searchDiagram } from "@/lib/diagram/search";
 import { buildDiagram } from "@/templates/build";
+import { sequenceTemplate } from "@/templates/sequence";
 
 const diagram = buildDiagram("Plan", [
   {
@@ -62,5 +63,24 @@ describe("searchDiagram", () => {
     const [result] = searchDiagram(diagram, "postgres");
     const orders = diagram.sections[0].nodes.find((node) => node.data.label === "Orders")!;
     expect(result).toMatchObject({ label: "Orders DB", sectionId: diagram.sections[0].id, detailId: orders.id });
+  });
+});
+
+describe("searching sequence tabs", () => {
+  it("finds participants by name or description, messages by what's sent, and notes by their text", () => {
+    const diagram = sequenceTemplate.build();
+    const section = diagram.sections[0];
+    const kinds = (query: string) => searchDiagram(diagram, query).map((result) => [result.kind, result.label]);
+    // The participant by its name first, then the steps that say it, in order (not those that merely touch it).
+    expect(kinds("order")).toEqual([
+      ["participant", "Orders Service"],
+      ["message", "Customer → Web Shop"],
+      ["message", "Web Shop → Orders Service"],
+      ["note", "Retries twice if the gateway times out, then cancels the …"],
+      ["message", "Orders Service → Notification Service"],
+      ["message", "Orders Service → Web Shop"],
+    ]);
+    expect(searchDiagram(diagram, "kafka")[0]).toMatchObject({ kind: "message", match: "Protocol: Kafka", sectionId: section.id });
+    expect(searchDiagram(diagram, "retries")[0]).toMatchObject({ kind: "note", where: "Checkout › note over Orders Service" });
   });
 });

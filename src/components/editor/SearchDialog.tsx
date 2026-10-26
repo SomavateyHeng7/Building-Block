@@ -10,6 +10,9 @@ const KIND_LABEL: Record<SearchResult["kind"], string> = {
   container: "Container",
   component: "Component",
   connection: "Connection",
+  participant: "Participant",
+  message: "Message",
+  note: "Note",
 };
 
 /**
@@ -32,7 +35,10 @@ export default function SearchDialog({ onClose }: { onClose: () => void }) {
     goTo({
       sectionId: result.sectionId,
       detailId: result.detailId,
-      kind: result.kind === "connection" ? "edge" : "node",
+      kind:
+        result.kind === "connection" ? "edge"
+        : result.kind === "participant" || result.kind === "message" || result.kind === "note" ? "sequence"
+        : "node",
       id: result.id,
     });
     onClose();
@@ -64,7 +70,7 @@ export default function SearchDialog({ onClose }: { onClose: () => void }) {
             aria-expanded={results.length > 0}
             aria-controls={listId}
             aria-activedescendant={results[active] ? `${listId}-${active}` : undefined}
-            aria-label="Find components, containers and connections"
+            aria-label="Find components, containers, connections and sequence steps"
             placeholder="Find a component, technology, owner, protocol…"
             className="min-w-0 flex-1 bg-transparent py-3 text-base outline-none placeholder:text-zinc-400 sm:text-sm"
             value={query}

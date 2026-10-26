@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Position } from "@xyflow/react";
-import { connectionPath, toFlowEdges, toFlowNodes } from "@/lib/diagram/flowAdapter";
+import { connectionPath, fromFlowNodes, toFlowEdges, toFlowNodes } from "@/lib/diagram/flowAdapter";
 import type { ChangeMarks } from "@/lib/diagram/compare";
 import type { DiagramEdge, DiagramNode } from "@/lib/diagram/types";
 
@@ -50,5 +50,27 @@ describe("change marks on the canvas", () => {
     expect(removed.data).toEqual({ shape: "curved", bend: { x: 8, y: 0 } });
     expect(plain.style?.stroke).toBe("#52525b");
     expect(plain.data).toEqual({ shape: "step" });
+  });
+});
+
+describe("fromFlowNodes", () => {
+  const nodes = [
+    { id: "a", type: "block", position: { x: 0, y: 0 }, size: { width: 160, height: 56 }, data: { kind: "block", label: "A", containerId: null } },
+    { id: "b", type: "block", position: { x: 200, y: 0 }, size: { width: 160, height: 56 }, data: { kind: "block", label: "B", containerId: null } },
+  ] satisfies DiagramNode[];
+
+  it("keeps the objects of nodes that didn't change, so undo history shares them", () => {
+    const flow = toFlowNodes(nodes, new Set());
+    const moved = flow.map((node) => (node.id === "a" ? { ...node, position: { x: 8, y: 0 } } : node));
+    const [a, b] = fromFlowNodes(moved, nodes);
+    expect(a).not.toBe(nodes[0]);
+    expect(a.position).toEqual({ x: 8, y: 0 });
+    expect(b).toBe(nodes[1]);
+  });
+
+  it("makes new objects for resized nodes, and without the previous nodes", () => {
+    const flow = toFlowNodes(nodes, new Set());
+    expect(fromFlowNodes([{ ...flow[0], width: 200 }], nodes)[0].size).toEqual({ width: 200, height: 56 });
+    expect(fromFlowNodes(flow)[1]).not.toBe(nodes[1]);
   });
 });

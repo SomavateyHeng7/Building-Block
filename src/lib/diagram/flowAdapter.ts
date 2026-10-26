@@ -44,19 +44,38 @@ export function toFlowNodes(nodes: DiagramNode[], selectedIds: ReadonlySet<strin
   }));
 }
 
-export function fromFlowNodes(flowNodes: FlowNode[]): DiagramNode[] {
-  return flowNodes.map((node) => ({
-    id: node.id,
-    type: node.type as "container" | "block",
-    position: node.position,
-    size: {
-      width: node.width ?? node.measured?.width ?? 160,
-      height: node.height ?? node.measured?.height ?? 80,
-    },
-    parentId: node.parentId,
-    zIndex: node.zIndex,
-    data: node.data,
-  }));
+/**
+ * With `previous` (the nodes the flow nodes were made from), an unchanged node keeps its object, so undo
+ * history shares it instead of keeping a copy of the whole tab per step.
+ */
+export function fromFlowNodes(flowNodes: FlowNode[], previous: readonly DiagramNode[] = []): DiagramNode[] {
+  const byId = new Map(previous.map((node) => [node.id, node]));
+  return flowNodes.map((node) => {
+    const width = node.width ?? node.measured?.width ?? 160;
+    const height = node.height ?? node.measured?.height ?? 80;
+    const old = byId.get(node.id);
+    if (
+      old &&
+      old.type === node.type &&
+      old.position === node.position &&
+      old.size.width === width &&
+      old.size.height === height &&
+      old.parentId === node.parentId &&
+      old.zIndex === node.zIndex &&
+      old.data === node.data
+    ) {
+      return old;
+    }
+    return {
+      id: node.id,
+      type: node.type as "container" | "block",
+      position: node.position,
+      size: { width, height },
+      parentId: node.parentId,
+      zIndex: node.zIndex,
+      data: node.data,
+    };
+  });
 }
 
 /**

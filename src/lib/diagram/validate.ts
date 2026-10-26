@@ -1,6 +1,7 @@
 import { COMPONENT_ICON_KEYS } from "./componentIcons";
 import { DEFAULT_LEGEND } from "./defaultLegend";
 import { createBlankSection, createId } from "./factory";
+import { syncLinkedParticipants } from "./sequence";
 import type {
   ConnectionSide,
   ContainerStyle,
@@ -242,6 +243,10 @@ function parseSequence(raw: unknown, name: string, legendKeys: Set<string>, fixe
       ...(item.shape === "actor" ? { shape: "actor" as const } : {}),
       ...(colorKey && legendKeys.has(colorKey) ? { colorKey } : {}),
       ...(description ? { description } : {}),
+      // Checked against the other tabs once they're all read (see parseDiagram).
+      ...(isObject(item.component) && text(item.component.sectionId) && text(item.component.id)
+        ? { component: { sectionId: text(item.component.sectionId)!, id: text(item.component.id)! } }
+        : {}),
     });
   }
   if (dropped) fixes.push(`"${name}": skipped ${plural(dropped, "participant")} that couldn't be read.`);
@@ -420,6 +425,14 @@ export function parseDiagram(input: unknown): ParsedDiagram {
 
   const activeSectionId = text(input.activeSectionId);
   const now = new Date().toISOString();
+  // Participants linked to a component take its name and colour; links to missing components are dropped.
+  const links = (list: DiagramSection[]) =>
+    list.flatMap((section) => section.sequence?.participants.filter((participant) => participant.component) ?? []).length;
+  const before = links(sections);
+  sections = syncLinkedParticipants({ sections }).sections;
+  const unlinked = before - links(sections);
+  if (unlinked) fixes.push(`Unlinked ${plural(unlinked, "sequence participant")} from components that are no longer there.`);
+
   const diagram: Diagram = {
     schemaVersion: 1,
     id: text(input.id) || createId("diagram"),

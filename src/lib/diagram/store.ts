@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createBlankDiagram, createBlankSection, createId, isSequenceSection } from "./factory";
 import { nextLegendColor } from "./palette";
+import { syncLinkedParticipants } from "./sequence";
 import {
   absolutePosition,
   arrangeNodes,
@@ -118,7 +119,9 @@ let lastCommit: { key: string | null; at: number } = { key: null, at: 0 };
  * Applies a diagram change and records the previous diagram for undo.
  * Pass a coalesceKey for bursts of edits (drags, typing) so they undo as one step.
  */
-function commit(state: DiagramState, diagram: Diagram, coalesceKey?: string) {
+function commit(state: DiagramState, changed: Diagram, coalesceKey?: string) {
+  // Sequence participants that stand for a component follow its name and colour, whatever the edit was.
+  const diagram = syncLinkedParticipants(changed);
   const now = Date.now();
   const coalesce =
     coalesceKey !== undefined && coalesceKey === lastCommit.key && now - lastCommit.at < COALESCE_MS;

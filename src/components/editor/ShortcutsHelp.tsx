@@ -3,7 +3,7 @@
 const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: "Ctrl/⌘ + S", action: "Save to the open file (asks where the first time)" },
   { keys: "Ctrl/⌘ + Shift + S", action: "Save as a new file" },
-  { keys: "Ctrl/⌘ + F", action: "Find a component, container or connection on any tab" },
+  { keys: "Ctrl/⌘ + F", action: "Find a component, container, connection or sequence step on any tab" },
   { keys: "B", action: "Add a component (inside the selected container)" },
   { keys: "C", action: "Add a container" },
   { keys: "Drag from a dot", action: "Connect a component to another (dots appear on hover, selection or touch)" },

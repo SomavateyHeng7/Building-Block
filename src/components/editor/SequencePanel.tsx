@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import {
   addStep,
+  linkableComponents,
   moveParticipant,
   moveStep,
   newMessage,
@@ -13,6 +14,7 @@ import {
   updateStep,
 } from "@/lib/diagram/sequence";
 import type { SequenceDiagram, SequenceMessage, SequenceMessageKind, SequenceNote, SequenceParticipant } from "@/lib/diagram/types";
+import { goTo } from "./canvasFocus";
 import { Icon } from "./Icon";
 import { SEQUENCE_LABEL_FIELD_ID, findSequenceItem, selectSequenceItem, useSequenceSelection } from "./sequenceSelection";
 
@@ -157,17 +159,63 @@ function MoveButtons({ labels, canBack, canForward, onBack, onForward }: { label
 function ParticipantPanel({ sequence, participant, index, action }: { sequence: SequenceDiagram; participant: SequenceParticipant; index: number; action?: ReactNode }) {
   const edit = useEdit();
   const legend = useDiagramStore((state) => state.diagram.legend);
+  const diagram = useDiagramStore((state) => state.diagram);
+  const groups = linkableComponents(diagram);
+  const link = participant.component;
+  const linkedTab = link ? diagram.sections.find((section) => section.id === link.sectionId) : undefined;
   const messages = sequence.steps.filter((step) => step.type === "message" && (step.from === participant.id || step.to === participant.id)).length;
   const key = `participant:${participant.id}`;
 
   return (
     <div className={PANEL}>
       <Title action={action}>{participant.shape === "actor" ? "Actor" : "Participant"}</Title>
+      {groups.length > 0 && (
+        <label className={FIELD_LABEL}>
+          Stands for
+          <select
+            className={FIELD}
+            value={link ? `${link.sectionId}/${link.id}` : ""}
+            onChange={(event) => {
+              const [sectionId, id] = event.target.value.split("/");
+              const component = groups.find((group) => group.section.id === sectionId)?.components.find((node) => node.id === id);
+              edit((current) =>
+                updateParticipant(current, participant.id, component ? { component: { sectionId, id }, label: component.data.label, colorKey: component.data.colorKey } : { component: undefined }),
+              );
+            }}
+          >
+            <option value="">Nothing: just a name</option>
+            {groups.map(({ section, components }) => (
+              <optgroup key={section.id} label={section.name}>
+                {components.map((component) => (
+                  <option key={component.id} value={`${section.id}/${component.id}`}>
+                    {component.data.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          <span className={HINT}>
+            {link
+              ? "Its name and colour follow the component: rename or recolour it there."
+              : "Pick a component from your architecture to keep the names in step."}
+          </span>
+          {link && linkedTab && (
+            <button
+              type="button"
+              className={`${ACTION_BUTTON} self-start`}
+              onClick={() => goTo({ sectionId: link.sectionId, kind: "node", id: link.id })}
+            >
+              Show it on {linkedTab.name}
+            </button>
+          )}
+        </label>
+      )}
       <label className={FIELD_LABEL}>
         Name
         <input
           id={SEQUENCE_LABEL_FIELD_ID}
-          className={FIELD}
+          className={`${FIELD} read-only:bg-zinc-50 read-only:text-zinc-500 dark:read-only:bg-zinc-950`}
+          readOnly={!!link}
           value={participant.label}
           onChange={(event) => edit((current) => updateParticipant(current, participant.id, { label: event.target.value }), `${key}:label`)}
           onBlur={(event) => {
@@ -197,27 +245,29 @@ function ParticipantPanel({ sequence, participant, index, action }: { sequence: 
           })}
         </div>
       </div>
-      <div className={FIELD_LABEL}>
-        Color
-        <div className="flex flex-wrap gap-1.5">
-          {legend.map((entry) => {
-            const active = participant.colorKey === entry.key;
-            return (
-              <button
-                key={entry.key}
-                type="button"
-                aria-label={entry.label}
-                aria-pressed={active}
-                title={entry.label}
-                onClick={() => edit((current) => updateParticipant(current, participant.id, { colorKey: active ? undefined : entry.key }))}
-                className={`h-6 w-6 rounded border ${active ? "border-zinc-900 ring-2 ring-zinc-900/30 dark:border-zinc-100" : "border-black/15"}`}
-                style={{ backgroundColor: entry.color }}
-              />
-            );
-          })}
+      {!link && (
+        <div className={FIELD_LABEL}>
+          Color
+          <div className="flex flex-wrap gap-1.5">
+            {legend.map((entry) => {
+              const active = participant.colorKey === entry.key;
+              return (
+                <button
+                  key={entry.key}
+                  type="button"
+                  aria-label={entry.label}
+                  aria-pressed={active}
+                  title={entry.label}
+                  onClick={() => edit((current) => updateParticipant(current, participant.id, { colorKey: active ? undefined : entry.key }))}
+                  className={`h-6 w-6 rounded border ${active ? "border-zinc-900 ring-2 ring-zinc-900/30 dark:border-zinc-100" : "border-black/15"}`}
+                  style={{ backgroundColor: entry.color }}
+                />
+              );
+            })}
+          </div>
+          <span className={HINT}>The same categories as your components. Click again to clear.</span>
         </div>
-        <span className={HINT}>The same categories as your components. Click again to clear.</span>
-      </div>
+      )}
       <label className={FIELD_LABEL}>
         Description
         <textarea

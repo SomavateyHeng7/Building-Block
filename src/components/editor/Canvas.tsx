@@ -229,7 +229,7 @@ export default function Canvas() {
 
       const options = historyOptionsFor(changes);
       if (!options) return;
-      const updated = fromFlowNodes(applyNodeChanges(changes, flowNodes) as FlowNode[]);
+      const updated = fromFlowNodes(applyNodeChanges(changes, flowNodes) as FlowNode[], section.nodes);
       // A component resized past its container's edge makes the container grow, as when dragging.
       const parents = new Set(
         changes.flatMap((change) =>
@@ -238,13 +238,13 @@ export default function Canvas() {
       );
       setActiveSectionNodes([...parents].reduce((nodes, id) => growContainerToFit(nodes, id), updated), options);
     },
-    [flowNodes, selectedNodeIds, setActiveSectionNodes, setSelection],
+    [flowNodes, section.nodes, selectedNodeIds, setActiveSectionNodes, setSelection],
   );
 
   // Dropping decides which container each dragged component is in: into one, out of one, or across.
   const handleNodeDragStop: OnNodeDrag = useCallback(
     (_event, _node, dragged) => {
-      const current = fromFlowNodes(flowNodes);
+      const current = fromFlowNodes(flowNodes, section.nodes);
       const nodes = dropIntoContainers(
         current,
         dragged.map((node) => ({ id: node.id, position: node.position })),
@@ -253,7 +253,7 @@ export default function Canvas() {
       // Same key as the drag itself, so the move and the re-parent undo together.
       setActiveSectionNodes(nodes, { coalesceKey: historyKey("move", dragged.map((node) => node.id)) });
     },
-    [flowNodes, setActiveSectionNodes],
+    [flowNodes, section.nodes, setActiveSectionNodes],
   );
 
   const handleDragOver = useCallback((event: React.DragEvent) => {

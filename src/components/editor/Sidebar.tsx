@@ -3,7 +3,7 @@
 import { useReactFlow } from "@xyflow/react";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { nextSlotInContainer } from "@/lib/diagram/layout";
-import { addParticipant, addStep, newNote, newParticipant } from "@/lib/diagram/sequence";
+import { addParticipant, addStep, linkableComponents, newNote, newParticipant, participantFor } from "@/lib/diagram/sequence";
 import type { BlockColorKey, SequenceParticipant } from "@/lib/diagram/types";
 import { showDetails } from "./detailsPanel";
 import { SEQUENCE_LABEL_FIELD_ID, findSequenceItem, selectSequenceItem, useSequenceSelection } from "./sequenceSelection";
@@ -43,6 +43,7 @@ export default function Sidebar({ className = "", onAdded, onCollapse }: Sidebar
   const addBlock = useDiagramStore((state) => state.addBlock);
   const { screenToFlowPosition } = useReactFlow();
   const sequence = useDiagramStore((state) => getActiveSection(state.diagram).sequence);
+  const sections = useDiagramStore((state) => state.diagram.sections);
   const updateSequence = useDiagramStore((state) => state.updateSequence);
 
   /** Touch screens can't drag from here, so tapping adds at the middle of what's on screen. */
@@ -144,6 +145,41 @@ export default function Sidebar({ className = "", onAdded, onCollapse }: Sidebar
             ))}
           </div>
         </section>
+        {(() => {
+          // Components from the architecture tabs that aren't in this sequence yet.
+          const used = new Set(sequence.participants.flatMap((participant) => (participant.component ? [participant.component.id] : [])));
+          const groups = linkableComponents({ sections })
+            .map((group) => ({ ...group, components: group.components.filter((component) => !used.has(component.id)) }))
+            .filter((group) => group.components.length);
+          if (!groups.length) return null;
+          return (
+            <section>
+              <h2 className={HEADING}>From your architecture</h2>
+              <select
+                aria-label="Add a component from your architecture"
+                value=""
+                onChange={(event) => {
+                  const [sectionId, id] = event.target.value.split("/");
+                  const component = groups.find((group) => group.section.id === sectionId)?.components.find((node) => node.id === id);
+                  if (component) add(participantFor(sectionId, component));
+                }}
+                className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900"
+              >
+                <option value="">Add a component…</option>
+                {groups.map(({ section, components }) => (
+                  <optgroup key={section.id} label={section.name}>
+                    {components.map((component) => (
+                      <option key={component.id} value={`${section.id}/${component.id}`}>
+                        {component.data.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              <p className="mt-1.5 text-[11px] leading-snug text-zinc-400">Keeps its name and colour in step with the component.</p>
+            </section>
+          );
+        })()}
         <section>
           <h2 className={HEADING}>Steps</h2>
           <button {...button(addNote)} disabled={!sequence.participants.length}>

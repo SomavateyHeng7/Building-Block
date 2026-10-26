@@ -128,6 +128,11 @@ export interface SequenceParticipant {
   shape?: "participant" | "actor";
   colorKey?: BlockColorKey;
   description?: string;
+  /**
+   * A component on an architecture tab that this participant stands for. While set, the participant takes that
+   * component's name and colour (kept in step by the store); it's dropped if the component goes.
+   */
+  component?: { sectionId: string; id: string };
 }
 
 /** How a message is sent: a call (solid, filled arrow), asynchronous (solid, open arrow) or a reply (dashed). */
