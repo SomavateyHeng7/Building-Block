@@ -4,7 +4,8 @@ import type { Diagram, DiagramEdge, DiagramNode, SequenceDiagram } from "./types
 /**
  * Finding things anywhere in a diagram: every tab, every component's internal design and every sequence. Matches
  * names first, then the other things an architect writes down (technology, owner, category, description, notes),
- * connections and messages by what flows, protocol and description, and notes on sequences by their text.
+ * connections and messages by what flows and protocol, and notes on sequences by their text. A query of several
+ * words finds what has every word somewhere ("orders kafka"), and accents don't matter ("cafe" finds "Café").
  */
 
 export interface SearchResult {
@@ -21,90 +22,135 @@ export interface SearchResult {
   match?: string;
 }
 
-const normalize = (value: string | undefined) => (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
-
-/** Lower is better: the name starting with the query, then the name containing it, then any other field. */
-function score(query: string, label: string, fields: [string, string | undefined][]): { score: number; match?: string } | null {
-  const name = normalize(label);
-  if (name.startsWith(query)) return { score: 0 };
-  if (name.includes(query)) return { score: 1 };
-  const field = fields.find(([, value]) => normalize(value).includes(query));
-  return field ? { score: 2, match: `${field[0]}: ${field[1]}` } : null;
+/** Lower case, accents off, runs of spaces as one. */
+export function normalize(value: string | undefined): string {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
 }
 
-export function searchDiagram(diagram: Diagram, rawQuery: string, limit = 50): SearchResult[] {
-  const query = normalize(rawQuery);
-  if (!query) return [];
+/** The words of a query, for matching and for highlighting them in results. */
+export function searchWords(query: string): string[] {
+  const normal = normalize(query);
+  return normal ? normal.split(" ") : [];
+}
+
+/**
+ * Splits `text` into runs inside and outside the query's words, ignoring case and accents ("cafe" marks "Café").
+ * Each character is folded on its own, so the marks line up with the original text.
+ */
+export function highlightWords(text: string, words: string[]): { text: string; mark: boolean }[] {
+  const chars = [...text];
+  if (!words.length || !chars.length) return [{ text, mark: false }];
+  const folded = chars.map((char) => normalize(char) || " ");
+  // Which character each position of the folded text came from (folding can change a character's length).
+  const owner = folded.flatMap((char, index) => Array.from({ length: char.length }, () => index));
+  const haystack = folded.join("");
+  const marked = chars.map(() => false);
+  for (const word of words) {
+    for (let at = haystack.indexOf(word); at !== -1; at = haystack.indexOf(word, at + 1)) {
+      for (let position = at; position < at + word.length; position++) marked[owner[position]] = true;
+    }
+  }
+  const parts: { text: string; mark: boolean }[] = [];
+  chars.forEach((char, index) => {
+    const last = parts.at(-1);
+    if (last && last.mark === marked[index]) last.text += char;
+    else parts.push({ text: char, mark: marked[index] });
+  });
+  return parts;
+}
+
+interface Field {
+  /** "Technology"; empty for a note's text, which needs no label. */
+  name: string;
+  value: string;
+  normal: string;
+}
+
+/** One thing that can be found, with its text normalised once per diagram rather than once per keystroke. */
+interface Entry {
+  result: SearchResult;
+  name: string;
+  /** Components, containers and participants are found by their name; connections, messages and notes by what they say. */
+  byName: boolean;
+  fields: Field[];
+}
+
+const field = (name: string, value: string | undefined): Field[] => (value ? [{ name, value, normal: normalize(value) }] : []);
+
+// Built when a diagram is first searched and reused while it's unchanged: every edit makes a new diagram object.
+const indexes = new WeakMap<Diagram, Entry[]>();
+
+function buildIndex(diagram: Diagram): Entry[] {
   const categories = new Map(diagram.legend.map((entry) => [entry.key, entry.label]));
-  const results: { score: number; result: SearchResult }[] = [];
+  const entries: Entry[] = [];
 
   function visit(nodes: DiagramNode[], edges: DiagramEdge[], sectionId: string, where: string, detailId?: string) {
     for (const node of nodes) {
       const icon = node.data.kind === "block" ? componentIcon(node.data.icon)?.label : undefined;
-      const found = score(query, node.data.label, [
-        ["Technology", node.data.technology],
-        ["Owner", node.data.owner],
-        ["Category", node.data.colorKey ? categories.get(node.data.colorKey) : undefined],
-        ["Icon", icon],
-        ["Description", node.data.description],
-        ["Notes", node.data.notes],
-      ]);
-      if (found) {
-        const kind = node.type === "container" ? "container" : "component";
-        const result: SearchResult = { kind, id: node.id, sectionId, detailId, label: node.data.label, where };
-        if (found.match) result.match = found.match;
-        results.push({ score: found.score, result });
-      }
+      const result: SearchResult = { kind: node.type === "container" ? "container" : "component", id: node.id, sectionId, detailId, label: node.data.label, where };
+      entries.push({
+        result,
+        name: normalize(node.data.label),
+        byName: true,
+        fields: [
+          ...field("Technology", node.data.technology),
+          ...field("Owner", node.data.owner),
+          ...field("Category", node.data.colorKey ? categories.get(node.data.colorKey) : undefined),
+          ...field("Icon", icon),
+          ...field("Description", node.data.description),
+          ...field("Notes", node.data.notes),
+        ],
+      });
     }
-    const nameOf = (id: string) => nodes.find((node) => node.id === id)?.data.label ?? "?";
+    const names = new Map(nodes.map((node) => [node.id, node.data.label]));
     for (const edge of edges) {
-      const label = `${nameOf(edge.source)} → ${nameOf(edge.target)}`;
-      // A connection is found by what it says, not by its ends' names: those find the components themselves.
-      const field = (
-        [
-          ["What flows", edge.label],
-          ["Protocol", edge.protocol],
-          ["Description", edge.description],
-        ] as [string, string | undefined][]
-      ).find(([, value]) => normalize(value).includes(query));
-      if (field) {
-        const match = `${field[0]}: ${field[1]}`;
-        results.push({ score: 2, result: { kind: "connection", id: edge.id, sectionId, detailId, label, where, match } });
-      }
+      const label = `${names.get(edge.source) ?? "?"} → ${names.get(edge.target) ?? "?"}`;
+      entries.push({
+        result: { kind: "connection", id: edge.id, sectionId, detailId, label, where },
+        name: normalize(label),
+        byName: false,
+        fields: [...field("What flows", edge.label), ...field("Protocol", edge.protocol), ...field("Description", edge.description)],
+      });
     }
   }
 
   function visitSequence(sequence: SequenceDiagram, sectionId: string, where: string) {
-    const nameOf = (id: string) => sequence.participants.find((participant) => participant.id === id)?.label ?? "?";
+    const names = new Map(sequence.participants.map((participant) => [participant.id, participant.label]));
+    const nameOf = (id: string) => names.get(id) ?? "?";
     for (const participant of sequence.participants) {
-      const found = score(query, participant.label, [
-        ["Category", participant.colorKey ? categories.get(participant.colorKey) : undefined],
-        ["Description", participant.description],
-      ]);
-      if (found) {
-        const result: SearchResult = { kind: "participant", id: participant.id, sectionId, label: participant.label, where };
-        if (found.match) result.match = found.match;
-        results.push({ score: found.score, result });
-      }
+      entries.push({
+        result: { kind: "participant", id: participant.id, sectionId, label: participant.label, where },
+        name: normalize(participant.label),
+        byName: true,
+        fields: [
+          ...field("Category", participant.colorKey ? categories.get(participant.colorKey) : undefined),
+          ...field("Description", participant.description),
+        ],
+      });
     }
     for (const step of sequence.steps) {
       if (step.type === "note") {
-        if (!normalize(step.text).includes(query)) continue;
         const label = step.text.length > 60 ? `${step.text.slice(0, 57)}…` : step.text;
-        results.push({ score: 2, result: { kind: "note", id: step.id, sectionId, label, where: `${where} › note over ${step.over.map(nameOf).join(", ")}` } });
+        entries.push({
+          result: { kind: "note", id: step.id, sectionId, label, where: `${where} › note over ${step.over.map(nameOf).join(", ")}` },
+          name: "",
+          byName: false,
+          fields: field("", step.text),
+        });
         continue;
       }
-      // Like connections: found by what they say; their ends' names find the participants.
-      const field = (
-        [
-          ["What's sent", step.label],
-          ["Protocol", step.protocol],
-        ] as [string, string | undefined][]
-      ).find(([, value]) => normalize(value).includes(query));
-      if (field) {
-        const label = `${nameOf(step.from)} → ${nameOf(step.to)}`;
-        results.push({ score: 2, result: { kind: "message", id: step.id, sectionId, label, where, match: `${field[0]}: ${field[1]}` } });
-      }
+      const label = `${nameOf(step.from)} → ${nameOf(step.to)}`;
+      entries.push({
+        result: { kind: "message", id: step.id, sectionId, label, where },
+        name: normalize(label),
+        byName: false,
+        fields: [...field("What's sent", step.label), ...field("Protocol", step.protocol)],
+      });
     }
   }
 
@@ -120,6 +166,55 @@ export function searchDiagram(diagram: Diagram, rawQuery: string, limit = 50): S
         visit(nodes, edges ?? [], section.id, `${section.name} › ${node.data.label}`, node.id);
       }
     }
+  }
+  return entries;
+}
+
+/**
+ * Lower is better: the name starting with the query, then containing it, then holding all its words; then every
+ * word found across the name and the other fields. Connections, messages and notes need at least one word in what
+ * they say: their ends' names alone find the components themselves.
+ */
+function score(entry: Entry, query: string, words: string[]): { score: number; match?: Field } | null {
+  if (entry.byName) {
+    if (entry.name.startsWith(query)) return { score: 0 };
+    if (entry.name.includes(query)) return { score: 1 };
+    if (words.length > 1 && words.every((word) => entry.name.includes(word))) return { score: 1.5 };
+  }
+  const inFields = (word: string) => entry.fields.some((candidate) => candidate.normal.includes(word));
+  if (!words.every((word) => entry.name.includes(word) || inFields(word))) return null;
+  // Show the field holding the whole query, else the first one holding a word the name doesn't.
+  const match =
+    entry.fields.find((candidate) => candidate.normal.includes(query)) ??
+    entry.fields.find((candidate) => words.some((word) => !entry.name.includes(word) && candidate.normal.includes(word)));
+  if (!match) return null;
+  return { score: 2, match };
+}
+
+/** Indexes a diagram ahead of the first search, e.g. as the search opens, so the first keystroke is quick too. */
+export function prepareSearch(diagram: Diagram): void {
+  indexFor(diagram);
+}
+
+function indexFor(diagram: Diagram): Entry[] {
+  let index = indexes.get(diagram);
+  if (!index) indexes.set(diagram, (index = buildIndex(diagram)));
+  return index;
+}
+
+export function searchDiagram(diagram: Diagram, rawQuery: string, limit = 50): SearchResult[] {
+  const query = normalize(rawQuery);
+  if (!query) return [];
+  const words = query.split(" ");
+  const index = indexFor(diagram);
+
+  const results: { score: number; result: SearchResult }[] = [];
+  for (const entry of index) {
+    const found = score(entry, query, words);
+    if (!found) continue;
+    const result = { ...entry.result };
+    if (found.match?.name) result.match = `${found.match.name}: ${found.match.value}`;
+    results.push({ score: found.score, result });
   }
 
   // Stable: equal scores keep the diagram's order (tabs left to right, each tab before its internal designs).

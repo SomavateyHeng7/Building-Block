@@ -129,7 +129,10 @@ describe.each(SIZES)("%i components per tab", (size) => {
       store().undo();
     }, 10, "paste + undo");
 
+    // A copy of the diagram object is searched as if just edited, so the index is built again.
+    measure(size, "find: first keystroke (indexes)", () => void searchDiagram({ ...store().diagram }, "ord"));
     measure(size, "find: one keystroke", () => void searchDiagram(store().diagram, "ord"));
+    measure(size, "find: two words", () => void searchDiagram(store().diagram, "ord svc"));
 
     const [from, to] = store().diagram.sections;
     measure(size, "compare two tabs", () => void compareSections(store().diagram, from, to), 10);

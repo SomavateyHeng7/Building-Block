@@ -105,7 +105,7 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 | `diagram/palette.ts` | Named colours, colour names, next colour, parsing colour codes, readable text colour |
 | `diagram/layout.ts` | Nesting, insets, arrange, tidy, fit, nudge, re-parenting ([layout](08-layout-and-containers.md)) |
 | `diagram/flowAdapter.ts` | Our nodes/edges ↔ React Flow's; undo keys; connection captions; line geometry (`connectionPath`); change marks |
-| `diagram/search.ts` | Finding components, containers and connections across the diagram |
+| `diagram/search.ts` | Finding components, containers, connections and sequence steps across the diagram; highlighting matches |
 | `diagram/export.ts` | Rendering pictures, PDF, SVG, CSV rows, export titles ([export](10-export.md)) |
 | `diagram/exportPlan.ts` | Which files an export produces |
 | `diagram/componentIcons.ts` | The built-in component icons (key, label, SVG path); keys are stored in files |

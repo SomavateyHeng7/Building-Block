@@ -118,8 +118,16 @@ dialog doesn't belong inside a `tablist`). It works in view mode too: comparing 
 Ctrl/⌘+F or the magnifier in the toolbar. `searchDiagram` (`src/lib/diagram/search.ts`, tested) looks through every
 tab and internal design: names starting with the query first, then names containing it, then technology, owner,
 category, icon, description, notes, and connections by what flows, protocol and description, each saying which field
-matched. A combobox with a listbox: arrows move, Enter or a click calls `goTo`, which opens the tab and internal
-design, selects the item and asks the canvas to zoom to it.
+matched. Sequence tabs are searched too: participants by name, messages by what's sent and protocol, notes by their
+text. Several words find what has every word somewhere, in any order ("orders kafka"); case and accents don't matter.
+Matched words are highlighted, and past 50 results the list says to add a word. A combobox with a listbox: arrows
+move, Enter or a click calls `goTo`, which opens the tab and internal design, selects the item and asks the canvas to
+zoom to it.
+
+**Speed:** the first search of a diagram builds an index of its normalised text (`prepareSearch`, run as the dialog
+opens), kept in a `WeakMap` keyed by the diagram object; every edit makes a new object, so the index is never stale.
+Each keystroke then only compares strings (about 1.6 ms at 2,000 components a tab), and the list follows the typing
+through `useDeferredValue`.
 
 **Zooming after a view change:** going to another view remounts the canvas, so `goTo` leaves a request in
 `useCanvasFocus`. The canvas waits until those nodes are measured (and a frame more, after its own fit-to-everything),

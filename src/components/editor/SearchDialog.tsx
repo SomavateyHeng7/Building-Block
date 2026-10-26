@@ -2,9 +2,24 @@
 
 import { useDeferredValue, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useDiagramStore } from "@/lib/diagram/store";
-import { searchDiagram, type SearchResult } from "@/lib/diagram/search";
+import { highlightWords, prepareSearch, searchDiagram, searchWords, type SearchResult } from "@/lib/diagram/search";
 import { goTo } from "./canvasFocus";
 import { Icon } from "./Icon";
+
+const LIMIT = 50;
+
+/** A result's text with the query's words marked. */
+function Highlight({ text, words }: { text: string; words: string[] }) {
+  return highlightWords(text, words).map((part, index) =>
+    part.mark ? (
+      <mark key={index} className="rounded-sm bg-amber-200/70 text-inherit dark:bg-amber-400/30">
+        {part.text}
+      </mark>
+    ) : (
+      part.text
+    ),
+  );
+}
 
 const KIND_LABEL: Record<SearchResult["kind"], string> = {
   container: "Container",
@@ -27,7 +42,14 @@ export default function SearchDialog({ onClose }: { onClose: () => void }) {
   const list = useRef<HTMLUListElement>(null);
   // On a big diagram a search takes longer than a frame, so the list catches up after typing rather than slowing it.
   const deferredQuery = useDeferredValue(query);
-  const results = useMemo(() => searchDiagram(diagram, deferredQuery), [diagram, deferredQuery]);
+  const results = useMemo(() => searchDiagram(diagram, deferredQuery, LIMIT), [diagram, deferredQuery]);
+  const words = useMemo(() => searchWords(deferredQuery), [deferredQuery]);
+
+  // Index while the dialog paints, before the first keystroke.
+  useEffect(() => {
+    const timer = setTimeout(() => prepareSearch(diagram));
+    return () => clearTimeout(timer);
+  }, [diagram]);
 
   useEffect(() => {
     list.current?.querySelector(`[data-index="${active}"]`)?.scrollIntoView({ block: "nearest" });
@@ -52,7 +74,7 @@ export default function SearchDialog({ onClose }: { onClose: () => void }) {
     else if (event.key === "ArrowUp") setActive((index) => Math.max(index - 1, 0));
     else if (event.key === "Enter") {
       // Enter pressed before the list caught up opens what matches what's typed now.
-      const current = deferredQuery === query ? results : searchDiagram(diagram, query);
+      const current = deferredQuery === query ? results : searchDiagram(diagram, query, LIMIT);
       if (current[active]) open(current[active]);
     }
     else return;
@@ -111,15 +133,27 @@ export default function SearchDialog({ onClose }: { onClose: () => void }) {
                 onClick={() => open(result)}
               >
                 <span className="flex items-baseline gap-2 text-sm">
-                  <span className="min-w-0 truncate font-medium">{result.label}</span>
+                  <span className="min-w-0 truncate font-medium">
+                    <Highlight text={result.label} words={words} />
+                  </span>
                   <span className="shrink-0 text-xs text-zinc-500">{KIND_LABEL[result.kind]}</span>
                 </span>
                 <span className="truncate text-xs text-zinc-500">
                   {result.where}
-                  {result.match && <> · {result.match}</>}
+                  {result.match && (
+                    <>
+                      {" · "}
+                      <Highlight text={result.match} words={words} />
+                    </>
+                  )}
                 </span>
               </li>
             ))}
+            {results.length === LIMIT && (
+              <li role="presentation" className="px-3 py-2 text-xs text-zinc-500">
+                Showing the first {LIMIT}. Add a word to narrow it down.
+              </li>
+            )}
           </ul>
         ) : (
           query.trim() && <p className="px-4 py-6 text-center text-sm text-zinc-500">Nothing matches “{query.trim()}”.</p>
