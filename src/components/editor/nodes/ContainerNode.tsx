@@ -4,7 +4,7 @@ import { memo, useRef, useState } from "react";
 import { Handle, NodeResizer, NodeToolbar, Position, type Node, type NodeProps } from "@xyflow/react";
 import { defaultLabel } from "@/lib/diagram/factory";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
-import { CONTAINER_MIN, containerInsets } from "@/lib/diagram/layout";
+import { CONTAINER_MIN, containerInsets, contentExtents } from "@/lib/diagram/layout";
 import type { ContainerNodeData, HeaderAlign, HeaderPosition } from "@/lib/diagram/types";
 import { NotesMarker, SIDES } from "./BlockNode";
 import { useReadOnly } from "../viewMode";
@@ -51,18 +51,8 @@ function ContainerNodeComponent({ id, data, selected }: NodeProps<ContainerFlowN
   const fitContainer = useDiagramStore((state) => state.fitContainer);
   const tidyContainer = useDiagramStore((state) => state.tidyContainer);
   // Right and bottom edges of the components inside, so resizing can't clip them.
-  const contentRight = useDiagramStore((state) =>
-    getActiveSection(state.diagram).nodes.reduce(
-      (max, node) => (node.parentId === id ? Math.max(max, node.position.x + node.size.width) : max),
-      0,
-    ),
-  );
-  const contentBottom = useDiagramStore((state) =>
-    getActiveSection(state.diagram).nodes.reduce(
-      (max, node) => (node.parentId === id ? Math.max(max, node.position.y + node.size.height) : max),
-      0,
-    ),
-  );
+  const contentRight = useDiagramStore((state) => contentExtents(getActiveSection(state.diagram).nodes).get(id)?.right ?? 0);
+  const contentBottom = useDiagramStore((state) => contentExtents(getActiveSection(state.diagram).nodes).get(id)?.bottom ?? 0);
   const readOnly = useReadOnly();
   const [editing, setEditing] = useState(false);
   // Escape leaves the name as it was; the blur that follows must not save what was typed.

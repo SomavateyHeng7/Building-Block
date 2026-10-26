@@ -136,9 +136,9 @@ export default function SearchDialog({ onClose }: { onClose: () => void }) {
                   <span className="min-w-0 truncate font-medium">
                     <Highlight text={result.label} words={words} />
                   </span>
-                  <span className="shrink-0 text-xs text-zinc-500">{KIND_LABEL[result.kind]}</span>
+                  <span className="shrink-0 text-xs text-zinc-600 dark:text-zinc-400">{KIND_LABEL[result.kind]}</span>
                 </span>
-                <span className="truncate text-xs text-zinc-500">
+                <span className="truncate text-xs text-zinc-600 dark:text-zinc-400">
                   {result.where}
                   {result.match && (
                     <>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_LEGEND } from "@/lib/diagram/defaultLegend";
-import { PALETTE, colorName, nextLegendColor, parseHexColor } from "@/lib/diagram/palette";
+import { PALETTE, colorName, contrastRatio, nextLegendColor, parseHexColor, readableTextOn } from "@/lib/diagram/palette";
 
 describe("palette", () => {
   it("has no repeated colours or names, all as #rrggbb", () => {
@@ -33,5 +33,23 @@ describe("palette", () => {
     ["", null],
   ])("reads %j as %j", (input, expected) => {
     expect(parseHexColor(input)).toBe(expected);
+  });
+});
+
+describe("readable text", () => {
+  it("measures contrast the WCAG way", () => {
+    expect(contrastRatio("#000000", "#ffffff")).toBeCloseTo(21, 5);
+    expect(contrastRatio("#777777", "#777777")).toBe(1);
+  });
+
+  it("picks the text colour with more contrast, so every default legend colour reads at 4.5:1 or better", () => {
+    // Mid tones that a brightness cut-off gave light text at about 3:1.
+    expect(readableTextOn("#b8860b")).toBe("#111827");
+    expect(readableTextOn("#e0536f")).toBe("#111827");
+    expect(readableTextOn("#1f7a4d")).toBe("#f9fafb");
+    for (const entry of DEFAULT_LEGEND) {
+      expect(contrastRatio(entry.color, readableTextOn(entry.color)), entry.label).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(readableTextOn("not a colour")).toBe("#111827");
   });
 });

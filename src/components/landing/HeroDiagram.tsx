@@ -1,10 +1,9 @@
 import { DEFAULT_LEGEND } from "@/lib/diagram/defaultLegend";
+import { readableTextOn } from "@/lib/diagram/palette";
 import type { BlockColorKey } from "@/lib/diagram/types";
 
 const COLORS = new Map(DEFAULT_LEGEND.map((entry) => [entry.key, entry.color]));
 /** Legend colours dark enough to need light text. */
-const DARK_KEYS = new Set<BlockColorKey>(["microservice", "ai-focus", "replacement", "rest-api"]);
-
 interface MockBlock {
   label: string;
   tech?: string;
@@ -70,13 +69,11 @@ export default function HeroDiagram() {
                 {container.blocks.map((block) => (
                   <div
                     key={block.label}
-                    className={`relative rounded-md border border-black/10 px-2 py-2 text-center ${
-                      DARK_KEYS.has(block.colorKey) ? "text-white" : "text-zinc-900"
-                    }`}
-                    style={{ backgroundColor: COLORS.get(block.colorKey) }}
+                    className="relative rounded-md border border-black/10 px-2 py-2 text-center"
+                    style={{ backgroundColor: COLORS.get(block.colorKey), color: readableTextOn(COLORS.get(block.colorKey) ?? "") }}
                   >
                     <div className="text-[11px] font-semibold leading-tight">{block.label}</div>
-                    {block.tech && <div className="mt-0.5 text-[10px] leading-tight opacity-75">{block.tech}</div>}
+                    {block.tech && <div className="mt-0.5 text-[10px] leading-tight">{block.tech}</div>}
                     {block.notes && (
                       <span className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-amber-400 text-amber-950 dark:border-zinc-900">
                         <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden>

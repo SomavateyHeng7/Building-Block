@@ -36,6 +36,7 @@ import { useUnsavedGuard } from "./useUnsavedGuard";
 import { Icon } from "./Icon";
 import { useReadOnly } from "./viewMode";
 import { useCompareView } from "./compareView";
+import { useRenderEverything } from "./exportRendering";
 import { changeMarksForView } from "@/lib/diagram/compare";
 import { LogoMark } from "@/components/Logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -266,12 +267,22 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
   const nextFrames = () =>
     new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-  /** Waits until the canvas shows the section's nodes with measured sizes. */
-  async function waitForSection(nodeCount: number) {
+  /**
+   * Waits until the canvas has drawn the section: all its nodes and connections in the DOM. Node sizes are known
+   * before anything is drawn, and a connection is only drawn once its ends have been measured, so this counts
+   * what's on the page rather than asking React Flow.
+   */
+  async function waitForSection(nodeCount: number, edgeCount: number) {
     for (let attempt = 0; attempt < 40; attempt++) {
       await nextFrames();
-      const nodes = getNodes();
-      if (nodes.length === nodeCount && nodes.every((node) => node.measured?.width && node.measured?.height)) return;
+      const canvas = document.querySelector(".react-flow__viewport");
+      if (
+        getNodes().length === nodeCount &&
+        canvas?.querySelectorAll(".react-flow__node").length === nodeCount &&
+        canvas.querySelectorAll(".react-flow__edge").length === edgeCount
+      ) {
+        return;
+      }
     }
   }
 
@@ -318,6 +329,8 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
     const pictured = [...new Map(plan.files.flatMap((file) => file.views).map((view) => [view.id, view])).values()];
     const needs = (format: ExportFormat) => plan.files.some((file) => file.format === format);
     setExporting(true);
+    // The picture is taken from the canvas's DOM, so mount the parts that are off screen too.
+    useRenderEverything.getState().set(true);
     setSelection([]);
     useDiagramStore.getState().setSelectedEdge(null);
     try {
@@ -332,7 +345,7 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
             const view = getActiveSection(useDiagramStore.getState().diagram);
             // A sequence tab is one sheet drawn at its full size; a canvas is the area its nodes cover.
             const sheet = view.sequence ? await waitForSequenceSheet() : null;
-            if (!view.sequence) await waitForSection(view.nodes.length);
+            if (!view.sequence) await waitForSection(view.nodes.length, view.edges?.length ?? 0);
             const viewport = sheet ?? document.querySelector<HTMLElement>(".react-flow__viewport");
             if (!viewport) throw new Error("The canvas isn't showing");
             const options = {
@@ -402,6 +415,7 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
         if (originalDetailId) openDetail(originalDetailId);
       }
       setExporting(false);
+      useRenderEverything.getState().set(false);
     }
   }
 

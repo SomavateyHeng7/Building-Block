@@ -79,7 +79,7 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
           <span className="flex min-w-0 flex-col leading-tight">
             <span>{data.label}</span>
             {showTechnology && data.technology && (
-              <span className="text-[10px] font-normal opacity-75">[{data.technology}]</span>
+              <span className="text-[10px] font-normal">[{data.technology}]</span>
             )}
           </span>
         </span>

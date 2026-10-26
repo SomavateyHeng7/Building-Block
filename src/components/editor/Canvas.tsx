@@ -30,6 +30,7 @@ import ConnectionEdge from "./edges/ConnectionEdge";
 import { useCanvasFocus } from "./canvasFocus";
 import { requestDelete } from "./deletePrompt";
 import { useCompareView } from "./compareView";
+import { useRenderEverything } from "./exportRendering";
 import { Icon } from "./Icon";
 import { PALETTE_DATA_FORMAT, type PaletteDragPayload } from "./Sidebar";
 import { useReadOnly } from "./viewMode";
@@ -97,6 +98,7 @@ export default function Canvas() {
   const { screenToFlowPosition, fitView, getNode } = useReactFlow();
   const focus = useCanvasFocus((state) => state.target);
   const comparePair = useCompareView((state) => state.pair);
+  const renderEverything = useRenderEverything((state) => state.on);
   const { resolvedTheme } = useTheme();
   const mounted = useMounted();
   const wide = useIsWide();
@@ -319,6 +321,7 @@ export default function Canvas() {
       snapGrid={[8, 8]}
       minZoom={0.2}
       maxZoom={2}
+      onlyRenderVisibleElements={!renderEverything}
       fitView
     >
       <Background gap={16} />

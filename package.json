@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "perf": "vitest run --config vitest.perf.config.mts"
+    "perf": "vitest run --config vitest.perf.config.mts",
+    "testerarmy:sync": "node testerarmy/sync.mjs",
+    "test:browser": "ta ci --project \"$TESTERARMY_PROJECT_ID\" --group \"$TESTERARMY_GROUP_ID\" --target-url \"$TESTERARMY_URL\""
   },
   "dependencies": {
     "@xyflow/react": "^12.12.0",
@@ -25,9 +27,10 @@
     "@types/node": "^24.19.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^9",
+    "eslint": "^10.13.0",
     "eslint-config-next": "16.4.3",
     "tailwindcss": "^4",
+    "testerarmy": "0.10.1",
     "typescript": "^5",
     "vite": "^8.3.3",
     "vitest": "^5.0.3"
@@ -37,6 +40,13 @@
     "overrides": {
       "dompurify@<3.4.17": "^3.4.17",
       "zod@>=4.0.0 <4.6.6": "^4.6.6"
+    },
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "eslint-plugin-react>eslint": "10",
+        "eslint-plugin-jsx-a11y>eslint": "10",
+        "eslint-plugin-import>eslint": "10"
+      }
     }
   }
 }

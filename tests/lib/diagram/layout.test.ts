@@ -4,6 +4,7 @@ import {
   CONTAINER_PADDING,
   LAYOUT_GAP,
   arrangeNodes,
+  contentExtents,
   dropIntoContainers,
   growContainerToFit,
   nextSlotInContainer,
@@ -182,5 +183,16 @@ describe("dropIntoContainers", () => {
     const nodes = [container("c", 0, 0), block("a", 20, 50, "c")];
     const out = dropIntoContainers(nodes, [{ id: "a", position: { x: 20, y: 50 } }]);
     expect(out.every((node, index) => node === nodes[index])).toBe(true);
+  });
+});
+
+describe("contentExtents", () => {
+  it("gives each container how far its components reach, once per nodes array", () => {
+    const nodes = [container("c", 0, 0), block("a", 16, 40, "c"), block("b", 140, 90, "c", 100, 60), block("loose", 900, 900)];
+    const extents = contentExtents(nodes);
+    expect(extents.get("c")).toEqual({ right: 240, bottom: 150 });
+    expect(extents.has("loose")).toBe(false);
+    expect(contentExtents(nodes)).toBe(extents);
+    expect(contentExtents([...nodes])).not.toBe(extents);
   });
 });

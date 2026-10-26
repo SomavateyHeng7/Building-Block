@@ -2,18 +2,10 @@
 
 import { useState } from "react";
 import { layoutSequence } from "@/lib/diagram/sequence";
+import { readableTextOn } from "@/lib/diagram/palette";
 import type { Diagram, DiagramNode, SequenceDiagram } from "@/lib/diagram/types";
 
 const PADDING = 24;
-/** Legend colours dark enough to need light text. */
-function textColorFor(hex: string): string {
-  const value = hex.replace("#", "");
-  if (value.length !== 6) return "#111827";
-  const r = parseInt(value.slice(0, 2), 16);
-  const g = parseInt(value.slice(2, 4), 16);
-  const b = parseInt(value.slice(4, 6), 16);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? "#111827" : "#f9fafb";
-}
 
 /** A static, scaled-down picture of a template's first section, drawn from the same data the editor loads. */
 export default function TemplatePreview({ build, name }: { build: () => Diagram; name: string }) {
@@ -120,7 +112,7 @@ export default function TemplatePreview({ build, name }: { build: () => Diagram;
                 dominantBaseline="central"
                 fontSize={17}
                 fontWeight={500}
-                fill={textColorFor(color)}
+                fill={readableTextOn(color)}
               >
                 {node.data.label}
               </text>
@@ -157,7 +149,7 @@ function SequencePreview({ diagram, sequence, name }: { diagram: Diagram; sequen
             stroke="rgba(0,0,0,0.25)"
             strokeWidth={1.5}
           />
-          <text x={column.x} y={54} textAnchor="middle" dominantBaseline="central" fontSize={14} fontWeight={600} fill={textColorFor(colorOf(column.participant.colorKey))}>
+          <text x={column.x} y={54} textAnchor="middle" dominantBaseline="central" fontSize={14} fontWeight={600} fill={readableTextOn(colorOf(column.participant.colorKey))}>
             {column.participant.label}
           </text>
         </g>

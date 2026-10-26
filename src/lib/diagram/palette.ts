@@ -52,13 +52,30 @@ export function parseHexColor(input: string): string | null {
   return null;
 }
 
-/** Dark or light text, whichever reads better on `hex`. */
-export function readableTextOn(hex: string): string {
+const DARK_TEXT = "#111827";
+const LIGHT_TEXT = "#f9fafb";
+
+/** WCAG relative luminance of a 6-digit hex colour. */
+function relativeLuminance(hex: string): number {
   const value = hex.replace("#", "");
-  if (value.length !== 6) return "#111827";
-  const r = parseInt(value.slice(0, 2), 16);
-  const g = parseInt(value.slice(2, 4), 16);
-  const b = parseInt(value.slice(4, 6), 16);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.6 ? "#111827" : "#f9fafb";
+  const [r, g, b] = [0, 2, 4].map((at) => {
+    const channel = parseInt(value.slice(at, at + 2), 16) / 255;
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** WCAG contrast ratio between two 6-digit hex colours, from 1 to 21. */
+export function contrastRatio(a: string, b: string): number {
+  const [light, dark] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
+  return (light + 0.05) / (dark + 0.05);
+}
+
+/**
+ * Dark or light text, whichever has more contrast on `hex` (WCAG's measure, not a brightness cut-off: that gave
+ * light text at about 3:1 on mid tones like goldenrod and rose).
+ */
+export function readableTextOn(hex: string): string {
+  if (!/^#?[0-9a-f]{6}$/i.test(hex)) return DARK_TEXT;
+  return contrastRatio(hex, DARK_TEXT) >= contrastRatio(hex, LIGHT_TEXT) ? DARK_TEXT : LIGHT_TEXT;
 }

@@ -5,11 +5,18 @@
 ```bash
 pnpm test        # Vitest: every file in tests/
 npx tsc --noEmit # type check
-pnpm lint        # ESLint (Next.js core-web-vitals + TypeScript rules)
+pnpm lint        # ESLint 10 (Next.js core-web-vitals + TypeScript rules)
 pnpm build       # production build (also type-checks)
+pnpm perf        # performance baselines on big diagrams (not part of pnpm test)
+pnpm audit       # known vulnerabilities in dependencies
 ```
 
-All four must pass before merging.
+The first four run in CI (`.github/workflows/ci.yml`) and must pass before merging. Browser tests run separately,
+in TesterArmy, against a deployed copy of the app (see [Browser tests](#browser-tests-testerarmy)).
+
+**ESLint 10 and three plugins:** `eslint-plugin-react`, `-jsx-a11y` and `-import` (pulled in by
+`eslint-config-next`) don't list ESLint 10 as supported yet. Their rules were checked to run on it, and
+`pnpm.peerDependencyRules` in `package.json` allows it for those three only; drop the rule once they list it.
 
 ## Layout of the test suite
 
@@ -22,22 +29,29 @@ environment: no browser, so tests cover the pure logic and the stores.
 
 | File | Tests | What it proves |
 | --- | --- | --- |
-| `tests/lib/diagram/validate.test.ts` | 21 | File parsing: rejects non-diagrams and newer versions; every repair rule; short colours; size caps |
+| `tests/lib/diagram/validate.test.ts` | 24 | File parsing: rejects non-diagrams and newer versions; every repair rule; short colours; size caps |
 | `tests/lib/diagram/file.test.ts` | 17 | Dirty tracking (incl. tab switches and undo-to-saved); save via picker, reuse of the handle, Save As, cancel, failure; `fileBaseName` cases |
-| `tests/lib/diagram/connections.test.ts` | 23 | Connections: creating, refusing, editing, deleting with components, copying; paste/duplicate growing containers; no-op renames; `historyKey`; `defaultLabel` |
-| `tests/lib/diagram/layout.test.ts` | 21 | Align/distribute/size (incl. containers carrying children and leaving containers), grow/fit, next slot, nudging, `dropIntoContainers` |
-| `tests/lib/diagram/detail.test.ts` | 14 | L2: drawing inside a component, back, navigation isn't an edit, undo, emptying, one level deep, copying, legend removal, stable view objects, file round-trip, nested-design repair, CSV "Part of", export titles |
+| `tests/lib/diagram/connections.test.ts` | 27 | Connections: creating, refusing, editing, deleting with components, copying; paste/duplicate growing containers; no-op renames; `historyKey`; `defaultLabel` |
+| `tests/lib/diagram/layout.test.ts` | 22 | Container content extents (computed once per nodes array); align/distribute/size (incl. containers carrying children and leaving containers), grow/fit, next slot, nudging, `dropIntoContainers` |
+| `tests/lib/diagram/detail.test.ts` | 15 | L2: drawing inside a component, back, navigation isn't an edit, undo, emptying, one level deep, copying, legend removal, stable view objects, file round-trip, nested-design repair, CSV "Part of", export titles |
 | `tests/lib/diagram/exportPlan.test.ts` | 8 | Views and file names; single file vs zip; PDF pages vs files; empty views skipped; name collisions; descriptions |
 | `tests/lib/diagram/export.test.ts` | 6 | CSV quoting and formula injection; BOM and CRLF; pixel ratio within iOS canvas limits |
-| `tests/lib/diagram/palette.test.ts` | 11 | Palette has no duplicates; default legend colours are named; next colour; parsing typed colour codes |
+| `tests/lib/diagram/palette.test.ts` | 13 | WCAG contrast; every default legend colour has 4.5:1 text; palette has no duplicates; default legend colours are named; next colour; parsing typed colour codes |
 | `tests/lib/zip.test.ts` | 3 | CRC-32 against the standard value; the zip passes `unzip -t` and Python's `zipfile` (UTF-8 names, contents); empty zip |
 | `tests/lib/consent.test.ts` | 4 | Needed until accepted; version mismatch asks again; withdraw; blocked storage lasts for the session |
 | `tests/lib/toast.test.ts` | 4 | Durations by kind; repeats replace; at most three; empty details |
 | `tests/lib/maintenance.test.ts` | 6 | Reading the environment; `Retry-After`; upcoming end time |
 | `tests/proxy.test.ts` | 2 | 503 on every page during maintenance (incl. `/maintenance`); redirect home afterwards |
 | `tests/lib/levels.test.ts` | 2 | Roadmap statuses and heading wording |
-| `tests/lib/diagram/compare.test.ts` | 9 | Compare tabs: matching by name across ids, added/removed/changed fields, container moves, ignoring layout, connection matching (incl. two-way), internal designs, change-list rows |
-| `tests/templates/templates.test.ts` | 17 | Every template opens without repairs, mints fresh ids, connects real components, fits its containers; the richer templates have connections, an L2 design and two tabs |
+| `tests/lib/diagram/compare.test.ts` | 13 | Compare tabs: matching by name across ids, added/removed/changed fields, container moves, ignoring layout, connection matching (incl. two-way), internal designs, change-list rows |
+| `tests/templates/templates.test.ts` | 20 | Every template opens without repairs, mints fresh ids, connects real components, fits its containers; the richer templates have connections, an L2 design and two tabs |
+| `tests/lib/diagram/search.test.ts` | 9 | Names first, then details; several words in any order; accents ignored; a changed diagram is searched afresh; highlighting; sequence participants, messages and notes |
+| `tests/lib/diagram/sequence.test.ts` | 11 | Editing and laying out sequences; sequence tabs (undo, duplicate, save, picture); picking a component for a participant, tab-safe |
+| `tests/lib/diagram/flowAdapter.test.ts` | 6 | Line paths and bends; change marks; unchanged nodes keep their objects (undo history shares them) |
+| `tests/lib/diagram/grouping.test.ts` | 11 | Grouping into a container and ungrouping, as one undo step; deleting a container asks about its components |
+| `tests/lib/diagram/import.test.ts` | 10 | XML reading; draw.io shapes, swimlanes, arrows and compressed pages; Mermaid sequences; refusals with reasons |
+| `tests/lib/diagram/legend.test.ts` | 3 | Reordering entries; removing one moves its items to another, inside internal designs too |
+| `tests/lib/diagram/recovery.test.ts` | 6 | Recovery copy: off by default, read back like a file, cleared, full or blocked storage reported |
 
 `zip.test.ts` shells out to `unzip` and `python3`, which are present on macOS and most Linux CI images.
 
@@ -49,10 +63,54 @@ environment: no browser, so tests cover the pure logic and the stores.
   `localStorage`, and `file.test.ts` for fake file handles.
 - Prefer testing the pure function (e.g. `planExport`, `componentRows`) over the component that uses it.
 
+## Browser tests (TesterArmy)
+
+The app is tested in a real browser by [TesterArmy](https://tester.army): an AI agent follows plain-language steps
+in a cloud browser. The tests are defined in **`testerarmy/tests.mjs`** (41, one or more per area of the app, each on
+a desktop, tablet or phone screen) and copied into TesterArmy with `pnpm testerarmy:sync`, so they're reviewed with
+the code. Where the agent can't see or do something itself, a `javascript` step does it: hiding the native file
+pickers and handing the app a file, recording downloads, reading CSS classes and browser storage, measuring contrast.
+
+**It needs a public URL.** The cloud browser can't reach `localhost`, so tests run against a deployment (a Vercel
+preview, say) or a tunnel to a local server.
+
+### Setting it up (once)
+
+1. Sign in: `pnpm exec ta auth`. Create a web project (or pick one: `pnpm exec ta projects list`) and a group:
+   `echo '{"projectId":"<project>","name":"Regression"}' | pnpm exec ta groups create --json`.
+2. Copy the tests in: `TESTERARMY_PROJECT_ID=<project> TESTERARMY_GROUP_ID=<group> pnpm testerarmy:sync`. Run it
+   again after changing `tests.mjs`: it updates tests by title and lists any in the group that aren't in the file.
+3. For CI, in the GitHub repository settings add the secret `TESTERARMY_API_KEY` (an API key from the TesterArmy
+   dashboard) and the variables `TESTERARMY_PROJECT_ID` and `TESTERARMY_GROUP_ID`, and have the host report
+   deployments to GitHub (Vercel's GitHub integration does).
+
+`.github/workflows/testerarmy.yml` then runs the group against every successful deployment and fails if any test
+fails; it can also be run by hand with a URL. Until the variables are set it's skipped.
+
+### Running them by hand
+
+```bash
+TESTERARMY_URL=https://<preview-url> TESTERARMY_PROJECT_ID=<project> TESTERARMY_GROUP_ID=<group> pnpm test:browser
+```
+
+For a local build, start it (`pnpm build && pnpm start -p 3100`) and expose it with a tunnel, e.g.
+`cloudflared tunnel --url http://localhost:3100`, then use the tunnel's URL. Keep the tunnel up only while testing:
+it puts the local server on the internet.
+
+### Writing a test
+
+- One flow per test, 3–15 steps (TesterArmy allows 30): `act` for what to do, `assert` for what should be true.
+  Name things as they appear on screen ("Click 'Compare tabs'"), not by selector.
+- Accept the privacy notice first (the `consent` step) and open a template with `openTemplate(...)`.
+- Use a `javascript` step only for what the agent can't see; return `{ success: false, reason }` to fail.
+- Only what's on screen is in the DOM (the canvas uses `onlyRenderVisibleElements`): count nodes on templates
+  that fit the screen, not on big diagrams.
+
 ## What automated tests don't cover
 
-The UI components aren't unit-tested (there is no browser environment in the suite). These are checked by hand,
-in **Chrome or Edge** *and* **Safari or Firefox**, plus a phone, before a release:
+The unit tests run without a browser, and TesterArmy uses one Chromium browser. These are checked by hand, in
+**Chrome or Edge** *and* **Safari or Firefox**, plus a real phone, before a release. Most need a real file system,
+a real device or a deployment setting, which is why they're here:
 
 ### Manual checklist
 
@@ -93,6 +151,14 @@ in **Chrome or Edge** *and* **Safari or Firefox**, plus a phone, before a releas
 - [ ] Phone: drawers open and close; tapping the palette adds; handles are visible; no zoom when typing.
 
 ## QA history
+
+**October 2026:** a browser pass on Chrome, WebKit, a tablet and a phone (the former Playwright suite plus checks of
+the newer features), an axe-core accessibility scan and a CPU profile of dragging on big diagrams found and fixed:
+dragging at 3–7 fps on 1,000–2,000 components a tab (every connection remounted each frame), low-contrast text on
+goldenrod and rose components, non-tab controls inside the tab list, an unnamed tab-rename field, a search row
+below contrast, a button whose name didn't include its visible text, and the Next.js, DOMPurify, Vite and Zod
+advisories. Undo history now shares unchanged nodes (13× fewer objects kept).
+
 
 A full QA pass (code review, executable probes, a production-server HTTP check and a dependency audit) found and
 fixed, among others: Back-button data loss, components stuck inside containers, Save-then-Open picker failures,

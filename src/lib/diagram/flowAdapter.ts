@@ -20,28 +20,46 @@ export interface ConnectionEdgeData extends Record<string, unknown> {
 
 export type FlowEdge = Edge<ConnectionEdgeData, "connection">;
 
+// The flow node last made for each diagram node, reused while the node, its selection and its mark are the same.
+const flowNodeCache = new WeakMap<DiagramNode, { selected: boolean; className: string | undefined; flow: FlowNode }>();
+
 /**
  * React Flow needs parents before their children, so containers are listed first. With `marks`, changed
  * nodes get a `bb-change-*` class that outlines and tags them (see globals.css).
+ *
+ * **Why the cache and `measured`:** React Flow rebuilds its record of every node object it hasn't seen before, and
+ * without `measured` it forgets where that node's connection dots are, hiding its connections until it measures
+ * the node again. Rebuilding every node on each frame of a drag made every connection on the tab unmount and
+ * remount, measuring its label each time: a few frames a second on big diagrams. Unchanged nodes now keep their
+ * object, and changed ones say their size (already known) so their dots are kept.
  */
 export function toFlowNodes(nodes: DiagramNode[], selectedIds: ReadonlySet<string>, marks?: ChangeMarks | null): FlowNode[] {
   const ordered = [
     ...nodes.filter((node) => node.type === "container"),
     ...nodes.filter((node) => node.type !== "container"),
   ];
-  return ordered.map((node) => ({
-    id: node.id,
-    type: node.type,
-    position: node.position,
-    width: node.size.width,
-    height: node.size.height,
-    // No `extent: "parent"`: components can be dragged out of their container (see dropIntoContainers).
-    parentId: node.parentId,
-    zIndex: node.zIndex,
-    selected: selectedIds.has(node.id),
-    className: marks?.nodes.has(node.id) ? `bb-change bb-change-${marks.nodes.get(node.id)}` : undefined,
-    data: node.data,
-  }));
+  return ordered.map((node) => {
+    const selected = selectedIds.has(node.id);
+    const className = marks?.nodes.has(node.id) ? `bb-change bb-change-${marks.nodes.get(node.id)}` : undefined;
+    const cached = flowNodeCache.get(node);
+    if (cached && cached.selected === selected && cached.className === className) return cached.flow;
+    const flow: FlowNode = {
+      id: node.id,
+      type: node.type,
+      position: node.position,
+      width: node.size.width,
+      height: node.size.height,
+      measured: { width: node.size.width, height: node.size.height },
+      // No `extent: "parent"`: components can be dragged out of their container (see dropIntoContainers).
+      parentId: node.parentId,
+      zIndex: node.zIndex,
+      selected,
+      className,
+      data: node.data,
+    };
+    flowNodeCache.set(node, { selected, className, flow });
+    return flow;
+  });
 }
 
 /**

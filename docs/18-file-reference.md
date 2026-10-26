@@ -8,14 +8,17 @@ Every file in the repository and what it is for. Details are in the linked pages
 | --- | --- |
 | `README.md` | User-facing overview: features, where diagrams live, devices, development commands, form settings |
 | `AGENTS.md` / `CLAUDE.md` | Notes for AI coding assistants. `AGENTS.md` is written by `next dev`: Next.js 16 differs from older docs; read `node_modules/next/dist/docs/` first |
-| `package.json` | Scripts (`dev`, `build`, `start`, `lint`, `test`) and dependencies; pnpm 9 |
+| `package.json` | Scripts (`dev`, `build`, `start`, `lint`, `test`, `perf`, `testerarmy:sync`, `test:browser`), dependencies, and pnpm overrides and peer rules; pnpm 9 |
 | `pnpm-lock.yaml` | Locked dependency versions |
 | `next.config.ts` | Security headers, `poweredByHeader: false` ([security](14-security.md#http-headers)) |
 | `tsconfig.json` | Strict TypeScript; `@/*` → `src/*` |
 | `eslint.config.mjs` | Next.js core-web-vitals + TypeScript lint rules |
 | `postcss.config.mjs` | Tailwind 4 via PostCSS |
 | `vitest.config.mts` | `@` alias; tests in `tests/**/*.test.ts`; Node environment |
+| `vitest.perf.config.mts` | `pnpm perf`: the performance baselines in `tests/perf/`, one file at a time |
 | `.gitignore` | Ignores builds, `node_modules`, `.env*`, `*.tsbuildinfo` |
+| `.github/workflows/ci.yml` | On every push to main and pull request: lint, type check, unit tests |
+| `.github/workflows/testerarmy.yml` | Browser tests in TesterArmy against each successful deployment, once set up ([testing](15-testing-and-qa.md#browser-tests-testerarmy)) |
 | `docs/` | This documentation |
 
 ## `src/app/` — routes ([routing](03-routing.md))
@@ -71,6 +74,7 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 | `compareView.ts` | Which two tabs are compared on the canvas (screen state, not saved) |
 | `SearchDialog.tsx` | Find (Ctrl/⌘+F) across tabs and internal designs |
 | `canvasFocus.ts` | `goTo`: open a view, select an item and ask the canvas to zoom to it |
+| `exportRendering.ts` | `useRenderEverything`: mounts off-screen nodes while an export pictures the canvas |
 | `edges/ConnectionEdge.tsx` | A connection line: right-angled, curved or straight, with the dot that bends it |
 | `Canvas.tsx` | React Flow canvas: changes → store, drops, connections, empty state |
 | `Sidebar.tsx` | Palette: drag or tap to add containers and components |
@@ -145,3 +149,12 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 ## `tests/`
 
 Unit tests mirroring `src/` ([testing](15-testing-and-qa.md#layout-of-the-test-suite)).
+
+## `testerarmy/`
+
+Browser tests run by TesterArmy ([testing](15-testing-and-qa.md#browser-tests-testerarmy)).
+
+| File | Purpose |
+| --- | --- |
+| `tests.mjs` | The tests: plain-language steps, with `javascript` steps where the agent can't see or act |
+| `sync.mjs` | `pnpm testerarmy:sync`: creates or updates them in a TesterArmy group, matched by title |

@@ -38,6 +38,28 @@ export type ArrangeOp =
   | "same-height";
 
 /** Canvas position, adding the parent container's offset for nested nodes. */
+const extentsCache = new WeakMap<DiagramNode[], Map<string, { right: number; bottom: number }>>();
+
+/**
+ * How far each container's components reach (right and bottom edges, relative to the container), by container id.
+ * Worked out once per nodes array: every container asks on every edit, so scanning the nodes per container made
+ * each drag frame cost containers × nodes.
+ */
+export function contentExtents(nodes: DiagramNode[]): ReadonlyMap<string, { right: number; bottom: number }> {
+  let extents = extentsCache.get(nodes);
+  if (extents) return extents;
+  extents = new Map();
+  for (const node of nodes) {
+    if (!node.parentId) continue;
+    const current = extents.get(node.parentId) ?? { right: 0, bottom: 0 };
+    current.right = Math.max(current.right, node.position.x + node.size.width);
+    current.bottom = Math.max(current.bottom, node.position.y + node.size.height);
+    extents.set(node.parentId, current);
+  }
+  extentsCache.set(nodes, extents);
+  return extents;
+}
+
 export function absolutePosition(node: DiagramNode, nodes: DiagramNode[]): Position {
   const parent = node.parentId ? nodes.find((candidate) => candidate.id === node.parentId) : undefined;
   return parent

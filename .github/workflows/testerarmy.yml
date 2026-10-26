@@ -1,0 +1,44 @@
+name: Browser tests
+
+# TesterArmy runs the tests in testerarmy/tests.mjs in a cloud browser, so it needs a public URL: each successful
+# deployment (e.g. a Vercel preview), or one given by hand. Skipped until TesterArmy is set up; see
+# docs/15-testing-and-qa.md.
+on:
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Public URL of the app to test
+        required: true
+
+jobs:
+  testerarmy:
+    if: >-
+      vars.TESTERARMY_GROUP_ID != '' &&
+      (github.event_name == 'workflow_dispatch' || github.event.deployment_status.state == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # Runs the group and waits; fails the job if any test fails, is blocked or times out.
+      - run: >-
+          npx --yes testerarmy@0.10.1 ci
+          --project "$TESTERARMY_PROJECT_ID"
+          --group "$TESTERARMY_GROUP_ID"
+          --target-url "$TARGET_URL"
+          --commit-sha "$COMMIT_SHA"
+          --output testerarmy-result.json
+        env:
+          TESTERARMY_API_KEY: ${{ secrets.TESTERARMY_API_KEY }}
+          TESTERARMY_PROJECT_ID: ${{ vars.TESTERARMY_PROJECT_ID }}
+          TESTERARMY_GROUP_ID: ${{ vars.TESTERARMY_GROUP_ID }}
+          TARGET_URL: ${{ github.event.deployment_status.environment_url || inputs.url }}
+          COMMIT_SHA: ${{ github.event.deployment.sha || github.sha }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: testerarmy-result
+          path: testerarmy-result.json
+          retention-days: 14

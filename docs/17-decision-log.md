@@ -78,6 +78,19 @@ want to reverse.
 - **Why React Flow:** pan/zoom, drag, resize, selection, handles and minimap would be months of work.
 - **Why controlled:** one source of truth makes undo, autosave and dirty tracking cover every change.
 
+### Keep React Flow's node objects, and mount only what's on screen
+
+- **Problem:** dragging on big diagrams ran at 3–7 fps (1,000–2,000 components a tab). Every frame handed React Flow a
+  new object for every node without `measured`, so it forgot where every node's connection dots were: every
+  connection on the tab unmounted and remounted (about 5,000 SVG elements a frame), measuring its label each time.
+  Each container also scanned every node to find how far its contents reach.
+- **Decision:** `toFlowNodes` reuses a node's flow object while it's unchanged and gives its size as `measured`;
+  `fromFlowNodes` keeps unchanged diagram nodes (so undo history shares them); `contentExtents` works out every
+  container's contents in one pass per nodes array; the canvas sets `onlyRenderVisibleElements`.
+- **Consequence:** off-screen nodes aren't in the DOM, so export turns full rendering on while it pictures the canvas
+  (`useRenderEverything`) and waits for the nodes and connections to be on the page, not for React Flow's
+  measurements (sizes are known up front now).
+
 ### One level of container nesting
 
 - L0 groups systems into domains; deeper structure belongs in L2. Keeps every layout calculation simple.
@@ -237,6 +250,18 @@ want to reverse.
 
 - Collapse buttons sit on each panel's first title line; a collapsed panel leaves a 40 px rail with the expand
   button, so there is always a way back.
+
+### Text colour on a colour by WCAG contrast
+
+- A brightness cut-off put light text on mid tones (goldenrod, rose) at about 3:1. `readableTextOn` now picks
+  whichever of dark or light text has more contrast, so every default legend colour reads at 4.5:1 or better
+  (tested), and the start page and template previews use it too. The technology line isn't faded any more: at 75%
+  it fell below 4.5:1; its smaller size sets it apart.
+
+### The tab list holds only tabs
+
+- Screen readers expect a tab list to contain tabs. Rename, duplicate and delete for the open tab, and adding or
+  comparing tabs, sit in a "Tab actions" group just after the tabs, rather than inside the open tab.
 
 ---
 
