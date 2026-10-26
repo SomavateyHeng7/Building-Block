@@ -39,9 +39,9 @@ to choose this product over a SaaS whiteboard.
 
 ### 2. The only data that can leave the browser is what a user types into a form
 
-Two optional forms send data to a form provider: the **waitlist** (an email address) and the **contact form**
-(name, email, message). Both are switched off unless their environment variable is set, and both require an
-explicit agreement checkbox ([forms](11-privacy-consent-and-forms.md)).
+One optional form sends data to a form provider: the **waitlist** (an email address). It's switched off unless its
+environment variable is set, and it requires an explicit agreement checkbox. To contact us, people email the address
+on the contact page from their own email; the app sends nothing ([forms](11-privacy-consent-and-forms.md)).
 
 ### 3. Never lose work silently
 

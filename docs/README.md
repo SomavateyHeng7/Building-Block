@@ -24,7 +24,7 @@ New to the codebase? Read 1 → 4 first, then whichever area you're working on.
 | 8 | [Layout and containers](08-layout-and-containers.md) | `layout.ts`: nesting, insets, align/distribute, tidy, fit, drag-and-drop re-parenting |
 | 9 | [Connections (L1) and internal designs (L2)](09-connections-and-internal-designs.md) | The architecture levels and how each is stored and edited |
 | 10 | [Export](10-export.md) | The export dialog, export plans, rendering images, PDF, SVG, CSV, ZIP |
-| 11 | [Privacy, consent and forms](11-privacy-consent-and-forms.md) | The consent gate, privacy notice, waitlist and contact forms, everything stored in the browser |
+| 11 | [Privacy, consent and forms](11-privacy-consent-and-forms.md) | The consent gate, privacy notice, waitlist form, the contact page, everything stored in the browser |
 | 12 | [Notifications](12-notifications.md) | The toast system and its writing rules |
 | 13 | [Public pages](13-public-pages.md) | Landing page, start page, templates, maintenance page, error and 404 pages |
 | 14 | [Security](14-security.md) | Threat model, headers, file-parsing hardening, CSV injection, what we deliberately didn't do |

@@ -76,7 +76,7 @@ never diagram data.
 The app pages (`/diagrams`, `/templates`, `/editor`) ask people to accept the privacy notice once before use;
 the landing, privacy and contact pages stay open. The acceptance records the notice's version
 (`PRIVACY_VERSION` in `src/lib/consent.ts`): **change it whenever the notice changes**, and everyone is asked
-again. People can withdraw it on `/privacy`. The waitlist and contact forms ask for their own agreement.
+again. People can withdraw it on `/privacy`. The waitlist form asks for its own agreement; the contact page gives an email address rather than a form.
 
 ### Diagrams from an earlier version
 
@@ -107,14 +107,13 @@ pnpm lint
 pnpm build
 ```
 
-Optional form endpoints (each accepts a JSON POST, e.g. a Formspree form). Leave them unset to keep the app
-fully offline; these forms are the only places data can leave the browser:
+Optional settings. Leave them unset to keep the app fully offline; the waitlist form is the only place data can
+leave the browser:
 
 | Variable | What it turns on |
 | --- | --- |
 | `NEXT_PUBLIC_WAITLIST_URL` | The landing-page waitlist form (`{ email, consent }`) |
-| `NEXT_PUBLIC_CONTACT_URL` | The `/contact` form (`{ name, email, topic, message, consent }`) |
-| `NEXT_PUBLIC_CONTACT_EMAIL` | An address shown on `/contact`; without a form URL, the form opens the visitor's email app instead |
+| `NEXT_PUBLIC_CONTACT_EMAIL` | The address shown on `/contact` for people to write to (there's no contact form) |
 
 ### Project layout
 

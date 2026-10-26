@@ -88,5 +88,5 @@ itself; update `tests/lib/levels.test.ts`.
 
 ## Turn on the forms
 
-Set `NEXT_PUBLIC_WAITLIST_URL`, `NEXT_PUBLIC_CONTACT_URL` and/or `NEXT_PUBLIC_CONTACT_EMAIL` at the host and rebuild
+Set `NEXT_PUBLIC_WAITLIST_URL` (the waitlist form) and `NEXT_PUBLIC_CONTACT_EMAIL` (the address on `/contact`) at the host and rebuild
 ([operations](16-operations.md#environment-variables)).

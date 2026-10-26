@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Footer from "@/components/landing/Footer";
-import ContactForm from "./ContactForm";
 import { SOCIAL_LINKS } from "@/lib/links";
 
 export const metadata: Metadata = {
@@ -9,6 +8,7 @@ export const metadata: Metadata = {
   description: "Questions, problems, ideas or privacy requests: get in touch with the Building Block team.",
 };
 
+/** The address people write to, set at build time. Without it the email section is hidden. */
 const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL;
 /** A donation page (e.g. Ko-fi, GitHub Sponsors, a Stripe payment link), set at build time. Without it the section is hidden. */
 const DONATE_URL = process.env.NEXT_PUBLIC_DONATE_URL?.startsWith("https://") ? process.env.NEXT_PUBLIC_DONATE_URL : undefined;
@@ -116,6 +116,53 @@ function DonateSection() {
   );
 }
 
+/** The address to write to, and what helps us reply. There's no form: people write from their own email. */
+function EmailSection() {
+  if (!CONTACT_EMAIL) {
+    return process.env.NODE_ENV === "development" ? (
+      <p className="rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
+        Set <code className="font-mono">NEXT_PUBLIC_CONTACT_EMAIL</code> to the address people should write to, then rebuild, to show it here.
+      </p>
+    ) : null;
+  }
+  const subject = encodeURIComponent("Building Block");
+  return (
+    <section aria-labelledby="email-title" className="flex flex-col gap-4 rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
+      <div className="flex flex-col gap-1">
+        <h2 id="email-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          Email us
+        </h2>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          Write to{" "}
+          <a href={`mailto:${CONTACT_EMAIL}`} className="font-medium wrap-anywhere text-zinc-900 underline underline-offset-2 dark:text-zinc-100">
+            {CONTACT_EMAIL}
+          </a>{" "}
+          and we&apos;ll reply, usually within two working days.
+        </p>
+      </div>
+      <ul className="flex list-disc flex-col gap-1.5 pl-5 text-sm text-zinc-600 dark:text-zinc-400">
+        <li>
+          <span className="font-medium text-zinc-800 dark:text-zinc-200">Reporting a problem?</span> Tell us what you did, what you
+          expected and what happened, and which browser you use. Please don&apos;t paste confidential diagram content.
+        </li>
+        <li>
+          <span className="font-medium text-zinc-800 dark:text-zinc-200">A privacy or data request?</span> For example, removing your
+          email from the waitlist. We don&apos;t hold any diagrams, so there are none to delete.
+        </li>
+      </ul>
+      <a
+        href={`mailto:${CONTACT_EMAIL}?subject=${subject}`}
+        className="inline-flex items-center gap-2 self-start rounded-full bg-foreground px-6 py-2.5 text-sm font-medium text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc]"
+      >
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M4 6h16v12H4zM4 7l8 6 8-6" />
+        </svg>
+        Write an email
+      </a>
+    </section>
+  );
+}
+
 const HELP = [
   { title: "Lost work or can't open a file?", body: "Check your Downloads folder for the .json file, then use Open a diagram file on the start page.", href: "/diagrams", link: "Start page" },
   { title: "What happens to my data?", body: "Your diagrams never leave your device. The privacy notice explains the rest.", href: "/privacy", link: "Privacy notice" },
@@ -131,17 +178,7 @@ export default function ContactPage() {
         <header className="flex flex-col gap-3">
           <h1 className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Contact us</h1>
           <p className="text-zinc-600 dark:text-zinc-400">
-            Questions, problems, ideas or privacy requests: send us a message and we&apos;ll reply by email.
-            {CONTACT_EMAIL && (
-              <>
-                {" "}
-                You can also write to{" "}
-                <a href={`mailto:${CONTACT_EMAIL}`} className="font-medium wrap-anywhere text-zinc-900 underline underline-offset-2 dark:text-zinc-100">
-                  {CONTACT_EMAIL}
-                </a>
-                .
-              </>
-            )}
+            Questions, problems, ideas or privacy requests: email us and we&apos;ll reply. Some answers are right here too.
           </p>
           <ElsewhereLinks />
         </header>
@@ -158,12 +195,7 @@ export default function ContactPage() {
           ))}
         </section>
 
-        <section aria-labelledby="contact-form-title" className="flex flex-col gap-4">
-          <h2 id="contact-form-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-            Send a message
-          </h2>
-          <ContactForm />
-        </section>
+        <EmailSection />
 
         <DonateSection />
       </main>

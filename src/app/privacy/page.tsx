@@ -35,9 +35,9 @@ const SECTIONS = [
     ],
   },
   {
-    title: "Contact form",
+    title: "Writing to us",
     body: [
-      "If you write to us through the contact page, we receive the name (if you give one), email address and message you enter, through our form provider. We use them only to reply, and you're asked to agree to that before sending.",
+      "If you email us at the address on the contact page, we receive your email address, your name if your email shows it, and what you write. We use them only to reply. The app itself sends nothing: you write from your own email.",
     ],
   },
   {

@@ -5,8 +5,7 @@
 | Variable | Read | Effect |
 | --- | --- | --- |
 | `NEXT_PUBLIC_WAITLIST_URL` | **Build time** | Shows the landing-page waitlist form, which POSTs JSON to this URL (e.g. a Formspree form) |
-| `NEXT_PUBLIC_CONTACT_URL` | Build time | The `/contact` form POSTs JSON here |
-| `NEXT_PUBLIC_CONTACT_EMAIL` | Build time | Shown on `/contact`; with no contact URL, the form opens the visitor's email app addressed to it |
+| `NEXT_PUBLIC_CONTACT_EMAIL` | Build time | The address shown on `/contact` for people to write to; unset hides the email section |
 | `MAINTENANCE_MODE` | **Per request** | `on` / `true` / `1` / `yes` turns maintenance mode on |
 | `MAINTENANCE_UNTIL` | Per request | Optional ISO time, e.g. `2026-10-08T18:00Z`. Shown in the visitor's time zone; sets `Retry-After` |
 | `MAINTENANCE_MESSAGE` | Per request | Optional text replacing the default explanation |

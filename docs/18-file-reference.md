@@ -36,8 +36,7 @@ Every file in the repository and what it is for. Details are in the linked pages
 | `not-found.tsx` | 404 page |
 | `privacy/page.tsx` | Privacy notice and acceptance box |
 | `privacy/WithdrawConsent.tsx` | Shows when consent was given; withdraw button |
-| `contact/page.tsx` | Contact page shell, self-help cards |
-| `contact/ContactForm.tsx` | Contact form: validation, honeypot, POST or `mailto:` |
+| `contact/page.tsx` | Contact page: self-help cards, the address to email, donation section |
 | `maintenance/page.tsx` | Maintenance page (dynamic) |
 | `maintenance/MaintenanceStatus.tsx` | Expected end time, Try again, 30-second check |
 | `favicon.ico`, `icon.svg`, `apple-icon.png` | Site icons (Next.js file conventions) |

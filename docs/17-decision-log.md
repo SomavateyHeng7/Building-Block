@@ -234,8 +234,9 @@ want to reverse.
 
 ### Forms through configurable providers
 
-- No backend, so the waitlist and contact form POST to a URL set at build time (or open the email app). Unset means
-  fully offline.
+- No backend, so the waitlist form POSTs to a URL set at build time. Unset means fully offline.
+- The contact page gives an email address instead of a form (October 2026): people write from their own email, so
+  no form provider holds their details, and there's nothing to set up beyond the address.
 
 ### One toast system with writing rules
 

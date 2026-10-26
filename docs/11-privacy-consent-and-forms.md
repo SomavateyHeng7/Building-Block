@@ -9,7 +9,6 @@
 | Preferences (theme, panels, export choices) | `localStorage` | Never |
 | Privacy-notice acceptance | `localStorage` (`bb:consent`) | Never |
 | Waitlist email + consent record | Sent to the form provider | **Only if** `NEXT_PUBLIC_WAITLIST_URL` is set **and** the user ticks the box and submits |
-| Contact name/email/message + consent record | Sent to the form provider | **Only if** `NEXT_PUBLIC_CONTACT_URL` is set **and** the user ticks the box and submits |
 | Maintenance bypass cookie | Cookie, HttpOnly | Sent to our server (team only) |
 | Standard hosting logs (IP, pages) | Hosting provider | Yes, as for any website |
 
@@ -82,33 +81,17 @@ under it.
 
 ## The contact page — `src/app/contact/`
 
-`page.tsx` (server) shows the heading, the address from `NEXT_PUBLIC_CONTACT_EMAIL` if set, two self-help cards
-(lost work, data questions), and the form. `ContactForm.tsx` (client):
+`page.tsx` (server) shows the heading, two self-help cards (lost work, data questions), and an **Email us** section
+with the address from `NEXT_PUBLIC_CONTACT_EMAIL`, what helps us reply (for a problem: what happened and which
+browser, without confidential diagram content; for a privacy request: that we hold no diagrams), and a **Write an
+email** button (`mailto:`, subject "Building Block"). The address is shown as text too, for people without an email
+app set up. Without the variable the section is hidden (in development, a hint says how to show it).
 
-| Field | Rule |
-| --- | --- |
-| Name | Optional, up to 100 characters |
-| Email | Required, must look like an email |
-| Topic | A question / Report a problem / Suggest a feature / Privacy or data request / Something else. *Problem* and *privacy* show guidance (what to include; that we hold no diagrams). |
-| Message | Required, at least 10 characters, up to 2,000, with a live counter |
-| Agreement | Required: "I agree that Building Block may use my name and email to reply…" |
-| `website` | **Honeypot:** hidden from people and screen readers; a bot that fills it gets a fake "sent" |
-
-Errors appear next to their field after the first submit attempt (not while typing), linked with
-`aria-describedby`/`aria-invalid`.
-
-**Delivery modes:**
-
-| Configured | Submit does |
-| --- | --- |
-| `NEXT_PUBLIC_CONTACT_URL` | POSTs `{ name, email, topic, message, source: "contact", consent }`. On failure, offers "send it from your email app" if an address is configured. |
-| Only `NEXT_PUBLIC_CONTACT_EMAIL` | Button says **Write the email** and opens the visitor's email app with the subject and message filled in (`mailto:`) |
-| Neither | The page says the form isn't available (in development, how to turn it on) |
-
-**Why no backend:** the product has no server by design. A form provider (e.g. Formspree) or plain email keeps it
-that way.
+**Why no form:** the product has no server by design, and a form provider would be one more place people's details
+go. Email keeps it simple: people write from their own email, and the app sends nothing. (There was a form, posting
+to a provider; it was removed in October 2026.)
 
 ## The privacy notice — `src/app/privacy/page.tsx`
 
-A static page built from a `SECTIONS` array: your diagrams, what is stored in your browser, waitlist, contact form,
+A static page built from a `SECTIONS` array: your diagrams, what is stored in your browser, waitlist, writing to us,
 cookies/analytics/fonts, hosting logs, plus the acceptance box. Keep it in step with the tables above.
