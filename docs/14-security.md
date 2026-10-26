@@ -13,9 +13,9 @@ backend, broken authentication) don't apply. What remains:
 | **MIME sniffing** | All pages | `X-Content-Type-Options: nosniff` |
 | **Leaking URLs** to other sites | Links | `Referrer-Policy: strict-origin-when-cross-origin` |
 | **Unneeded powerful APIs** | All pages | `Permissions-Policy` denies camera, microphone, geolocation |
-| **Form spam** | Contact form | Honeypot field |
+| **Form spam** | Waitlist form | Required agreement box; the form provider's spam filtering (there's no contact form) |
 | **Maintenance bypass** | Proxy | Secret token, HttpOnly + SameSite=Lax + Secure cookie, token removed from the URL |
-| **Personal data** | Forms | Opt-in endpoints, explicit consent recorded, no analytics |
+| **Personal data** | Forms, analytics | Opt-in endpoints, explicit consent recorded; visit counts are cookieless, keep no IPs and skip GPC/Do Not Track |
 
 ## Opening files safely
 

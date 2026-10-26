@@ -8,6 +8,8 @@ export interface MermaidImport {
   sequence: SequenceDiagram;
   /** From a `title` line, if there was one. */
   title?: string;
+  /** Whether the text had an `autonumber` line (Mermaid numbers messages only then). */
+  autonumber: boolean;
   /** What was left out or simplified, for the user. */
   fixes: string[];
 }
@@ -18,9 +20,30 @@ function mermaidSource(text: string): string {
   return fences.find((block) => /^\s*sequenceDiagram\b/m.test(block)) ?? fences[0] ?? text;
 }
 
-/** Mermaid writes line breaks in labels as <br>. */
+/** Mermaid's `#59;`-style codes, for characters that would otherwise end a line or a label. */
+function decodeEntities(text: string): string {
+  return text.replace(/#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)));
+}
+
+/** Mermaid writes line breaks in labels as <br>; a name or a message is one line. */
 function cleanLabel(text: string): string {
-  return text.replace(/<br\s*\/?>/gi, " ").replace(/\s+/g, " ").trim();
+  return decodeEntities(text.replace(/<br\s*\/?>/gi, " ")).replace(/\s+/g, " ").trim();
+}
+
+/** A note keeps its line breaks. */
+function cleanNote(text: string): string {
+  return decodeEntities(text.replace(/<br\s*\/?>/gi, "\n"))
+    .split("\n")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .join("\n")
+    .trim();
+}
+
+/** "Place order (REST)" → label and protocol, the way messages are written in the code view. */
+function splitProtocol(text: string): { label?: string; protocol?: string } {
+  const match = /^(.*?)\s*\(([^()]+)\)$/.exec(text);
+  if (!match) return text ? { label: text } : {};
+  return { ...(match[1] ? { label: match[1] } : {}), protocol: match[2].trim() };
 }
 
 // `A->>B: text`, with any of Mermaid's arrows, and optional +/- activation marks.
@@ -47,8 +70,11 @@ function unquote(text: string): string {
  * Reads a Mermaid `sequenceDiagram`: participants and actors (with `as` aliases), messages with any arrow,
  * and notes. `loop`/`alt`/`opt`/`par` and similar blocks are flattened, keeping their messages in order;
  * styling lines are skipped. Throws ImportError when the text isn't a sequence diagram.
+ *
+ * With `protocols`, a message ending in brackets ("Place order (REST)") gives its protocol, as the code view
+ * writes it; imports from elsewhere keep the brackets in the label.
  */
-export function parseMermaidSequence(input: string): MermaidImport {
+export function parseMermaidSequence(input: string, { protocols = false }: { protocols?: boolean } = {}): MermaidImport {
   const lines = mermaidSource(input)
     .split(/\r?\n/)
     .map((line) => line.replace(/%%.*$/, "").trim())
@@ -66,6 +92,7 @@ export function parseMermaidSequence(input: string): MermaidImport {
   let sequence = emptySequence();
   const byName = new Map<string, string>();
   let title: string | undefined;
+  let autonumber = false;
   let blocks = 0;
   let skipped = 0;
 
@@ -95,7 +122,7 @@ export function parseMermaidSequence(input: string): MermaidImport {
     if (note) {
       // Participants are added first: addStep must see them.
       const over = note[2].split(",").map((name) => participant(name)).slice(0, 2);
-      const step = newNote(over, cleanLabel(note[3]));
+      const step = newNote(over, cleanNote(note[3]));
       sequence = addStep(sequence, step);
       continue;
     }
@@ -105,7 +132,7 @@ export function parseMermaidSequence(input: string): MermaidImport {
       const text = cleanLabel(label);
       // Participants are added first: addStep must see them.
       const step = newMessage(participant(from), participant(to), {
-        ...(text ? { label: text } : {}),
+        ...(protocols ? splitProtocol(text) : text ? { label: text } : {}),
         ...(arrowKind(arrow) !== "call" ? { kind: arrowKind(arrow) } : {}),
       });
       sequence = addStep(sequence, step);
@@ -113,6 +140,10 @@ export function parseMermaidSequence(input: string): MermaidImport {
     }
     if (BLOCK_START.test(line)) {
       if (!/^(else|and|option)\b/i.test(line)) blocks += 1;
+      continue;
+    }
+    if (/^autonumber\b/i.test(line)) {
+      autonumber = true;
       continue;
     }
     if (IGNORED.test(line)) continue;
@@ -125,5 +156,5 @@ export function parseMermaidSequence(input: string): MermaidImport {
     fixes.push(`Flattened ${blocks} loop/alt/opt/par block${blocks === 1 ? "" : "s"}: their messages are kept in order, without the box around them.`);
   }
   if (skipped) fixes.push(`Skipped ${skipped} line${skipped === 1 ? "" : "s"} that couldn't be read.`);
-  return { sequence, title, fixes };
+  return { sequence, title, autonumber, fixes };
 }

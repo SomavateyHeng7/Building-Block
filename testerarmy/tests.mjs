@@ -728,6 +728,34 @@ ${ok}`,
       ),
     ],
   },
+  {
+    title: "The pricing page shows Free and the plans to come",
+    settings: desktop,
+    steps: [
+      act("Open the home page and click 'Pricing' in the header."),
+      assert("The Pricing page shows three plans: Free, Pro and Team."),
+      assert("Free has a 'Start drawing' button; Pro and Team are marked 'Coming soon' with 'Price to be announced'."),
+      assert("The page says everything Building Block does today is free and stays free."),
+      act("Click 'Start drawing' on the Free plan."),
+      assert("The start page opens (the URL ends in /diagrams)."),
+    ],
+  },
+  {
+    title: "A sequence tab is edited as Mermaid code",
+    settings: desktop,
+    steps: [
+      ...openTemplate("Sequence diagram"),
+      act("Click 'Mermaid code' at the top right of the sheet."),
+      assert("A Mermaid code box opens beside the sheet, starting with 'sequenceDiagram' and listing the participants."),
+      act("At the end of the code, add a new line: Customer->>Customer: Celebrate"),
+      act("Click 'Apply'."),
+      assert("The sheet now ends with a 'Celebrate' message from Customer to itself."),
+      act("Replace all the code with: flowchart LR (then a new line) A --> B, and click 'Apply'."),
+      assert("An error under the code says it's a flowchart, and the sheet hasn't changed."),
+      act("Click 'Undo edits'."),
+      assert("The code starts with 'sequenceDiagram' again."),
+    ],
+  },
 ];
 
 // TesterArmy takes 1 to 30 steps a test.

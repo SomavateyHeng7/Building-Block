@@ -89,7 +89,7 @@ function DonateSection() {
           Would you like to support the team?
         </h2>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Building Block is free, with no ads, no tracking and no account. If it saves you time, a donation helps pay for hosting and
+          Building Block is free, with no ads and no account, and your diagrams stay on your device. If it saves you time, a donation helps pay for hosting and
           new features. Any amount helps, and it&apos;s entirely optional.
         </p>
         <p className="mt-2 text-xs text-zinc-500">

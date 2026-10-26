@@ -10,6 +10,7 @@
 | Privacy-notice acceptance | `localStorage` (`bb:consent`) | Never |
 | Waitlist email + consent record | Sent to the form provider | **Only if** `NEXT_PUBLIC_WAITLIST_URL` is set **and** the user ticks the box and submits |
 | Maintenance bypass cookie | Cookie, HttpOnly | Sent to our server (team only) |
+| Visit counts (page address, referrer, browser, device, country) | Cloudflare Web Analytics, no cookies | **Only if** `NEXT_PUBLIC_CF_ANALYTICS_TOKEN` is set, and not when the browser sends GPC or Do Not Track |
 | Standard hosting logs (IP, pages) | Hosting provider | Yes, as for any website |
 
 The privacy notice (`src/app/privacy/page.tsx`) says the same thing in plain language. **If you change what is

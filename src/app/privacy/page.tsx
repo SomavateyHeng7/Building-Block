@@ -49,7 +49,8 @@ const SECTIONS = [
   {
     title: "Cookies, analytics and fonts",
     body: [
-      "Building Block does not use advertising or analytics trackers. The site sets no cookies for visitors, other than a short-lived technical cookie used by our team to preview the site during maintenance.",
+      "Building Block does not use advertising trackers. To know how many people use it, we count visits with Cloudflare Web Analytics, which sets no cookies and builds no profile of you. It records the page address, the page you came from, your browser and device type, and your country (worked out from your IP address, which is not kept). Your diagrams are never part of it. If your browser sends Global Privacy Control or Do Not Track, nothing is counted.",
+      "The site sets no cookies for visitors, other than a short-lived technical cookie used by our team to preview the site during maintenance.",
       "Fonts are served from our own domain, so your browser does not contact Google to load them.",
     ],
   },

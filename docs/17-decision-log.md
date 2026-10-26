@@ -185,6 +185,14 @@ want to reverse.
 - **Our own XML reader** (`xml.ts`), not DOMParser: imports then run the same in the browser and in unit tests.
 - **Everything goes through `parseDiagram`** afterwards, so an import can never break an invariant.
 
+### Sequence tabs as Mermaid code too
+
+- People who write sequences in Mermaid can edit a tab as code beside the sheet, and copy or download it. It's one
+  model with two views: the code is generated from the sequence and applied back to it (one undo step), not stored.
+- **Applying keeps what Mermaid can't say** (colours, descriptions, links to components) by matching participants by
+  name. **Protocol** has no Mermaid syntax, so it's written in brackets after the message, as the sheet shows it;
+  only the code view reads brackets back as a protocol (imports from elsewhere keep them in the text).
+
 ### "The active section" means the active view
 
 - Making `getActiveSection` return an internal design when one is open made every existing action work at L2
@@ -237,6 +245,19 @@ want to reverse.
 - No backend, so the waitlist form POSTs to a URL set at build time. Unset means fully offline.
 - The contact page gives an email address instead of a form (October 2026): people write from their own email, so
   no form provider holds their details, and there's nothing to set up beyond the address.
+
+### Visit counts from Cloudflare Web Analytics, not an admin page in the app
+
+- **Need:** see how many people use the site. **Constraint:** no server-side storage, and the host wasn't chosen
+  yet. **Decision:** Cloudflare Web Analytics: free, cookieless, no personal data kept, works on any host; the
+  dashboard is the admin view. Loaded only with a token, only in production, and not for GPC or Do Not Track.
+- **Alternatives:** our own counts and `/admin` page (needs a server and a database); a third-party script with its
+  own login (Plausible, Umami, GoatCounter). The privacy notice and consent text no longer say "no analytics".
+
+### A plans page before anything is for sale
+
+- `/pricing` shows Free today and planned paid tiers as *Coming soon*, from `src/lib/plans.ts`, with *Notify me* on
+  the waitlist. Launching a plan is a price, a status and a payment link in that file; no payments code until then.
 
 ### One toast system with writing rules
 

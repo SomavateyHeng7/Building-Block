@@ -114,6 +114,7 @@ leave the browser:
 | --- | --- |
 | `NEXT_PUBLIC_WAITLIST_URL` | The landing-page waitlist form (`{ email, consent }`) |
 | `NEXT_PUBLIC_CONTACT_EMAIL` | The address shown on `/contact` for people to write to (there's no contact form) |
+| `NEXT_PUBLIC_CF_ANALYTICS_TOKEN` | Cookieless visit counts with Cloudflare Web Analytics; the numbers are on the Cloudflare dashboard |
 
 ### Project layout
 

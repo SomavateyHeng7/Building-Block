@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ReactFlowProvider } from "@xyflow/react";
 import Canvas from "./Canvas";
 import SequenceCanvas from "./SequenceCanvas";
+import SequenceCode, { useSequenceCode } from "./SequenceCode";
 import { findSequenceItem, selectSequenceItem, useSequenceSelection } from "./sequenceSelection";
 import { moveParticipant, moveStep, removeParticipant, removeStep } from "@/lib/diagram/sequence";
 import { isSequenceSection } from "@/lib/diagram/factory";
@@ -58,6 +59,8 @@ export default function EditorApp() {
   const router = useRouter();
   const diagram = useDiagramStore((state) => state.diagram);
   const sequenceTab = isSequenceSection(getActiveSection(diagram));
+  const codeOpen = useSequenceCode((state) => state.open);
+  const setCodeOpen = useSequenceCode((state) => state.setOpen);
   const opened = useFileStore((state) => state.opened);
   const handle = useFileStore((state) => state.handle);
   const saving = useFileStore((state) => state.saving);
@@ -311,7 +314,24 @@ export default function EditorApp() {
             className={`${drawer === "palette" ? "flex" : "hidden"} absolute inset-y-0 left-0 z-30 w-72 max-w-[85%] shadow-xl lg:static lg:z-auto ${hidden.palette ? "lg:hidden" : "lg:flex"} lg:w-60 lg:shrink-0 lg:shadow-none`}
           />
           <div className={`relative min-w-0 flex-1 ${readOnly ? "bb-readonly" : ""}`}>
-            {sequenceTab ? <SequenceCanvas /> : <Canvas />}
+            {sequenceTab ? (
+              // The Mermaid code sits beside the sheet on wide screens and under it on narrow ones.
+              <div className="flex h-full flex-col lg:flex-row">
+                <div className="relative min-h-0 min-w-0 flex-1">
+                  <SequenceCanvas />
+                  {!codeOpen && (
+                    // Narrow screens have it with the buttons along the top (below).
+                    <button type="button" className={`${CANVAS_BUTTON} absolute right-3 top-3 z-10 max-lg:hidden`} onClick={() => setCodeOpen(true)}>
+                      <Icon name="code" />
+                      Mermaid code
+                    </button>
+                  )}
+                </div>
+                {codeOpen && <SequenceCode />}
+              </div>
+            ) : (
+              <Canvas />
+            )}
             <div className="absolute left-3 top-3 z-10 flex gap-2 lg:hidden">
               {readOnly ? (
                 <button type="button" className={CANVAS_BUTTON} onClick={() => switchMode("edit")}>
@@ -336,7 +356,13 @@ export default function EditorApp() {
                 </>
               )}
             </div>
-            <div className="absolute right-3 top-3 z-10 lg:hidden">
+            <div className="absolute right-3 top-3 z-10 flex gap-2 lg:hidden">
+              {sequenceTab && !codeOpen && (
+                <button type="button" title="Mermaid code" className={CANVAS_BUTTON} onClick={() => setCodeOpen(true)}>
+                  <Icon name="code" />
+                  <span className="sr-only">Mermaid code</span>
+                </button>
+              )}
               {readOnly ? (
                 <button type="button" aria-expanded={legendOpen} className={CANVAS_BUTTON} onClick={() => setLegendOpen((open) => !open)}>
                   <Icon name="layers" />

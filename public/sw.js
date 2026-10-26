@@ -3,7 +3,7 @@
 
 const CACHE = "bb-app-v1";
 /** Pages to have ready offline. Their scripts, styles and fonts are cached with them. */
-const SHELL = ["/", "/diagrams", "/editor", "/templates", "/privacy", "/contact"];
+const SHELL = ["/", "/diagrams", "/editor", "/templates", "/privacy", "/contact", "/pricing"];
 /** Old build files pile up across releases; keep the cache to roughly this many entries. */
 const MAX_ENTRIES = 400;
 

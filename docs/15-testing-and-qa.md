@@ -49,6 +49,7 @@ environment: no browser, so tests cover the pure logic and the stores.
 | `tests/lib/diagram/sequence.test.ts` | 11 | Editing and laying out sequences; sequence tabs (undo, duplicate, save, picture); picking a component for a participant, tab-safe |
 | `tests/lib/diagram/flowAdapter.test.ts` | 6 | Line paths and bends; change marks; unchanged nodes keep their objects (undo history shares them) |
 | `tests/lib/diagram/grouping.test.ts` | 11 | Grouping into a container and ungrouping, as one undo step; deleting a container asks about its components |
+| `tests/lib/diagram/exportMermaid.test.ts` | 5 | Sequence → Mermaid (aliases, arrows, protocol, escapes, autonumber) and back to the same sequence; applying keeps colours, descriptions and links; errors |
 | `tests/lib/diagram/import.test.ts` | 10 | XML reading; draw.io shapes, swimlanes, arrows and compressed pages; Mermaid sequences; refusals with reasons |
 | `tests/lib/diagram/legend.test.ts` | 3 | Reordering entries; removing one moves its items to another, inside internal designs too |
 | `tests/lib/diagram/recovery.test.ts` | 6 | Recovery copy: off by default, read back like a file, cleared, full or blocked storage reported |

@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | `NEXT_PUBLIC_WAITLIST_URL` | **Build time** | Shows the landing-page waitlist form, which POSTs JSON to this URL (e.g. a Formspree form) |
 | `NEXT_PUBLIC_CONTACT_EMAIL` | Build time | The address shown on `/contact` for people to write to; unset hides the email section |
+| `NEXT_PUBLIC_CF_ANALYTICS_TOKEN` | Build time | Turns on visit counting with Cloudflare Web Analytics ([monitoring visits](#monitoring-visits)) |
 | `MAINTENANCE_MODE` | **Per request** | `on` / `true` / `1` / `yes` turns maintenance mode on |
 | `MAINTENANCE_UNTIL` | Per request | Optional ISO time, e.g. `2026-10-08T18:00Z`. Shown in the visitor's time zone; sets `Retry-After` |
 | `MAINTENANCE_MESSAGE` | Per request | Optional text replacing the default explanation |
@@ -33,6 +34,24 @@ without it maintenance mode won't work but the app still will.
 
 Before releasing: run the checks in [Testing and QA](15-testing-and-qa.md), `pnpm audit --prod`, and the manual
 checklist for anything you changed.
+
+## Monitoring visits
+
+Visit counts come from **Cloudflare Web Analytics** (free; cookieless; works on any host). The admin view is the
+Cloudflare dashboard: visitors and page views over time, top pages, where people came from, countries, browsers and
+devices, and page speed. There's no admin page in the app: the app has no server-side storage to keep counts in.
+
+**Setting it up** (once the site has its public address):
+
+1. In the Cloudflare dashboard, open **Analytics & Logs → Web Analytics → Add a site**, enter the site's hostname
+   and choose the JavaScript snippet (the site doesn't need to use Cloudflare DNS).
+2. Copy the token from the snippet (`data-cf-beacon='{"token": "…"}'`).
+3. Set `NEXT_PUBLIC_CF_ANALYTICS_TOKEN` to it at the host and **rebuild** (it's compiled in).
+
+`src/components/Analytics.tsx` then adds the beacon in production on every page, counting moves between pages inside
+the app too. It isn't loaded in development, without the token, or for browsers that send Global Privacy Control or
+Do Not Track. Only page addresses are sent, never diagram content. To add other teammates as viewers, invite them to
+the Cloudflare account.
 
 ## Maintenance mode runbook
 

@@ -2,7 +2,7 @@
 
 ## Landing page — `src/app/page.tsx`
 
-A server component, pre-rendered. Sections: sticky header (logo, in-page links, Templates, Start, theme toggle),
+A server component, pre-rendered. Sections: sticky header (logo, in-page links, Templates, Pricing, Contact us, Start, theme toggle),
 hero with **Start drawing** and **Browse templates**, the `HeroDiagram`, three problem statements, six feature
 cards, three "how it works" steps, the **roadmap**, the team waitlist, a final call to action, and the footer.
 
@@ -16,9 +16,25 @@ cards, three "how it works" steps, the **roadmap**, the team waitlist, a final c
 
 ## Footer — `src/components/landing/Footer.tsx`
 
-Product links, Get started links, © year, **Privacy**, **Contact**, and "Your diagrams are your files".
+Product links (including **Pricing**), Get started links, © year, **Privacy**, **Contact**, and "Your diagrams are your files".
 `CurrentYear.tsx` renders the year in the browser: the page is pre-rendered at build time, so a server-rendered
 year would be stale until the next deploy.
+
+## Pricing — `src/app/pricing/page.tsx` and `src/lib/plans.ts`
+
+A server component, pre-rendered, not behind the consent gate. One card per plan in `PLANS`: today **Free** (the whole
+app) and **Pro** and **Team**, marked *Coming soon* with "Price to be announced". The intro says what's free stays
+free and that plans and prices may change.
+
+- **Buttons:** Free → *Start drawing* (`/diagrams`). A plan that isn't out yet → *Notify me*, which jumps to a
+  waitlist form at the bottom (`WaitlistForm` with `source: "pricing"`, so those signups can be told apart); without
+  a waitlist URL, *Ask about …* emails the contact address; with neither, no button.
+- **Going live with a plan:** in `plans.ts`, give it a `price`, `status: "available"` and a `checkoutUrl` (e.g. a
+  Stripe Payment Link). The card then shows the price and **Subscribe** (`canSubscribe` checks all three, and that the
+  link is https). Before taking money: terms of sale, the privacy notice (the payment provider becomes a processor;
+  bump `PRIVACY_VERSION`), and tax and invoicing for where you sell.
+- **Why no payments yet:** nothing is for sale. A config of plans keeps the page honest now and makes launch a
+  small change, without a server or webhooks to maintain in the meantime.
 
 ## Start page — `src/app/diagrams/page.tsx`
 

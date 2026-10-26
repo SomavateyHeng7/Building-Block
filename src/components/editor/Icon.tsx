@@ -3,6 +3,7 @@ export const ICONS = {
   arrowLeft: "M19 12H5M11 6l-6 6 6 6",
   check: "M5 13l4 4L19 7",
   chevronDown: "m6 9 6 6 6-6",
+  code: "m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16",
   copy: "M8 8h12v12H8zM16 8V4H4v12h4",
   cursor: "M5 3l14 7-6 2-2 6z",
   download: "M12 4v11M7 10l5 5 5-5M5 20h14",

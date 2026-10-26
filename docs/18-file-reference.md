@@ -37,6 +37,7 @@ Every file in the repository and what it is for. Details are in the linked pages
 | `privacy/page.tsx` | Privacy notice and acceptance box |
 | `privacy/WithdrawConsent.tsx` | Shows when consent was given; withdraw button |
 | `contact/page.tsx` | Contact page: self-help cards, the address to email, donation section |
+| `pricing/page.tsx` | Plans page: Free and coming-soon plans, Notify me, Subscribe once a plan is live |
 | `maintenance/page.tsx` | Maintenance page (dynamic) |
 | `maintenance/MaintenanceStatus.tsx` | Expected end time, Try again, 30-second check |
 | `favicon.ico`, `icon.svg`, `apple-icon.png` | Site icons (Next.js file conventions) |
@@ -50,6 +51,7 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 | File | Purpose |
 | --- | --- |
 | `ConsentGate.tsx` | Privacy-notice acceptance dialog on app pages ([consent](11-privacy-consent-and-forms.md#the-consent-gate)) |
+| `Analytics.tsx` | Cloudflare Web Analytics beacon, with a token, in production, unless the browser opts out ([operations](16-operations.md#monitoring-visits)) |
 | `ToastViewport.tsx` | Renders toasts; per-toast timers that pause ([notifications](12-notifications.md)) |
 | `TemplatePreview.tsx` | SVG preview of a template's first tab |
 | `Logo.tsx` | The brand mark (`LogoMark`) |
@@ -89,6 +91,7 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 | `PanelToggle.tsx` | Collapse/expand button for side panels |
 | `Icon.tsx` | Editor icon set |
 | `SequenceCanvas.tsx` | A sequence tab: SVG drawing, drag between lifelines to add a message (`.bb-sequence-sheet` is what exports picture) |
+| `SequenceCode.tsx` | Mermaid code beside a sequence tab: follows the sheet, Apply, Copy, `.mmd` download |
 | `SequencePanel.tsx` | Details panel on a sequence tab: participant, message, note, or the tab |
 | `sequenceSelection.ts` | What's selected on a sequence tab |
 | `ImportDialog.tsx` | Import from a file or pasted text; used by the start page and File menu |
@@ -118,12 +121,14 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 | `diagram/importFile.ts` | Import entry point: picks draw.io or Mermaid, checks the result with `parseDiagram` |
 | `diagram/importDrawio.ts` | draw.io (.drawio/.xml, compressed or not) → architecture tabs |
 | `diagram/importMermaid.ts` | Mermaid `sequenceDiagram` → a sequence; `ImportError` |
+| `diagram/exportMermaid.ts` | A sequence → Mermaid code, and code applied back keeping colours, descriptions and links |
 | `diagram/xml.ts` | Small XML reader used by the draw.io import |
 | `zip.ts` | Minimal ZIP writer |
 | `toast.ts` | Toast store and API |
 | `consent.ts` | Privacy-notice acceptance, versioned |
 | `levels.ts` | Roadmap levels computed from store actions |
 | `maintenance.ts` | Reads maintenance settings; `Retry-After`; upcoming end |
+| `plans.ts` | The plans on `/pricing`; `formatPrice`, `canSubscribe` |
 
 ## `src/templates/`
 

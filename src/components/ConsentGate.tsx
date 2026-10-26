@@ -16,7 +16,7 @@ const POINTS = [
   },
   {
     title: "A few preferences are remembered here",
-    body: "Your theme, panel layout and export choices, plus a note that you accepted this notice. The app's own pages are cached so it opens offline. No tracking, no analytics.",
+    body: "Your theme, panel layout and export choices, plus a note that you accepted this notice. The app's own pages are cached so it opens offline. We count visits anonymously, without cookies; your diagrams are never tracked.",
   },
   {
     title: "Recovery copies only if you turn them on",

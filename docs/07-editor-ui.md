@@ -192,6 +192,26 @@ participant boxes (or a stick figure for an actor) across the top, dashed lifeli
 - The sidebar becomes a list of participants to add (Actor, Participant, one per legend category) and Note; the
   details panel is `SequencePanel`. Box shortcuts (B, C, paste, duplicate) do nothing on a sequence tab.
 - "Sequence" beside "Add tab" adds one; sequence tabs have a small icon and aren't offered in Compare tabs.
+- The sheet is an SVG with `role="group"` (not `img`: it holds controls), and a note's lines are `tspan`s of one
+  `text`, so it's read, and named, as one sentence.
+
+### Mermaid code — `SequenceCode.tsx`
+
+**Mermaid code** (top right of the sheet; an icon button on narrow screens; *Write Mermaid code* on an empty tab)
+opens the tab as Mermaid `sequenceDiagram` code beside the sheet (under it on narrow screens).
+
+- **Follows the sheet** until you type in it; then the sheet waits for **Apply** (or Ctrl/⌘+Enter), which replaces
+  the sequence as one undo step. *Undo edits* goes back to the sheet's code. Edits are kept per tab.
+- **What the code says** (`exportMermaid.ts`): `actor`/`participant` with an `as` alias when the name isn't a
+  Mermaid id; `->>` call, `-)` async, `-->>` reply; the protocol in brackets after the text ("Place order (REST)");
+  `Note over A,B:` with `<br>` for line breaks; `autonumber` when messages are numbered; `;` and `#` written as
+  `#59;`/`#35;`. Reading it back gives the same sequence (tested).
+- **What Mermaid can't say is kept:** a participant whose name is unchanged keeps its id, colour, description and
+  link to a component (`applySequenceCode`). A renamed one is a new participant, so a linked one loses its link.
+- Code that isn't a sequence diagram shows why, under the code, and changes nothing; flattened blocks or skipped
+  lines are listed in a toast after Apply.
+- **Copy**, and **.mmd** downloads the code with the tab's name as `title` (the import reads it back).
+- In view mode the code is read-only.
 
 ## Import — `ImportDialog.tsx`
 

@@ -12,7 +12,11 @@ const WAITLIST_URL = process.env.NEXT_PUBLIC_WAITLIST_URL;
 
 type Status = "idle" | "sending" | "done" | "error";
 
-export default function WaitlistForm() {
+/**
+ * `source` is sent with the address, so signups from the plans page can be told apart; `topic` is what people
+ * are told about ("team features", "paid plans").
+ */
+export default function WaitlistForm({ source = "landing", topic = "team features" }: { source?: string; topic?: string }) {
   const [email, setEmail] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
@@ -33,7 +37,7 @@ export default function WaitlistForm() {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         // Records what was agreed to and when, alongside the address.
-        body: JSON.stringify({ email, source: "landing", consent: { agreed: true, privacyVersion: PRIVACY_VERSION, at: new Date().toISOString() } }),
+        body: JSON.stringify({ email, source, consent: { agreed: true, privacyVersion: PRIVACY_VERSION, at: new Date().toISOString() } }),
       });
       setStatus(response.ok ? "done" : "error");
     } catch {
@@ -44,7 +48,7 @@ export default function WaitlistForm() {
   if (status === "done") {
     return (
       <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-        Thanks — we&apos;ll be in touch when team features are ready.
+        Thanks — we&apos;ll be in touch when {topic} are ready.
       </p>
     );
   }
@@ -80,7 +84,7 @@ export default function WaitlistForm() {
           className="mt-0.5 h-4 w-4 shrink-0 accent-zinc-900 dark:accent-zinc-100"
         />
         <span>
-          I agree that Building Block may store my email to tell me when team features are ready. No diagrams are shared.
+          I agree that Building Block may store my email to tell me when {topic} are ready. No diagrams are shared.
           See the{" "}
           <Link href="/privacy" className="underline hover:text-zinc-900 dark:hover:text-zinc-100">
             privacy statement

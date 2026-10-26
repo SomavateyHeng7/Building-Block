@@ -12,7 +12,8 @@ renders it, and every rule that sends a visitor somewhere else.
 | `/templates` | `src/app/templates/page.tsx` | Static, client | All templates with previews | **Yes** |
 | `/editor` | `src/app/editor/page.tsx` → `EditorApp` | Static, client | The editor. Only works when a diagram is open in memory | **Yes** |
 | `/privacy` | `src/app/privacy/page.tsx` | Static | Privacy notice, acceptance status, withdraw button | No |
-| `/contact` | `src/app/contact/page.tsx` | Static | Contact form | No |
+| `/contact` | `src/app/contact/page.tsx` | Static | The address to email, self-help cards, donations | No |
+| `/pricing` | `src/app/pricing/page.tsx` | Static | Plans: Free today, paid plans to come (from `src/lib/plans.ts`) | No |
 | `/maintenance` | `src/app/maintenance/page.tsx` | **Dynamic** (per request) | "We're updating" page, shown by the proxy | No |
 | anything else | `src/app/not-found.tsx` | Static | 404 page | No |
 
@@ -33,7 +34,9 @@ flowchart LR
   Editor -->|Back button in toolbar| Start
   Editor -.->|reload with nothing open| Start
   Start & Templates & Editor -.->|consent: Not now| Landing
-  Any["any page"] -->|footer| Privacy["/privacy"] & Contact["/contact"]
+  Landing -->|Pricing| Pricing["/pricing"]
+  Pricing -->|Start drawing| Start
+  Any["any page"] -->|footer| Privacy["/privacy"] & Contact["/contact"] & Pricing
 ```
 
 ## Rules that redirect or block
@@ -149,3 +152,5 @@ Wraps every page:
 - `ThemeProvider` (`attribute="class"`, `defaultTheme="system"`, `disableTransitionOnChange` so switching themes
   doesn't animate every colour).
 - `ToastViewport` and `ConsentGate`, once for the whole app.
+- `ServiceWorker` (offline) and `Analytics` (visit counts, when `NEXT_PUBLIC_CF_ANALYTICS_TOKEN` is set; see
+  [operations](16-operations.md#monitoring-visits)).

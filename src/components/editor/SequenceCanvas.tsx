@@ -19,6 +19,7 @@ import {
 } from "@/lib/diagram/sequence";
 import type { SequenceDiagram, SequenceMessage, SequenceNote, SequenceParticipant } from "@/lib/diagram/types";
 import { showDetails } from "./detailsPanel";
+import { useSequenceCode } from "./SequenceCode";
 import { Icon } from "./Icon";
 import { SEQUENCE_LABEL_FIELD_ID, selectSequenceItem, useSequenceSelection } from "./sequenceSelection";
 import { useReadOnly } from "./viewMode";
@@ -129,6 +130,14 @@ export default function SequenceCanvas() {
                 <Icon name="plus" />
                 Actor (person)
               </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+                onClick={() => useSequenceCode.getState().setOpen(true)}
+              >
+                <Icon name="code" />
+                Write Mermaid code
+              </button>
             </div>
           )}
         </div>
@@ -148,7 +157,8 @@ export default function SequenceCanvas() {
         <div className="bb-sequence-sheet bg-white dark:bg-zinc-950" style={{ width: layout.width, height: layout.height }}>
           <svg
             ref={svgRef}
-            role="img"
+            // A group, not an image: it holds the participants, messages and notes people click and tab to.
+            role="group"
             aria-label={`Sequence diagram: ${sequence.participants.length} participants, ${sequence.steps.length} steps`}
             width={layout.width}
             height={layout.height}
@@ -417,11 +427,15 @@ function NoteBox({
         stroke={selected ? SELECTED : ink.noteStroke}
         fill={ink.noteFill}
       />
-      {lines.map((line, index) => (
-        <text key={index} x={(left + right) / 2} y={y + L.notePadding + L.noteLine * index + 12} textAnchor="middle" fontSize={12} fill={ink.noteText}>
-          {line}
-        </text>
-      ))}
+      {/* One text, a tspan a line, with a space between: read out (and named) as the sentence it is, not "ifthe". */}
+      <text textAnchor="middle" fontSize={12} fill={ink.noteText}>
+        {lines.map((line, index) => (
+          <tspan key={index} x={(left + right) / 2} y={y + L.notePadding + L.noteLine * index + 12}>
+            {line}
+            {index < lines.length - 1 ? " " : null}
+          </tspan>
+        ))}
+      </text>
     </g>
   );
 }
