@@ -5,7 +5,7 @@
  */
 
 /** Change this whenever the privacy notice changes in a way people should agree to again. */
-export const PRIVACY_VERSION = "2026-10-26.2";
+export const PRIVACY_VERSION = "2026-10-28.1";
 const KEY = "bb:consent";
 
 export interface ConsentRecord {

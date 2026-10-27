@@ -1,10 +1,8 @@
 import { blankTemplate } from "./blank";
-import { cacheAsideTemplate } from "./cache-aside";
 import { currentVsTargetTemplate } from "./current-vs-target";
 import { dataPlatformTemplate } from "./data-platform";
 import { eventDrivenTemplate } from "./event-driven";
 import { l0ArchitectureTemplate } from "./l0-architecture";
-import { oidcSignInTemplate } from "./oidc-sign-in";
 import { sequenceTemplate } from "./sequence";
 import { serverlessTemplate } from "./serverless";
 import { threeTierTemplate } from "./three-tier";
@@ -20,8 +18,6 @@ export const allTemplates: TemplateDefinition[] = [
   dataPlatformTemplate,
   { ...currentVsTargetTemplate, hidden: true },
   sequenceTemplate,
-  oidcSignInTemplate,
-  cacheAsideTemplate,
 ];
 
 /** The templates offered on the start page and /templates. */

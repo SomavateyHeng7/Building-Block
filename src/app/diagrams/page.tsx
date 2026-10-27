@@ -21,7 +21,7 @@ import { downloadLegacyItem, readLegacyItems, removeLegacyItems, type LegacyItem
 import { toast } from "@/lib/toast";
 import { templates } from "@/templates";
 import ImportDialog, { describeImport } from "@/components/editor/ImportDialog";
-import { ImportError, diagramFromImport, importDiagramText, isImportable, type ImportResult } from "@/lib/diagram/importFile";
+import { ImportError, diagramFromImport, importDiagramText, isImportable, readImportText, type ImportResult } from "@/lib/diagram/importFile";
 
 const noopSubscribe = () => () => {};
 const NO_ITEMS: LegacyItem[] = [];
@@ -229,7 +229,7 @@ export default function StartPage() {
         // draw.io and Mermaid files are imported into a new diagram; anything else is opened as a diagram file.
         if (file && isImportable(file.file.name)) {
           try {
-            return startImported(await importDiagramText(await file.file.text(), file.file.name));
+            return startImported(await importDiagramText(await readImportText(file.file), file.file.name));
           } catch (problem) {
             toast.error(`Couldn't import "${file.file.name}"`, {
               description: problem instanceof ImportError ? problem.message : "Check it's a draw.io file or a Mermaid sequence diagram.",

@@ -1,3 +1,4 @@
+import { MAX_MERMAID_LINE } from "./limits";
 import { addParticipant, addStep, emptySequence, newMessage, newNote, newParticipant } from "./sequence";
 import type { SequenceDiagram, SequenceMessageKind } from "./types";
 
@@ -85,6 +86,9 @@ export function parseMermaidSequence(
     .split(/\r?\n/)
     .map((line) => line.replace(/%%.*$/, "").trim())
     .filter(Boolean);
+  if (lines.some((line) => line.length > MAX_MERMAID_LINE)) {
+    throw new ImportError(`A line is longer than ${MAX_MERMAID_LINE} characters, which is more than a sequence diagram needs.`);
+  }
   const header = lines.findIndex((line) => line !== "---" && !/^(title|config|theme)\b/i.test(line));
   const kind = lines[header]?.split(/\s/)[0];
   if (kind !== "sequenceDiagram") {

@@ -19,7 +19,10 @@ rebuilding).
 
 Leave every variable unset to run fully offline: no data can leave the browser.
 
-`.env*` files are git-ignored; set variables in the hosting dashboard.
+`.env*` files are git-ignored (except `.env.example`, which lists every variable); set variables in the hosting
+dashboard. A production build prints a warning naming any of the three `NEXT_PUBLIC_*` variables that are unset, so a
+release can't quietly ship without them. **Set `NEXT_PUBLIC_CONTACT_EMAIL` for launch:** the privacy notice sends
+people to the contact page for data requests. Without it the page points to the website and social pages instead.
 
 ## Building and deploying
 
@@ -32,8 +35,8 @@ pnpm start      # serves the build (default port 3000)
 Any Node host that supports Next.js 16 (e.g. Vercel) works. The proxy needs server (edge or Node) support;
 without it maintenance mode won't work but the app still will.
 
-Before releasing: run the checks in [Testing and QA](15-testing-and-qa.md), `pnpm audit --prod`, and the manual
-checklist for anything you changed.
+Before releasing: run the checks in [Testing and QA](15-testing-and-qa.md) and the manual checklist for anything you
+changed. CI already runs lint, types, tests, `pnpm build` and `pnpm audit --prod --audit-level high`.
 
 ## Monitoring visits
 

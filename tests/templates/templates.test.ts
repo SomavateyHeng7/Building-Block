@@ -52,7 +52,7 @@ describe("templates", () => {
     expect(listed.map((template) => template.id)).not.toContain("current-vs-target");
     expect(listed.length).toBe(templates.filter((template) => !template.hidden).length);
     const sequences = listed.filter((template) => template.build().sections.some((section) => section.kind === "sequence"));
-    expect(sequences.map((template) => template.id)).toEqual(["sequence", "oidc-sign-in", "cache-aside"]);
+    expect(sequences.map((template) => template.id)).toEqual(["sequence"]);
   });
 
   it("the richer templates show connections, an internal design and several tabs", () => {

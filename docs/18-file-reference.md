@@ -36,7 +36,7 @@ Every file in the repository and what it is for. Details are in the linked pages
 | `not-found.tsx` | 404 page |
 | `privacy/page.tsx` | Privacy notice and acceptance box |
 | `privacy/WithdrawConsent.tsx` | Shows when consent was given; withdraw button |
-| `contact/page.tsx` | Contact page: self-help cards, the address to email, donation section |
+| `contact/page.tsx` | Contact page: self-help cards, the address to email |
 | `pricing/page.tsx` | Plans page: Free and coming-soon plans, Notify me, Subscribe once a plan is live |
 | `maintenance/page.tsx` | Maintenance page (dynamic) |
 | `maintenance/MaintenanceStatus.tsx` | Expected end time, Try again, 30-second check |
@@ -146,8 +146,6 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 | `current-vs-target.ts` | Two tabs, current and target, for Compare tabs (hidden for now) |
 | `sequence-build.ts` | Builds a one-tab sequence diagram from participants and steps written as data |
 | `sequence.ts` | A checkout flow as a sequence tab |
-| `oidc-sign-in.ts` | OpenID Connect sign-in as a sequence tab |
-| `cache-aside.ts` | A cache-aside read as a sequence tab |
 
 ## `src/types/`
 

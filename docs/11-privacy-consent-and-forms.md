@@ -86,7 +86,8 @@ under it.
 with the address from `NEXT_PUBLIC_CONTACT_EMAIL`, what helps us reply (for a problem: what happened and which
 browser, without confidential diagram content; for a privacy request: that we hold no diagrams), and a **Write an
 email** button (`mailto:`, subject "Building Block"). The address is shown as text too, for people without an email
-app set up. Without the variable the section is hidden (in development, a hint says how to show it).
+app set up. Without the variable the section says to use the website and social pages instead (in development, a hint says how
+to show the address).
 
 **Why no form:** the product has no server by design, and a form provider would be one more place people's details
 go. Email keeps it simple: people write from their own email, and the app sends nothing. (There was a form, posting
@@ -94,5 +95,6 @@ to a provider; it was removed in October 2026.)
 
 ## The privacy notice — `src/app/privacy/page.tsx`
 
-A static page built from a `SECTIONS` array: your diagrams, what is stored in your browser, waitlist, writing to us,
-cookies/analytics/fonts, hosting logs, plus the acceptance box. Keep it in step with the tables above.
+A static page built from a `SECTIONS` array: who we are, your diagrams, what is stored in your browser, waitlist
+(naming the provider from the host of `NEXT_PUBLIC_WAITLIST_URL`, and how long emails are kept), writing to us,
+cookies/analytics/fonts, your rights, hosting logs, plus the acceptance box. Keep it in step with the tables above.

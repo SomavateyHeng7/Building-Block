@@ -12,7 +12,7 @@ renders it, and every rule that sends a visitor somewhere else.
 | `/templates` | `src/app/templates/page.tsx` | Static, client | All templates with previews | **Yes** |
 | `/editor` | `src/app/editor/page.tsx` → `EditorApp` | Static, client | The editor. Only works when a diagram is open in memory | **Yes** |
 | `/privacy` | `src/app/privacy/page.tsx` | Static | Privacy notice, acceptance status, withdraw button | No |
-| `/contact` | `src/app/contact/page.tsx` | Static | The address to email, self-help cards, donations | No |
+| `/contact` | `src/app/contact/page.tsx` | Static | The address to email, self-help cards, the address to email | No |
 | `/pricing` | `src/app/pricing/page.tsx` | Static | Plans: Free today, paid plans to come (from `src/lib/plans.ts`) | No |
 | `/maintenance` | `src/app/maintenance/page.tsx` | **Dynamic** (per request) | "We're updating" page, shown by the proxy | No |
 | anything else | `src/app/not-found.tsx` | Static | 404 page | No |

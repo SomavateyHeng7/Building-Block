@@ -22,3 +22,6 @@ jobs:
       - run: npx next typegen
       - run: npx tsc --noEmit
       - run: pnpm test
+      - run: pnpm build
+      # Fails on known high-severity advisories in runtime dependencies.
+      - run: pnpm audit --prod --audit-level high

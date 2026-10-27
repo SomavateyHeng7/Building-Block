@@ -29,6 +29,10 @@ See [validation](04-data-model-and-file-format.md#how-files-are-read--validatets
   colours are validated hex; the embedded diagram is a URL-encoded data URI.
 - **Absurd values** (sizes above 10,000 px, positions beyond ±100,000) are capped, so a file can't make rendering or
   export stall.
+- **Size limits** (`src/lib/diagram/limits.ts`): files over 20 MB are refused before being read; a compressed
+  draw.io page stops inflating at 50 MB (a small file can expand to gigabytes); a diagram with more than 100 tabs,
+  5,000 components or 10,000 connections on one canvas, or a sequence with more than 200 participants or 5,000
+  steps, is refused as too large.
 - **Newer formats are refused** with a clear message instead of being half-read.
 
 ## HTTP headers

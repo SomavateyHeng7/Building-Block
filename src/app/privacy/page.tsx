@@ -8,7 +8,24 @@ export const metadata: Metadata = {
   description: "Your diagrams stay on your device. Building Block does not receive, store or analyse them.",
 };
 
+/** Where waitlist emails are sent: the host of the form URL, so the notice names the provider actually in use. */
+function waitlistProvider(): string | null {
+  try {
+    return process.env.NEXT_PUBLIC_WAITLIST_URL ? new URL(process.env.NEXT_PUBLIC_WAITLIST_URL).hostname : null;
+  } catch {
+    return null;
+  }
+}
+
+const PROVIDER = waitlistProvider();
+
 const SECTIONS = [
+  {
+    title: "Who we are",
+    body: [
+      "Building Block is built and run by Somatech, which is responsible for the personal data described on this page. To reach us about any of it, use the contact page.",
+    ],
+  },
   {
     title: "Your diagrams",
     body: [
@@ -30,8 +47,8 @@ const SECTIONS = [
   {
     title: "Waitlist",
     body: [
-      "Joining the waitlist is optional and needs your separate agreement: the form asks you to tick a box before it sends anything. If you join, we collect only the email address you enter. It is sent to our form provider and used only to tell you when team features are ready. We do not sell it or use it for anything else.",
-      "You can ask us to remove your email at any time through the contact page, and every message we send will say how to unsubscribe.",
+      `Joining the waitlist is optional and needs your separate agreement: the form asks you to tick a box before it sends anything. If you join, we collect only the email address you enter. It is sent to our form provider${PROVIDER ? ` (${PROVIDER})` : ""} and used only to tell you when team features are ready. We do not sell it or use it for anything else.`,
+      "Our basis for keeping it is your consent. We keep your email until you ask us to remove it, or until we have told you that team features are ready and you have not asked to stay on the list. You can withdraw your consent and ask us to remove your email at any time through the contact page, and every message we send will say how to unsubscribe.",
     ],
   },
   {
@@ -41,17 +58,17 @@ const SECTIONS = [
     ],
   },
   {
-    title: "Donations",
-    body: [
-      "Donating is optional and happens on our payment provider's website, under its own privacy policy. Building Block never sees your card or bank details. The provider may share your name, email address and the amount with us, which we use only to keep records and to thank you.",
-    ],
-  },
-  {
     title: "Cookies, analytics and fonts",
     body: [
       "Building Block does not use advertising trackers. To know how many people use it, we count visits with Cloudflare Web Analytics, which sets no cookies and builds no profile of you. It records the page address, the page you came from, your browser and device type, and your country (worked out from your IP address, which is not kept). Your diagrams are never part of it. If your browser sends Global Privacy Control or Do Not Track, nothing is counted.",
       "The site sets no cookies for visitors, other than a short-lived technical cookie used by our team to preview the site during maintenance.",
       "Fonts are served from our own domain, so your browser does not contact Google to load them.",
+    ],
+  },
+  {
+    title: "Your rights",
+    body: [
+      "You can ask us what personal data we hold about you (in practice, only an email address if you joined the waitlist or wrote to us), ask us to correct or delete it, and withdraw any consent you gave, at any time, through the contact page. If you are not satisfied with our answer, you can complain to your local data protection authority.",
     ],
   },
   {

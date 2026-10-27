@@ -69,8 +69,6 @@ still builds, is tested, and is found by `getTemplate`; removing `hidden` brings
 | `data-platform` | Sources → ingestion (CDC, batch connectors, an event stream) → a lake and a warehouse → ML, dashboards and reverse ETL. |
 | `current-vs-target` | **Hidden for now.** Two tabs, **Current** and **Target**, that differ in added, removed and recategorised components, made to show **Compare tabs**. Browser tests that open it are held back from the TesterArmy sync until it's shown again. |
 | `sequence` | A checkout flow as a sequence tab: calls, a self-call, replies, async events and a note. |
-| `oidc-sign-in` | Sequence: OpenID Connect authorisation code flow with PKCE, then an API call with the token. |
-| `cache-aside` | Sequence: a cache miss read from the database and cached, then a change event clearing the cache. |
 
 Sequence templates are written as data too (participants and steps by name) and built by `buildSequenceDiagram` in
 `src/templates/sequence-build.ts`. Every architecture template is written as data (columns of containers holding components, and connections by

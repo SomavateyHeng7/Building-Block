@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { IMPORT_EXTENSIONS, ImportError, importDiagramText, type ImportResult } from "@/lib/diagram/importFile";
+import { IMPORT_EXTENSIONS, ImportError, importDiagramText, readImportText, type ImportResult } from "@/lib/diagram/importFile";
 import type { LegendEntry } from "@/lib/diagram/types";
 
 const SECONDARY =
@@ -44,11 +44,11 @@ export default function ImportDialog({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  async function run(source: string, fileName?: string) {
+  async function run(source: string | Promise<string>, fileName?: string) {
     setBusy(true);
     setError(null);
     try {
-      onImport(await importDiagramText(source, fileName, legend));
+      onImport(await importDiagramText(await source, fileName, legend));
     } catch (problem) {
       setError(problem instanceof ImportError ? problem.message : "That couldn't be imported. Check it's a draw.io file or Mermaid sequence diagram.");
     } finally {
@@ -86,7 +86,7 @@ export default function ImportDialog({
             onChange={async (event) => {
               const file = event.target.files?.[0];
               event.target.value = "";
-              if (file) await run(await file.text(), file.name);
+              if (file) await run(readImportText(file), file.name);
             }}
           />
           <button type="button" autoFocus disabled={busy} className={`${PRIMARY} self-start`} onClick={() => input.current?.click()}>

@@ -1,6 +1,7 @@
 import { COMPONENT_ICON_KEYS } from "./componentIcons";
 import { DEFAULT_LEGEND } from "./defaultLegend";
 import { createBlankSection, createId } from "./factory";
+import { MAX_EDGES, MAX_NAME_LENGTH, MAX_NODES, MAX_PARTICIPANTS, MAX_SECTIONS, MAX_STEPS, MAX_TEXT_LENGTH } from "./limits";
 import { syncLinkedParticipants } from "./sequence";
 import type {
   ConnectionSide,
@@ -42,8 +43,19 @@ function isObject(value: unknown): value is Raw {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function text(value: unknown): string | undefined {
-  return typeof value === "string" ? value : typeof value === "number" ? String(value) : undefined;
+/** How many strings were cut to a limit during the current parse (parsing is synchronous, so one counter is enough). */
+let cutTexts = 0;
+
+function text(value: unknown, limit = MAX_TEXT_LENGTH): string | undefined {
+  const raw = typeof value === "string" ? value : typeof value === "number" ? String(value) : undefined;
+  if (raw === undefined || raw.length <= limit) return raw;
+  cutTexts += 1;
+  return raw.slice(0, limit);
+}
+
+/** A name or label: text cut to a shorter limit. */
+function nameText(value: unknown): string | undefined {
+  return text(value, MAX_NAME_LENGTH);
 }
 
 function finite(value: unknown): number | undefined {
@@ -86,7 +98,7 @@ function parseLegend(raw: unknown, fixes: string[]): LegendEntry[] {
       continue;
     }
     seen.add(key);
-    legend.push({ key, label: text(item.label) ?? key, color });
+    legend.push({ key, label: nameText(item.label) ?? key, color });
   }
   if (dropped) fixes.push(`Skipped ${dropped} invalid legend ${dropped === 1 ? "entry" : "entries"}.`);
   return legend;
@@ -134,7 +146,7 @@ function parseNode(
   const colorKey = text(data.colorKey);
   const icon = type === "block" ? oneOf(data.icon, COMPONENT_ICON_KEYS) : undefined;
   const unknownIcon = type === "block" && data.icon !== undefined && !icon;
-  const label = text(data.label) ?? (type === "container" ? "Untitled Container" : "Untitled");
+  const label = nameText(data.label) ?? (type === "container" ? "Untitled Container" : "Untitled");
   const repaired =
     typeof data.label !== "string" ||
     x === undefined ||
@@ -239,7 +251,7 @@ function parseSequence(raw: unknown, name: string, legendKeys: Set<string>, fixe
     const description = text(item.description)?.trim();
     participants.push({
       id,
-      label: text(item.label)?.trim() || "Participant",
+      label: nameText(item.label)?.trim() || "Participant",
       ...(item.shape === "actor" ? { shape: "actor" as const } : {}),
       ...(colorKey && legendKeys.has(colorKey) ? { colorKey } : {}),
       ...(description ? { description } : {}),
@@ -267,7 +279,7 @@ function parseSequence(raw: unknown, name: string, legendKeys: Set<string>, fixe
         droppedSteps += 1;
         continue;
       }
-      const label = text(item.label)?.trim();
+      const label = nameText(item.label)?.trim();
       const protocol = text(item.protocol)?.trim();
       const kind = oneOf(item.kind, ["call", "async", "reply"] as const);
       stepIds.add(id);
@@ -281,7 +293,7 @@ function parseSequence(raw: unknown, name: string, legendKeys: Set<string>, fixe
         ...(kind && kind !== "call" ? { kind } : {}),
       });
     } else if (item.type === "note") {
-      const over = (Array.isArray(item.over) ? item.over : []).map(text).filter((value): value is string => !!value && ids.has(value)).slice(0, 2);
+      const over = (Array.isArray(item.over) ? item.over : []).map((value) => text(value)).filter((value): value is string => !!value && ids.has(value)).slice(0, 2);
       if (!over.length) {
         droppedSteps += 1;
         continue;
@@ -298,7 +310,7 @@ function parseSequence(raw: unknown, name: string, legendKeys: Set<string>, fixe
 
 function parseSection(raw: unknown, index: number, legendKeys: Set<string>, fixes: string[]): DiagramSection {
   const section = isObject(raw) ? raw : {};
-  const name = text(section.name) || `Section ${index + 1}`;
+  const name = nameText(section.name) || `Section ${index + 1}`;
   if (section.kind === "sequence") {
     return {
       id: text(section.id) || createId("section"),
@@ -396,6 +408,26 @@ function parseView(
   return { nodes: withDetails, edges };
 }
 
+const count = (value: unknown) => (Array.isArray(value) ? value.length : 0);
+
+/** Refuses a file with more content than the editor can handle, before any of it is read. */
+function checkSize(sections: unknown[]): void {
+  const tooBig = () => new DiagramFileError("That diagram is too large to open.");
+  if (sections.length > MAX_SECTIONS) throw tooBig();
+  const view = (raw: unknown) => {
+    if (!isObject(raw) || count(raw.nodes) > MAX_NODES || count(raw.edges) > MAX_EDGES) return false;
+    return (Array.isArray(raw.nodes) ? raw.nodes : []).every((node) => {
+      const detail = isObject(node) && isObject(node.data) ? node.data.detail : undefined;
+      return detail === undefined || (isObject(detail) && count(detail.nodes) <= MAX_NODES && count(detail.edges) <= MAX_EDGES);
+    });
+  };
+  for (const section of sections) {
+    if (!isObject(section)) continue;
+    const sequence = isObject(section.sequence) ? section.sequence : {};
+    if (!view(section) || count(sequence.participants) > MAX_PARTICIPANTS || count(sequence.steps) > MAX_STEPS) throw tooBig();
+  }
+}
+
 /**
  * Turns anything read from a file or storage into a diagram the editor can safely render.
  * Throws DiagramFileError only when the input isn't a diagram at all.
@@ -409,6 +441,8 @@ export function parseDiagram(input: unknown): ParsedDiagram {
     throw new DiagramFileError("That file isn't a Building Block diagram.");
   }
 
+  checkSize(input.sections);
+  cutTexts = 0;
   const fixes: string[] = [];
   const legend = parseLegend(input.legend, fixes);
   const legendKeys = new Set(legend.map((entry) => entry.key));
@@ -436,7 +470,7 @@ export function parseDiagram(input: unknown): ParsedDiagram {
   const diagram: Diagram = {
     schemaVersion: 1,
     id: text(input.id) || createId("diagram"),
-    name: text(input.name)?.trim() || "Imported diagram",
+    name: nameText(input.name)?.trim() || "Imported diagram",
     legend,
     sections,
     activeSectionId: sections.some((section) => section.id === activeSectionId) ? activeSectionId! : sections[0].id,
@@ -450,5 +484,6 @@ export function parseDiagram(input: unknown): ParsedDiagram {
   if (activeDetailId && activeSection.nodes.some((node) => node.id === activeDetailId && node.type === "block")) {
     diagram.activeDetailId = activeDetailId;
   }
+  if (cutTexts) fixes.push(`Shortened ${plural(cutTexts, "very long name or text")}.`);
   return { diagram, fixes };
 }

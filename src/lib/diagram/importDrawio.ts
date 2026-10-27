@@ -1,6 +1,7 @@
 import { createId } from "./factory";
 import { ImportError } from "./importMermaid";
 import { containerInsets, growContainerToFit, suggestConnectionSides } from "./layout";
+import { MAX_INFLATED_BYTES } from "./limits";
 import type { ConnectionSide, DiagramEdge, DiagramNode, DiagramSection, LegendEntry } from "./types";
 import { decodeEntities, findAll, parseXml, type XmlElement } from "./xml";
 
@@ -108,8 +109,21 @@ function readCells(model: XmlElement): Cell[] {
 async function inflatePage(text: string): Promise<string> {
   const bytes = Uint8Array.from(atob(text.trim()), (char) => char.charCodeAt(0));
   const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
-  const inflated = await new Response(stream).text();
-  return decodeURIComponent(inflated);
+  // Read in pieces and stop at the limit: a small file can inflate to gigabytes.
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_INFLATED_BYTES) {
+      await reader.cancel();
+      throw new ImportError("That draw.io file expands to more than the app can open.");
+    }
+    chunks.push(value);
+  }
+  return decodeURIComponent(await new Blob(chunks as BlobPart[]).text());
 }
 
 /** Each page's name and graph model, whether the file is an <mxfile> (compressed or not) or a bare model. */
@@ -126,7 +140,8 @@ async function readPages(root: XmlElement): Promise<{ name: string; model: XmlEl
         if (!page.text.trim()) return null;
         try {
           return { name, model: parseXml(await inflatePage(page.text)) };
-        } catch {
+        } catch (problem) {
+          if (problem instanceof ImportError) throw problem;
           throw new ImportError(`Couldn't read the page "${name}" in that draw.io file.`);
         }
       }),

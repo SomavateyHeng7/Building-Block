@@ -154,7 +154,7 @@ const allTests = [
       consent,
       act("Open the /templates page."),
       assert(
-        "These templates are all listed: L0 Architecture, Three-tier web application, Event-driven microservices, Serverless API, Data and analytics platform, Sequence diagram, Sign-in with OpenID Connect, Cached read (cache-aside); 'Current vs target state' is not.",
+        "These templates are all listed: L0 Architecture, Three-tier web application, Event-driven microservices, Serverless API, Data and analytics platform, Sequence diagram; 'Current vs target state' is not.",
       ),
     ],
   },

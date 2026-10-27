@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { toast } from "@/lib/toast";
 import { useDiagramStore } from "./store";
 import type { Diagram } from "./types";
+import { fileSizeProblem } from "./limits";
 import { DiagramFileError, parseDiagram } from "./validate";
 
 /**
@@ -164,6 +165,8 @@ export async function saveDiagramToFile({ saveAs = false }: { saveAs?: boolean }
 }
 
 export async function parseDiagramFile(file: File): Promise<{ diagram: Diagram; fixes: string[] }> {
+  const tooLarge = fileSizeProblem(file);
+  if (tooLarge) throw new DiagramFileError(tooLarge);
   let json: unknown;
   try {
     json = JSON.parse(await file.text());

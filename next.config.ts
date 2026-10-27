@@ -1,5 +1,13 @@
 import type { NextConfig } from "next";
 
+// These are compiled into the build, so a release that forgets them ships without a way to reach us (see .env.example).
+if (process.env.NODE_ENV === "production") {
+  const unset = ["NEXT_PUBLIC_CONTACT_EMAIL", "NEXT_PUBLIC_WAITLIST_URL", "NEXT_PUBLIC_CF_ANALYTICS_TOKEN"].filter(
+    (name) => !process.env[name],
+  );
+  if (unset.length) console.warn(`[building-block] Not set for this build: ${unset.join(", ")}. See .env.example.`);
+}
+
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   async headers() {
