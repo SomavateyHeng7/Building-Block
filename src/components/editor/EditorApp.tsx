@@ -59,8 +59,6 @@ export default function EditorApp() {
   const router = useRouter();
   const diagram = useDiagramStore((state) => state.diagram);
   const sequenceTab = isSequenceSection(getActiveSection(diagram));
-  const codeOpen = useSequenceCode((state) => state.open);
-  const setCodeOpen = useSequenceCode((state) => state.setOpen);
   const opened = useFileStore((state) => state.opened);
   const handle = useFileStore((state) => state.handle);
   const saving = useFileStore((state) => state.saving);
@@ -121,6 +119,16 @@ export default function EditorApp() {
           const id = request.focusId;
           requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById(id)?.focus()));
         }
+      }),
+    [],
+  );
+
+  // Something on a sequence sheet asked for the code: show the panel (SequenceCode puts the cursor in it).
+  useEffect(
+    () =>
+      useSequenceCode.subscribe(() => {
+        if (wideRef.current) togglePanel("palette", false);
+        else setDrawer("palette");
       }),
     [],
   );
@@ -305,34 +313,42 @@ export default function EditorApp() {
           )}
           {hidden.palette && (
             <div className={`${RAIL} border-r border-zinc-200 dark:border-zinc-800`}>
-              <PanelToggle side="left" expanded={false} label="the components panel" onClick={() => togglePanel("palette")} />
+              <PanelToggle
+                side="left"
+                expanded={false}
+                label={sequenceTab ? "the Mermaid code" : "the components panel"}
+                onClick={() => togglePanel("palette")}
+              />
             </div>
           )}
-          <Sidebar
-            onAdded={() => setDrawer(null)}
-            onCollapse={() => togglePanel("palette")}
-            className={`${drawer === "palette" ? "flex" : "hidden"} absolute inset-y-0 left-0 z-30 w-72 max-w-[85%] shadow-xl lg:static lg:z-auto ${hidden.palette ? "lg:hidden" : "lg:flex"} lg:w-60 lg:shrink-0 lg:shadow-none`}
-          />
+          {/* Sequence tabs are written as Mermaid code, so the code takes the palette's place. */}
+          {sequenceTab ? (
+            <SequenceCode
+              onCollapse={() => togglePanel("palette")}
+              className={`${drawer === "palette" ? "flex" : "hidden"} absolute inset-y-0 left-0 z-30 w-80 max-w-[85%] shadow-xl lg:relative lg:z-auto ${hidden.palette ? "lg:hidden" : "lg:flex"} lg:max-w-[calc(100%-320px)] lg:shrink-0 lg:shadow-none`}
+            />
+          ) : (
+            <Sidebar
+              onAdded={() => setDrawer(null)}
+              onCollapse={() => togglePanel("palette")}
+              className={`${drawer === "palette" ? "flex" : "hidden"} absolute inset-y-0 left-0 z-30 w-72 max-w-[85%] shadow-xl lg:static lg:z-auto ${hidden.palette ? "lg:hidden" : "lg:flex"} lg:w-60 lg:shrink-0 lg:shadow-none`}
+            />
+          )}
           <div className={`relative min-w-0 flex-1 ${readOnly ? "bb-readonly" : ""}`}>
-            {sequenceTab ? (
-              // The Mermaid code sits beside the sheet on wide screens and under it on narrow ones.
-              <div className="flex h-full flex-col lg:flex-row">
-                <div className="relative min-h-0 min-w-0 flex-1">
-                  <SequenceCanvas />
-                  {!codeOpen && (
-                    // Narrow screens have it with the buttons along the top (below).
-                    <button type="button" className={`${CANVAS_BUTTON} absolute right-3 top-3 z-10 max-lg:hidden`} onClick={() => setCodeOpen(true)}>
-                      <Icon name="code" />
-                      Mermaid code
-                    </button>
-                  )}
-                </div>
-                {codeOpen && <SequenceCode />}
-              </div>
-            ) : (
-              <Canvas />
-            )}
+            {sequenceTab ? <SequenceCanvas /> : <Canvas />}
             <div className="absolute left-3 top-3 z-10 flex gap-2 lg:hidden">
+              {sequenceTab && (
+                // The code panel, which reads in View too.
+                <button
+                  type="button"
+                  aria-expanded={drawer === "palette"}
+                  className={CANVAS_BUTTON}
+                  onClick={() => setDrawer(drawer === "palette" ? null : "palette")}
+                >
+                  <Icon name="code" />
+                  Code
+                </button>
+              )}
               {readOnly ? (
                 <button type="button" className={CANVAS_BUTTON} onClick={() => switchMode("edit")}>
                   <Icon name="pencil" />
@@ -340,15 +356,17 @@ export default function EditorApp() {
                 </button>
               ) : (
                 <>
-                  <button
-                    type="button"
-                    aria-expanded={drawer === "palette"}
-                    className={CANVAS_BUTTON}
-                    onClick={() => setDrawer(drawer === "palette" ? null : "palette")}
-                  >
-                    <Icon name="plus" />
-                    Add
-                  </button>
+                  {!sequenceTab && (
+                      <button
+                        type="button"
+                        aria-expanded={drawer === "palette"}
+                        className={CANVAS_BUTTON}
+                        onClick={() => setDrawer(drawer === "palette" ? null : "palette")}
+                      >
+                        <Icon name="plus" />
+                        Add
+                      </button>
+                  )}
                   <button type="button" title="View only: look around without moving anything" className={CANVAS_BUTTON} onClick={() => switchMode("view")}>
                     <Icon name="eye" />
                     <span className="sr-only sm:not-sr-only">View</span>
@@ -356,42 +374,41 @@ export default function EditorApp() {
                 </>
               )}
             </div>
-            <div className="absolute right-3 top-3 z-10 flex gap-2 lg:hidden">
-              {sequenceTab && !codeOpen && (
-                <button type="button" title="Mermaid code" className={CANVAS_BUTTON} onClick={() => setCodeOpen(true)}>
-                  <Icon name="code" />
-                  <span className="sr-only">Mermaid code</span>
-                </button>
-              )}
-              {readOnly ? (
-                <button type="button" aria-expanded={legendOpen} className={CANVAS_BUTTON} onClick={() => setLegendOpen((open) => !open)}>
-                  <Icon name="layers" />
-                  Legend
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  aria-expanded={drawer === "properties"}
-                  className={CANVAS_BUTTON}
-                  onClick={() => setDrawer(drawer === "properties" ? null : "properties")}
-                >
-                  <Icon name="panel" />
-                  <span className="hidden min-[380px]:inline">Details &amp; legend</span>
-                  <span className="min-[380px]:hidden">Details</span>
-                </button>
-              )}
-            </div>
+            {/* Sequence tabs have no details panel: the code is where they're edited. */}
+            {!sequenceTab && (
+              <div className="absolute right-3 top-3 z-10 flex gap-2 lg:hidden">
+                {readOnly ? (
+                  <button type="button" aria-expanded={legendOpen} className={CANVAS_BUTTON} onClick={() => setLegendOpen((open) => !open)}>
+                    <Icon name="layers" />
+                    Legend
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    aria-expanded={drawer === "properties"}
+                    className={CANVAS_BUTTON}
+                    onClick={() => setDrawer(drawer === "properties" ? null : "properties")}
+                  >
+                    <Icon name="panel" />
+                    <span className="hidden min-[380px]:inline">Details &amp; legend</span>
+                    <span className="min-[380px]:hidden">Details</span>
+                  </button>
+                )}
+              </div>
+            )}
             {readOnly && <ViewSheet legendOpen={legendOpen} onCloseLegend={() => setLegendOpen(false)} />}
           </div>
-          <aside
-            className={`${drawer === "properties" ? "flex" : "hidden"} absolute inset-y-0 right-0 z-30 w-80 max-w-[85%] flex-col overflow-y-auto border-l border-zinc-200 bg-white pr-safe shadow-xl lg:static lg:z-auto ${hidden.properties ? "lg:hidden" : "lg:flex"} lg:w-72 lg:shrink-0 lg:shadow-none dark:border-zinc-800 dark:bg-zinc-950`}
-          >
-            <PropertiesPanel
-              headerAction={<PanelToggle side="right" expanded label="details and legend" onClick={() => togglePanel("properties")} />}
-            />
-            <LegendPanel />
-          </aside>
-          {hidden.properties && (
+          {!sequenceTab && (
+            <aside
+              className={`${drawer === "properties" ? "flex" : "hidden"} absolute inset-y-0 right-0 z-30 w-80 max-w-[85%] flex-col overflow-y-auto border-l border-zinc-200 bg-white pr-safe shadow-xl lg:static lg:z-auto ${hidden.properties ? "lg:hidden" : "lg:flex"} lg:w-72 lg:shrink-0 lg:shadow-none dark:border-zinc-800 dark:bg-zinc-950`}
+            >
+              <PropertiesPanel
+                headerAction={<PanelToggle side="right" expanded label="details and legend" onClick={() => togglePanel("properties")} />}
+              />
+              <LegendPanel />
+            </aside>
+          )}
+          {!sequenceTab && hidden.properties && (
             <div className={`${RAIL} border-l border-zinc-200 dark:border-zinc-800`}>
               <PanelToggle side="right" expanded={false} label="details and legend" onClick={() => togglePanel("properties")} />
             </div>

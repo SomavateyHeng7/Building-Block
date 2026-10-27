@@ -16,6 +16,12 @@ export interface PlanPrice {
   perSeat?: boolean;
 }
 
+/** What a plan allows. A limit that's left out is unlimited. */
+export interface PlanLimits {
+  /** Lines of Mermaid code in one sequence tab (blank lines don't count). */
+  sequenceCodeLines?: number;
+}
+
 export interface Plan {
   id: string;
   name: string;
@@ -30,7 +36,16 @@ export interface Plan {
   checkoutUrl?: string;
   /** Drawn as the one to look at first. */
   featured?: boolean;
+  limits?: PlanLimits;
 }
+
+/**
+ * Whether plan limits are applied. Off for now: the limits are worked out (and can be shown), but nothing is
+ * refused. Turning this on also means saying so on /pricing (the Free plan's features).
+ */
+export const LIMITS_ENFORCED = false;
+
+export const FREE_SEQUENCE_CODE_LINES = 100;
 
 export const PLANS: Plan[] = [
   {
@@ -39,6 +54,7 @@ export const PLANS: Plan[] = [
     audience: "For every architect, today",
     price: { amount: 0, currency: "USD", period: "month" },
     status: "available",
+    limits: { sequenceCodeLines: FREE_SEQUENCE_CODE_LINES },
     features: [
       "Unlimited diagrams, tabs and components",
       "L0 landscapes, L1 connections and L2 internal designs",
@@ -90,4 +106,32 @@ export function formatPrice(plan: Plan): string {
 /** A plan people can subscribe to now: available, priced above zero, with an https checkout link. */
 export function canSubscribe(plan: Plan): boolean {
   return plan.status === "available" && !!plan.price && plan.price.amount > 0 && !!plan.checkoutUrl?.startsWith("https://");
+}
+
+/** The plan this browser is on. There are no accounts yet, so everyone is on Free. */
+export function currentPlan(): Plan {
+  return PLANS.find((plan) => plan.id === "free")!;
+}
+
+/** Lines of code that count towards a limit: blank ones (and the usual trailing newline) don't. */
+export function countCodeLines(code: string): number {
+  return code.split("\n").filter((line) => line.trim()).length;
+}
+
+export interface LimitCheck {
+  used: number;
+  /** Unset when the plan has no limit. */
+  limit?: number;
+  /** Past the limit, whether or not limits are enforced. */
+  over: boolean;
+  /** Over, and limits are enforced: the action should be refused. */
+  blocked: boolean;
+}
+
+/** Whether a sequence tab's Mermaid code fits the plan's line limit. */
+export function checkSequenceCodeLines(code: string, plan: Plan = currentPlan(), enforced = LIMITS_ENFORCED): LimitCheck {
+  const used = countCodeLines(code);
+  const limit = plan.limits?.sequenceCodeLines;
+  const over = limit !== undefined && used > limit;
+  return { used, ...(limit !== undefined ? { limit } : {}), over, blocked: over && enforced };
 }

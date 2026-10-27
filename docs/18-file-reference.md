@@ -91,8 +91,8 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 | `PanelToggle.tsx` | Collapse/expand button for side panels |
 | `Icon.tsx` | Editor icon set |
 | `SequenceCanvas.tsx` | A sequence tab: SVG drawing, drag between lifelines to add a message (`.bb-sequence-sheet` is what exports picture) |
-| `SequenceCode.tsx` | Mermaid code beside a sequence tab: follows the sheet, Apply, Copy, `.mmd` download |
-| `SequencePanel.tsx` | Details panel on a sequence tab: participant, message, note, or the tab |
+| `SequenceCode.tsx` | The left panel on a sequence tab: its Mermaid code, follows the sheet, Apply, Copy, `.mmd` download |
+| `SequencePanel.tsx` | Details for a sequence participant, message or note (not shown since sequence tabs dropped the right panel) |
 | `sequenceSelection.ts` | What's selected on a sequence tab |
 | `ImportDialog.tsx` | Import from a file or pasted text; used by the start page and File menu |
 | `nodes/BlockNode.tsx` | A component on the canvas: colour, handles, rename, notes marker, L2 badge |
@@ -128,21 +128,26 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 | `consent.ts` | Privacy-notice acceptance, versioned |
 | `levels.ts` | Roadmap levels computed from store actions |
 | `maintenance.ts` | Reads maintenance settings; `Retry-After`; upcoming end |
-| `plans.ts` | The plans on `/pricing`; `formatPrice`, `canSubscribe` |
+| `plans.ts` | The plans on `/pricing`; `formatPrice`, `canSubscribe`; plan limits (`checkSequenceCodeLines`, not enforced while `LIMITS_ENFORCED` is false) |
 
 ## `src/templates/`
 
 | File | Purpose |
 | --- | --- |
 | `types.ts` | `TemplateDefinition` |
-| `index.ts` | The list of templates; `getTemplate(id)` |
+| `index.ts` | `allTemplates`, `templates` (without the hidden ones), `getTemplate(id)` |
 | `blank.ts` | Blank canvas |
 | `build.ts` | Lays out templates written as data (`CanvasSpec`) and builds diagrams with fresh ids |
 | `l0-architecture.ts` | Four-layer L0 example with connections |
 | `three-tier.ts` | Three-tier web application |
 | `event-driven.ts` | Event-driven microservices, with an internal design (L2) |
-| `current-vs-target.ts` | Two tabs, current and target, for Compare tabs |
+| `serverless.ts` | Serverless API on managed services |
+| `data-platform.ts` | Data and analytics platform |
+| `current-vs-target.ts` | Two tabs, current and target, for Compare tabs (hidden for now) |
+| `sequence-build.ts` | Builds a one-tab sequence diagram from participants and steps written as data |
 | `sequence.ts` | A checkout flow as a sequence tab |
+| `oidc-sign-in.ts` | OpenID Connect sign-in as a sequence tab |
+| `cache-aside.ts` | A cache-aside read as a sequence tab |
 
 ## `src/types/`
 

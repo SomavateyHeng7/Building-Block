@@ -72,9 +72,15 @@ function unquote(text: string): string {
  * styling lines are skipped. Throws ImportError when the text isn't a sequence diagram.
  *
  * With `protocols`, a message ending in brackets ("Place order (REST)") gives its protocol, as the code view
- * writes it; imports from elsewhere keep the brackets in the label.
+ * writes it; imports from elsewhere keep the brackets in the label. With `warnUndeclared` (the code view too), a
+ * participant that's only mentioned, in code that declares its participants, is listed in `fixes`: it's usually a
+ * typo. A name that matches a declared participant's display name ("Web Shop" for `WebShop as Web Shop`) is that
+ * participant, not a new one.
  */
-export function parseMermaidSequence(input: string, { protocols = false }: { protocols?: boolean } = {}): MermaidImport {
+export function parseMermaidSequence(
+  input: string,
+  { protocols = false, warnUndeclared = false }: { protocols?: boolean; warnUndeclared?: boolean } = {},
+): MermaidImport {
   const lines = mermaidSource(input)
     .split(/\r?\n/)
     .map((line) => line.replace(/%%.*$/, "").trim())
@@ -84,26 +90,32 @@ export function parseMermaidSequence(input: string, { protocols = false }: { pro
   if (kind !== "sequenceDiagram") {
     throw new ImportError(
       kind && /^(flowchart|graph)$/.test(kind)
-        ? "That's a Mermaid flowchart. Only Mermaid sequence diagrams can be imported; for architecture diagrams, import a draw.io file."
+        ? "That's a Mermaid flowchart. Only Mermaid sequence diagrams work here; for architecture diagrams, import a draw.io file."
         : "That doesn't look like a Mermaid sequence diagram. It should start with \"sequenceDiagram\".",
     );
   }
 
   let sequence = emptySequence();
   const byName = new Map<string, string>();
+  /** Declared participants by display name, so writing the name shown on the sheet finds them. */
+  const byLabel = new Map<string, string>();
+  let declaredAny = false;
+  const undeclared: string[] = [];
   let title: string | undefined;
   let autonumber = false;
   let blocks = 0;
   let skipped = 0;
 
   /** The id of a participant by the name used in the text, adding it the first time it's mentioned. */
-  function participant(name: string, shape?: "actor", label?: string): string {
+  function participant(name: string, shape?: "actor", label?: string, declaring = false): string {
     const key = unquote(name);
-    const known = byName.get(key);
+    const known = byName.get(key) ?? (declaring ? undefined : byLabel.get(key));
     if (known) return known;
     const added = newParticipant(cleanLabel(unquote(label ?? key)) || key, shape);
     sequence = addParticipant(sequence, added);
     byName.set(key, added.id);
+    if (declaring) byLabel.set(added.label, added.id);
+    else undeclared.push(added.label);
     return added.id;
   }
 
@@ -115,7 +127,8 @@ export function parseMermaidSequence(input: string, { protocols = false }: { pro
     }
     const declared = DECLARATION.exec(line);
     if (declared) {
-      participant(declared[2], declared[1].toLowerCase() === "actor" ? "actor" : undefined, declared[3]);
+      declaredAny = true;
+      participant(declared[2], declared[1].toLowerCase() === "actor" ? "actor" : undefined, declared[3], true);
       continue;
     }
     const note = NOTE.exec(line);
@@ -156,5 +169,11 @@ export function parseMermaidSequence(input: string, { protocols = false }: { pro
     fixes.push(`Flattened ${blocks} loop/alt/opt/par block${blocks === 1 ? "" : "s"}: their messages are kept in order, without the box around them.`);
   }
   if (skipped) fixes.push(`Skipped ${skipped} line${skipped === 1 ? "" : "s"} that couldn't be read.`);
+  if (warnUndeclared && declaredAny && undeclared.length) {
+    const names = undeclared.map((name) => `"${name}"`).join(", ");
+    fixes.push(
+      `Added ${undeclared.length === 1 ? "a participant that isn't" : `${undeclared.length} participants that aren't`} declared: ${names}. If that's a typo, fix the name and apply again.`,
+    );
+  }
   return { sequence, title, autonumber, fixes };
 }

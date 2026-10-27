@@ -183,7 +183,7 @@ export interface SequenceRow {
 export interface SequenceLayout {
   columns: SequenceColumn[];
   rows: SequenceRow[];
-  /** Below the boxes, where the lifelines start; and where they end. */
+  /** Below the boxes, where the lifelines start; and where they end (the boxes repeat below, as Mermaid draws). */
   lifelineTop: number;
   lifelineBottom: number;
   width: number;
@@ -261,7 +261,7 @@ export function layoutSequence(sequence: SequenceDiagram): SequenceLayout {
     lifelineTop,
     lifelineBottom,
     width: Math.ceil(right + L.margin),
-    height: Math.ceil(lifelineBottom + L.margin),
+    height: Math.ceil(lifelineBottom + L.headerHeight + L.margin),
   };
 }
 

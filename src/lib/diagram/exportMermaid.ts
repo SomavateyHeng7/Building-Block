@@ -9,19 +9,32 @@ import type { SequenceDiagram, SequenceParticipant } from "./types";
  * descriptions and links to components aren't Mermaid; `applySequenceCode` keeps them by matching names.
  */
 export function toMermaidSequence(sequence: SequenceDiagram, title?: string): string {
+  return `${mermaidLines(sequence, title).lines.join("\n")}\n`;
+}
+
+/** Which line of `toMermaidSequence`'s code (from 0) a participant or step is written on, if it's written. */
+export function mermaidLineOf(sequence: SequenceDiagram, id: string): number | undefined {
+  return mermaidLines(sequence).lineOf.get(id);
+}
+
+function mermaidLines(sequence: SequenceDiagram, title?: string): { lines: string[]; lineOf: Map<string, number> } {
   const ids = mermaidIds(sequence.participants);
+  const lineOf = new Map<string, number>();
   const lines = ["sequenceDiagram"];
   if (title?.trim()) lines.push(`  title ${escapeText(title.trim())}`);
   if (sequence.numbered !== false) lines.push("  autonumber");
   for (const participant of sequence.participants) {
     const id = ids.get(participant.id)!;
     const keyword = participant.shape === "actor" ? "actor" : "participant";
+    lineOf.set(participant.id, lines.length);
     lines.push(id === participant.label ? `  ${keyword} ${id}` : `  ${keyword} ${id} as ${escapeText(participant.label)}`);
   }
   for (const step of sequence.steps) {
     if (step.type === "note") {
       const over = step.over.map((id) => ids.get(id)).filter(Boolean).join(",");
-      if (over) lines.push(`  Note over ${over}: ${escapeText(step.text).replace(/\n/g, "<br>")}`);
+      if (!over) continue;
+      lineOf.set(step.id, lines.length);
+      lines.push(`  Note over ${over}: ${escapeText(step.text).replace(/\n/g, "<br>")}`);
       continue;
     }
     const from = ids.get(step.from);
@@ -29,9 +42,10 @@ export function toMermaidSequence(sequence: SequenceDiagram, title?: string): st
     if (!from || !to) continue;
     const arrow = step.kind === "async" ? "-)" : step.kind === "reply" ? "-->>" : "->>";
     const caption = escapeText(messageCaption(step));
+    lineOf.set(step.id, lines.length);
     lines.push(`  ${from}${arrow}${to}:${caption ? ` ${caption}` : ""}`);
   }
-  return `${lines.join("\n")}\n`;
+  return { lines, lineOf };
 }
 
 /** Text that would end a Mermaid line or label early is written as `#code;`, which Mermaid and our reader decode. */
@@ -56,7 +70,7 @@ function mermaidIds(participants: SequenceParticipant[]): Map<string, string> {
 
 /** Reads code from the code view: like an import, but brackets after a message are its protocol. */
 export function readSequenceCode(code: string): MermaidImport {
-  return parseMermaidSequence(code, { protocols: true });
+  return parseMermaidSequence(code, { protocols: true, warnUndeclared: true });
 }
 
 /**

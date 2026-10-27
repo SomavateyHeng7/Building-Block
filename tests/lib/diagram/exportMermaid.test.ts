@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applySequenceCode, readSequenceCode, toMermaidSequence } from "@/lib/diagram/exportMermaid";
+import { applySequenceCode, mermaidLineOf, readSequenceCode, toMermaidSequence } from "@/lib/diagram/exportMermaid";
 import { addParticipant, addStep, emptySequence, newMessage, newNote, newParticipant } from "@/lib/diagram/sequence";
 import type { SequenceDiagram } from "@/lib/diagram/types";
 import { sequenceTemplate } from "@/templates/sequence";
@@ -90,6 +90,23 @@ describe("Mermaid code for a sequence", () => {
     expect(step(readSequenceCode(code).sequence)).toMatchObject({ label: "Retry", protocol: "twice" });
     expect(step(readSequenceCode("sequenceDiagram\n  A->>B: (REST)").sequence)).toMatchObject({ protocol: "REST" });
     expect(step(readSequenceCode("sequenceDiagram\n  A->>B: (REST)").sequence)).not.toHaveProperty("label");
+  });
+
+  it("takes a participant's display name as that participant, and points out names that weren't declared", () => {
+    const code = "sequenceDiagram\n  participant WebShop as Web Shop\n  participant Orders\n  Web Shop->>Orders: Create\n  WebShop->>Ordres: Typo";
+    const { sequence, fixes } = readSequenceCode(code);
+    expect(sequence.participants.map((participant) => participant.label)).toEqual(["Web Shop", "Orders", "Ordres"]);
+    expect(fixes).toEqual(['Added a participant that isn\'t declared: "Ordres". If that\'s a typo, fix the name and apply again.']);
+    // Code that declares nothing names participants by using them, as Mermaid allows: nothing to point out.
+    expect(readSequenceCode("sequenceDiagram\n  A->>B: Hi").fixes).toEqual([]);
+  });
+
+  it("knows which line each participant and step is written on", () => {
+    const sequence = sequenceTemplate.build().sections[0].sequence!;
+    const lines = toMermaidSequence(sequence).split("\n");
+    expect(lines[mermaidLineOf(sequence, sequence.participants[1].id)!]).toBe("  participant WebShop as Web Shop");
+    expect(lines[mermaidLineOf(sequence, sequence.steps[0].id)!]).toBe("  Customer->>WebShop: Place order");
+    expect(mermaidLineOf(sequence, "missing")).toBeUndefined();
   });
 
   it("says what's wrong with code it can't read", () => {

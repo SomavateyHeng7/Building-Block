@@ -179,26 +179,31 @@ what's on screen), a hint about C/B/? on devices with a mouse, and, inside an in
 ## `SequenceCanvas.tsx` — sequence tabs
 
 Shown instead of `Canvas` when the open tab has `kind: "sequence"`. An SVG at 1:1, laid out by `layoutSequence`:
-participant boxes (or a stick figure for an actor) across the top, dashed lifelines, then one row per step.
+drawn in Mermaid's own look (its default theme, or its dark theme): lavender participant boxes (or a stick figure for
+an actor) across the top and repeated at the bottom, solid lifelines, then one row per step; numbers sit in a dot
+where each arrow starts, notes are yellow. A participant with a legend colour is filled with it.
 
 - **Adding a message:** press on a lifeline and drag to another (or back onto the same one for a call to itself);
   a dashed preview follows the pointer. It goes in between the rows around where you pressed, is selected, and the
-  panel's "What's sent" field gets the cursor. Without a drag, "Add message" in the panel does the same at the end.
+  Mermaid code gets the cursor so it can be named there.
 - **Selecting:** click a participant, message or note (selection is `sequenceSelection.ts`, separate from the
-  canvas selection). Double-click puts the cursor in its main field. ←/→ move a selected participant, ↑/↓ a
+  canvas selection). Double-click puts the cursor in the Mermaid code. ←/→ move a selected participant, ↑/↓ a
   selected step; Delete removes it (a participant with its messages); Esc clears.
 - **Colours are SVG attributes**, chosen from the theme, not Tailwind classes: the picture export copies
   `.bb-sequence-sheet`, and classes on SVG elements don't survive the copy.
-- The sidebar becomes a list of participants to add (Actor, Participant, one per legend category) and Note; the
-  details panel is `SequencePanel`. Box shortcuts (B, C, paste, duplicate) do nothing on a sequence tab.
+- The left panel is the Mermaid code (below) instead of the palette, and there's no details panel or legend on the
+  right: everything about a step is edited in the code. Box shortcuts (B, C, paste, duplicate) do nothing on a
+  sequence tab.
 - "Sequence" beside "Add tab" adds one; sequence tabs have a small icon and aren't offered in Compare tabs.
 - The sheet is an SVG with `role="group"` (not `img`: it holds controls), and a note's lines are `tspan`s of one
   `text`, so it's read, and named, as one sentence.
 
 ### Mermaid code — `SequenceCode.tsx`
 
-**Mermaid code** (top right of the sheet; an icon button on narrow screens; *Write Mermaid code* on an empty tab)
-opens the tab as Mermaid `sequenceDiagram` code beside the sheet (under it on narrow screens).
+On a sequence tab the left panel (where the palette is on architecture tabs) is the tab as Mermaid
+`sequenceDiagram` code. It collapses and expands like the palette, and its right edge drags to resize it (arrow keys
+on the focused edge too; double-click resets; the width is remembered in `localStorage["bb:sequence-code-width"]`); on narrow screens **Code** opens it as a drawer,
+in view mode too. *Write Mermaid code* on an empty tab shows it and puts the cursor in it.
 
 - **Follows the sheet** until you type in it; then the sheet waits for **Apply** (or Ctrl/⌘+Enter), which replaces
   the sequence as one undo step. *Undo edits* goes back to the sheet's code. Edits are kept per tab.
@@ -210,6 +215,12 @@ opens the tab as Mermaid `sequenceDiagram` code beside the sheet (under it on na
   link to a component (`applySequenceCode`). A renamed one is a new participant, so a linked one loses its link.
 - Code that isn't a sequence diagram shows why, under the code, and changes nothing; flattened blocks or skipped
   lines are listed in a toast after Apply.
+- **Names:** writing a participant's display name ("Web Shop" for `participant WebShop as Web Shop`) means that
+  participant, not a new one. In code that declares its participants, one that's only mentioned (usually a typo) is
+  still added, as Mermaid does, and named in the toast.
+- **Line numbers** in a gutter beside the code. Adding a participant or message on the sheet, or double-clicking
+  one, puts the cursor at the end of its line (`mermaidLineOf`), so a new message can be named straight away.
+- **Mermaid cheat sheet** under the code: the lines a sequence needs, open at first on a tab with no steps yet.
 - **Copy**, and **.mmd** downloads the code with the tab's name as `title` (the import reads it back).
 - In view mode the code is read-only.
 

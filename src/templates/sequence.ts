@@ -1,10 +1,7 @@
-import { createBlankDiagram, createBlankSection } from "@/lib/diagram/factory";
-import { newMessage, newNote, newParticipant } from "@/lib/diagram/sequence";
-import type { SequenceMessageKind, SequenceStep } from "@/lib/diagram/types";
+import { buildSequenceDiagram, type ParticipantSpec, type StepSpec } from "./sequence-build";
 import type { TemplateDefinition } from "./types";
 
-/** Who takes part, by name: [label, legend category, or "actor" for a person]. */
-const PARTICIPANTS: [string, string][] = [
+const PARTICIPANTS: ParticipantSpec[] = [
   ["Customer", "actor"],
   ["Web Shop", "product"],
   ["Orders Service", "microservice"],
@@ -12,8 +9,7 @@ const PARTICIPANTS: [string, string][] = [
   ["Notification Service", "microservice"],
 ];
 
-/** [from, to, what, protocol, kind], or a note: ["note", over, text]. */
-const STEPS: ([string, string, string, string?, SequenceMessageKind?] | ["note", string, string])[] = [
+const STEPS: StepSpec[] = [
   ["Customer", "Web Shop", "Place order"],
   ["Web Shop", "Orders Service", "Create order", "REST"],
   ["Orders Service", "Orders Service", "Check stock"],
@@ -30,26 +26,5 @@ export const sequenceTemplate: TemplateDefinition = {
   id: "sequence",
   name: "Sequence diagram",
   description: "A checkout flow step by step: who calls whom, in what order, sync or async. Pair it with an L0 tab to explain how the architecture is used.",
-  build: () => {
-    const diagram = createBlankDiagram("Checkout flow");
-    const section = createBlankSection("Checkout", "sequence");
-    const participants = PARTICIPANTS.map(([label, category]) =>
-      category === "actor" ? newParticipant(label, "actor") : newParticipant(label, "participant", category),
-    );
-    const id = (label: string) => participants.find((participant) => participant.label === label)!.id;
-    const steps: SequenceStep[] = STEPS.map((step) =>
-      step[0] === "note"
-        ? newNote([id(step[1])], step[2])
-        : newMessage(id(step[0]), id(step[1]), {
-            label: step[2],
-            ...(step[3] ? { protocol: step[3] } : {}),
-            ...(step[4] ? { kind: step[4] } : {}),
-          }),
-    );
-    return {
-      ...diagram,
-      sections: [{ ...section, sequence: { participants, steps } }],
-      activeSectionId: section.id,
-    };
-  },
+  build: () => buildSequenceDiagram("Checkout flow", "Checkout", PARTICIPANTS, STEPS),
 };

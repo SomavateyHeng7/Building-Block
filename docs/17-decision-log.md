@@ -187,7 +187,9 @@ want to reverse.
 
 ### Sequence tabs as Mermaid code too
 
-- People who write sequences in Mermaid can edit a tab as code beside the sheet, and copy or download it. It's one
+- People who write sequences in Mermaid can edit a tab as code beside the sheet, and copy or download it. The code
+  is the left panel on sequence tabs (replacing the participant palette), and the sheet is drawn in Mermaid's look,
+  so a sequence tab reads as Mermaid rather than as another architecture canvas. It's one
   model with two views: the code is generated from the sequence and applied back to it (one undo step), not stored.
 - **Applying keeps what Mermaid can't say** (colours, descriptions, links to components) by matching participants by
   name. **Protocol** has no Mermaid syntax, so it's written in brackets after the message, as the sheet shows it;

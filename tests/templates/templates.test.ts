@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { templates } from "@/templates";
+import { allTemplates as templates, templates as listed } from "@/templates";
 import { parseDiagram } from "@/lib/diagram/validate";
 import { growContainerToFit } from "@/lib/diagram/layout";
 
@@ -47,6 +47,13 @@ describe("templates", () => {
       });
     });
   }
+
+  it("offer every template but the hidden ones, with sequence templates among them", () => {
+    expect(listed.map((template) => template.id)).not.toContain("current-vs-target");
+    expect(listed.length).toBe(templates.filter((template) => !template.hidden).length);
+    const sequences = listed.filter((template) => template.build().sections.some((section) => section.kind === "sequence"));
+    expect(sequences.map((template) => template.id)).toEqual(["sequence", "oidc-sign-in", "cache-aside"]);
+  });
 
   it("the richer templates show connections, an internal design and several tabs", () => {
     const built = Object.fromEntries(templates.map((template) => [template.id, template.build()]));

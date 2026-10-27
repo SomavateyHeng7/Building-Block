@@ -33,6 +33,11 @@ free and that plans and prices may change.
   Stripe Payment Link). The card then shows the price and **Subscribe** (`canSubscribe` checks all three, and that the
   link is https). Before taking money: terms of sale, the privacy notice (the payment provider becomes a processor;
   bump `PRIVACY_VERSION`), and tax and invoicing for where you sell.
+- **Limits (built, not enforced):** a plan's `limits` say what it allows; Free has `sequenceCodeLines:
+  FREE_SEQUENCE_CODE_LINES` (100 non-blank lines of Mermaid code per sequence tab). `checkSequenceCodeLines` works
+  out `used`, `limit`, `over` and `blocked`; the code panel's Apply refuses only when `blocked`, which needs
+  `LIMITS_ENFORCED = true`. Everyone is on `currentPlan()` (Free) until there are accounts. Turning limits on also
+  means saying so on the Free card, which still says "Unlimited".
 - **Why no payments yet:** nothing is for sale. A config of plans keeps the page honest now and makes launch a
   small change, without a server or webhooks to maintain in the meantime.
 
@@ -50,7 +55,9 @@ free and that plans and prices may change.
 
 ## Templates — `src/app/templates/page.tsx` and `src/templates/`
 
-`templates` in `src/templates/index.ts` lists `TemplateDefinition`s (`id`, `name`, `description`, `build()`):
+`allTemplates` in `src/templates/index.ts` lists every `TemplateDefinition` (`id`, `name`, `description`, `build()`,
+`hidden?`); `templates` is the ones offered on the start page and here, without the `hidden` ones. A hidden template
+still builds, is tested, and is found by `getTemplate`; removing `hidden` brings it back.
 
 | Template | `build()` |
 | --- | --- |
@@ -58,9 +65,15 @@ free and that plans and prices may change.
 | `l0-architecture` | Four containers (channels, core systems, integration, infrastructure) of components laid out in columns with the default legend, plus three example connections (one dashed "Order events · Kafka"). The column gap leaves room for connection labels. |
 | `three-tier` | Presentation, application and data tiers plus an external identity provider, with technologies and six connections. |
 | `event-driven` | Clients → API gateway → order services → event broker → downstream services, a payment provider, and an **internal design (L2)** for the Order Service. |
-| `current-vs-target` | Two tabs, **Current** and **Target**, that differ in added, removed and recategorised components, made to show **Compare tabs**. |
+| `serverless` | Clients → CDN and API gateway → functions → a table, a queue that triggers a worker, and a bucket. |
+| `data-platform` | Sources → ingestion (CDC, batch connectors, an event stream) → a lake and a warehouse → ML, dashboards and reverse ETL. |
+| `current-vs-target` | **Hidden for now.** Two tabs, **Current** and **Target**, that differ in added, removed and recategorised components, made to show **Compare tabs**. Browser tests that open it are held back from the TesterArmy sync until it's shown again. |
+| `sequence` | A checkout flow as a sequence tab: calls, a self-call, replies, async events and a note. |
+| `oidc-sign-in` | Sequence: OpenID Connect authorisation code flow with PKCE, then an API call with the token. |
+| `cache-aside` | Sequence: a cache miss read from the database and cached, then a change event clearing the cache. |
 
-Every template except `blank` is written as data (columns of containers holding components, and connections by
+Sequence templates are written as data too (participants and steps by name) and built by `buildSequenceDiagram` in
+`src/templates/sequence-build.ts`. Every architecture template is written as data (columns of containers holding components, and connections by
 component name) and laid out by `buildDiagram` / `buildCanvas` in `src/templates/build.ts`: fixed column widths and
 gaps, containers stacked within a column, and connection sides facing each other (right → left across columns,
 bottom → top within one). `tests/templates/templates.test.ts` checks every template opens without repairs, mints

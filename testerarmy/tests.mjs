@@ -96,7 +96,13 @@ const mobile = { viewport: "mobile" };
 const DRAWIO = `<mxfile><diagram name="Platform"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="lane" value="Core Systems" style="swimlane;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="320" height="200" as="geometry"/></mxCell><mxCell id="a" value="Orders" style="fillColor=#dae8fc;" vertex="1" parent="lane"><mxGeometry x="20" y="40" width="120" height="60" as="geometry"/></mxCell><mxCell id="b" value="Payments" style="fillColor=#d5e8d4;" vertex="1" parent="1"><mxGeometry x="500" y="80" width="120" height="60" as="geometry"/></mxCell><mxCell id="e" value="Charge" edge="1" parent="1" source="a" target="b"><mxGeometry relative="1" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>`;
 const RESPONSIVE_PAGES = ["/", "/diagrams", "/templates", "/privacy", "/contact", "/this-page-does-not-exist"];
 
-export const tests = [
+// Templates hidden from the start page (src/templates/index.ts): tests that open one are held back from the sync
+// (and so left as they are in TesterArmy) until it's shown again.
+const HIDDEN_TEMPLATES = ["Current vs target state"];
+const opensHiddenTemplate = (test) =>
+  test.steps.some((step) => HIDDEN_TEMPLATES.some((name) => step.title.includes(`'${name}' template`)));
+
+const allTests = [
   // consent.spec.ts
   {
     title: "Privacy notice comes first; Not now goes home",
@@ -148,7 +154,7 @@ export const tests = [
       consent,
       act("Open the /templates page."),
       assert(
-        "These templates are all listed: L0 Architecture, Three-tier web application, Event-driven microservices, Current vs target state.",
+        "These templates are all listed: L0 Architecture, Three-tier web application, Event-driven microservices, Serverless API, Data and analytics platform, Sequence diagram, Sign-in with OpenID Connect, Cached read (cache-aside); 'Current vs target state' is not.",
       ),
     ],
   },
@@ -528,8 +534,8 @@ ${ok}`,
         "Drag horizontally from the second participant's lifeline (just below its header, above the first message) to the fourth participant's lifeline.",
       ),
       expectCount("messages", ".bb-sequence-sheet [data-step]", 1),
-      assert("The side panel shows the 'Message' heading with the cursor in the 'What's sent' box."),
-      act("Type 'Refund' in 'What's sent', then choose 'Async'."),
+      assert("The cursor is in the Mermaid code box on the left, which has a new message line ending in a colon with nothing after it."),
+      act("Type ' Refund' at the end of that line (after the colon), then click 'Apply'."),
       assert("The sheet shows a 'Refund' message as the first message."),
       act("Click the 'Refund' message on the sheet, then press the Down arrow key."),
       assert("'Refund' is now the second message."),
@@ -540,16 +546,16 @@ ${ok}`,
     ],
   },
   {
-    title: "A sequence tab is added beside an architecture tab and filled from the palette",
+    title: "A sequence tab is added beside an architecture tab and filled from the code",
     settings: desktop,
     steps: [
       ...openTemplate("L0 Architecture"),
       act("Click 'Add a sequence tab'."),
       assert("A selected tab named 'Sequence 2' (sequence diagram) asks 'Who takes part in this flow?'."),
-      act("In the left palette, click 'Actor (person)', then type 'Architect' in the side panel's Name box."),
-      act("In the left palette, click 'Microservices'."),
+      act("Click 'Write Mermaid code'."),
+      act("Replace all the code in the left panel with: sequenceDiagram (then a new line) actor Architect (then a new line) participant Microservices, and click 'Apply'."),
       assert("The sheet shows an 'Architect' participant drawn as a person and a 'Microservices' participant."),
-      act("Click the top-left corner of the sequence sheet, then click 'Add message' in the side panel."),
+      act("Drag horizontally from the Architect's lifeline (just below its header) to the Microservices lifeline."),
       assert("The sheet has exactly one message."),
       act("Press Escape, then press the 'c' key."),
       act("Click the first tab."),
@@ -690,19 +696,6 @@ ${ok}`,
     ],
   },
   {
-    title: "A sequence participant picked from the architecture follows its component's name",
-    settings: desktop,
-    steps: [
-      ...openTemplate("L0 Architecture"),
-      act("Click 'Add a sequence tab'."),
-      act("In the left panel, use 'Add a component from your architecture' to add 'Customer Portal'."),
-      assert("The sequence sheet shows a 'Customer Portal' participant, and the side panel's Name field can't be edited."),
-      act("Click the first tab, click the 'Customer Portal' component, and change its Label to 'Web Portal'."),
-      act("Click the sequence tab (the last tab)."),
-      assert("The participant is now called 'Web Portal'."),
-    ],
-  },
-  {
     title: "Text on every component colour has enough contrast",
     settings: desktop,
     steps: [
@@ -745,8 +738,7 @@ ${ok}`,
     settings: desktop,
     steps: [
       ...openTemplate("Sequence diagram"),
-      act("Click 'Mermaid code' at the top right of the sheet."),
-      assert("A Mermaid code box opens beside the sheet, starting with 'sequenceDiagram' and listing the participants."),
+      assert("The left panel is a Mermaid code box starting with 'sequenceDiagram' and listing the participants."),
       act("At the end of the code, add a new line: Customer->>Customer: Celebrate"),
       act("Click 'Apply'."),
       assert("The sheet now ends with a 'Celebrate' message from Customer to itself."),
@@ -757,6 +749,8 @@ ${ok}`,
     ],
   },
 ];
+
+export const tests = allTests.filter((test) => !opensHiddenTemplate(test));
 
 // TesterArmy takes 1 to 30 steps a test.
 for (const test of tests) if (test.steps.length > 30) throw new Error(`${test.title} has ${test.steps.length} steps`);
