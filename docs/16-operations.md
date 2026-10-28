@@ -28,7 +28,7 @@ people to the contact page for data requests. Without it the page points to the 
 
 ```bash
 pnpm install
-pnpm build      # all pages static except /maintenance and the proxy
+pnpm build      # pages render per request (ƒ), for the CSP nonce; icons and the manifest are static
 pnpm start      # serves the build (default port 3000)
 ```
 

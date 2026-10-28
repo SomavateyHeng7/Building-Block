@@ -1,6 +1,7 @@
 import { MAX_MERMAID_LINE } from "./limits";
 import { addParticipant, addStep, emptySequence, newMessage, newNote, newParticipant } from "./sequence";
 import type { SequenceDiagram, SequenceMessageKind } from "./types";
+import { MAX_CODE_POINT } from "./xml";
 
 /** Text that isn't something this importer can read; the message is shown to the user. */
 export class ImportError extends Error {}
@@ -21,9 +22,9 @@ function mermaidSource(text: string): string {
   return fences.find((block) => /^\s*sequenceDiagram\b/m.test(block)) ?? fences[0] ?? text;
 }
 
-/** Mermaid's `#59;`-style codes, for characters that would otherwise end a line or a label. */
+/** Mermaid's `#59;`-style codes, for characters that would otherwise end a line or a label. A code past Unicode is kept as written. */
 function decodeEntities(text: string): string {
-  return text.replace(/#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)));
+  return text.replace(/#(\d+);/g, (match, code: string) => (Number(code) <= MAX_CODE_POINT ? String.fromCodePoint(Number(code)) : match));
 }
 
 /** Mermaid writes line breaks in labels as <br>; a name or a message is one line. */

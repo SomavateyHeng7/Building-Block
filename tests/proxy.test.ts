@@ -20,3 +20,24 @@ describe("maintenance proxy", () => {
     expect(response.headers.get("location")).toBe("http://localhost/");
   });
 });
+
+describe("content security policy", () => {
+  const nonceOf = (response: Response) => /'nonce-([^']+)'/.exec(response.headers.get("Content-Security-Policy") ?? "")?.[1];
+
+  it("gives every page a fresh nonce, and hands the same one to the page", () => {
+    const first = proxy(new NextRequest("http://localhost/editor"));
+    const second = proxy(new NextRequest("http://localhost/editor"));
+    expect(nonceOf(first)).toBeTruthy();
+    expect(nonceOf(first)).not.toBe(nonceOf(second));
+    // NextResponse.next({ request }) passes request headers on as x-middleware-request-*.
+    expect(first.headers.get("x-middleware-request-x-nonce")).toBe(nonceOf(first));
+    expect(first.headers.get("x-middleware-request-content-security-policy")).toBe(first.headers.get("Content-Security-Policy"));
+  });
+
+  it("covers the maintenance page too", () => {
+    vi.stubEnv("MAINTENANCE_MODE", "on");
+    const response = proxy(new NextRequest("http://localhost/editor"));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("x-middleware-request-x-nonce")).toBe(nonceOf(response));
+  });
+});

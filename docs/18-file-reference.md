@@ -44,7 +44,8 @@ Every file in the repository and what it is for. Details are in the linked pages
 
 ## `src/proxy.ts`
 
-Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-maintenance-mode--srcproxyts)).
+Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-maintenance-mode--srcproxyts)), and each
+page's Content-Security-Policy with a fresh nonce ([security](14-security.md#content-security-policy)).
 
 ## `src/components/`
 
@@ -126,6 +127,7 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 | `zip.ts` | Minimal ZIP writer |
 | `toast.ts` | Toast store and API |
 | `consent.ts` | Privacy-notice acceptance, versioned |
+| `csp.ts` | The pages' Content-Security-Policy for a nonce; `NONCE_HEADER` ([security](14-security.md#content-security-policy)) |
 | `levels.ts` | Roadmap levels computed from store actions |
 | `maintenance.ts` | Reads maintenance settings; `Retry-After`; upcoming end |
 | `plans.ts` | The plans on `/pricing`; `formatPrice`, `canSubscribe`; plan limits (`checkSequenceCodeLines`, not enforced while `LIMITS_ENFORCED` is false) |

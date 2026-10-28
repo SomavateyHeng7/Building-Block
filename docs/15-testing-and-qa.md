@@ -41,7 +41,8 @@ environment: no browser, so tests cover the pure logic and the stores.
 | `tests/lib/consent.test.ts` | 4 | Needed until accepted; version mismatch asks again; withdraw; blocked storage lasts for the session |
 | `tests/lib/toast.test.ts` | 4 | Durations by kind; repeats replace; at most three; empty details |
 | `tests/lib/maintenance.test.ts` | 6 | Reading the environment; `Retry-After`; upcoming end time |
-| `tests/proxy.test.ts` | 2 | 503 on every page during maintenance (incl. `/maintenance`); redirect home afterwards |
+| `tests/proxy.test.ts` | 4 | 503 on every page during maintenance (incl. `/maintenance`); redirect home afterwards; a fresh CSP nonce per page, handed to the page, maintenance page included |
+| `tests/lib/csp.test.ts` | 3 | The policy: nonce and `'strict-dynamic'` scripts; eval only in development; HTTPS upgrade; waitlist and analytics hosts, ignoring endpoints that aren't `https://` |
 | `tests/lib/levels.test.ts` | 2 | Roadmap statuses and heading wording |
 | `tests/lib/diagram/compare.test.ts` | 13 | Compare tabs: matching by name across ids, added/removed/changed fields, container moves, ignoring layout, connection matching (incl. two-way), internal designs, change-list rows |
 | `tests/templates/templates.test.ts` | 20 | Every template opens without repairs, mints fresh ids, connects real components, fits its containers; the richer templates have connections, an L2 design and two tabs |
@@ -50,7 +51,7 @@ environment: no browser, so tests cover the pure logic and the stores.
 | `tests/lib/diagram/flowAdapter.test.ts` | 6 | Line paths and bends; change marks; unchanged nodes keep their objects (undo history shares them) |
 | `tests/lib/diagram/grouping.test.ts` | 11 | Grouping into a container and ungrouping, as one undo step; deleting a container asks about its components |
 | `tests/lib/diagram/exportMermaid.test.ts` | 5 | Sequence → Mermaid (aliases, arrows, protocol, escapes, autonumber) and back to the same sequence; applying keeps colours, descriptions and links; errors |
-| `tests/lib/diagram/import.test.ts` | 10 | XML reading; draw.io shapes, swimlanes, arrows and compressed pages; Mermaid sequences; refusals with reasons |
+| `tests/lib/diagram/import.test.ts` | 13 | XML reading (incl. very deep nesting); draw.io shapes, swimlanes, arrows and compressed pages; parents that loop or nest deep; Mermaid sequences; character codes past Unicode; refusals with reasons |
 | `tests/lib/diagram/legend.test.ts` | 3 | Reordering entries; removing one moves its items to another, inside internal designs too |
 | `tests/lib/diagram/recovery.test.ts` | 6 | Recovery copy: off by default, read back like a file, cleared, full or blocked storage reported |
 

@@ -149,6 +149,9 @@ async function readPages(root: XmlElement): Promise<{ name: string; model: XmlEl
   return pages.filter((page): page is { name: string; model: XmlElement } => page !== null);
 }
 
+/** How many shapes deep a cell's parents are followed; real diagrams nest a handful. */
+const MAX_NESTING = 50;
+
 const STEP_STYLES = new Set(["orthogonalEdgeStyle", "elbowEdgeStyle", "entityRelationEdgeStyle", "isometricEdgeStyle"]);
 
 /** draw.io's exit/entry points are fractions of the box; the nearest edge is the side. */
@@ -188,20 +191,28 @@ function convertPage(
   const isContainer = (cell: Cell) =>
     !isGroup(cell) && (cell.style.has("swimlane") || cell.style.get("container") === "1" || hasChildren.has(cell.id));
 
+  /** The shapes around a cell, nearest first. A broken file can make parents loop, so it stops at a repeat or MAX_NESTING. */
+  const ancestors = (cell: Cell): Cell[] => {
+    const chain: Cell[] = [];
+    const seen = new Set([cell.id]);
+    for (let parent = cell.parent ? byId.get(cell.parent) : undefined; parent?.vertex && !seen.has(parent.id) && chain.length < MAX_NESTING; parent = parent.parent ? byId.get(parent.parent) : undefined) {
+      seen.add(parent.id);
+      chain.push(parent);
+    }
+    return chain;
+  };
   // Canvas position: geometry is relative to the parent shape, if any.
   const absolute = (cell: Cell): { x: number; y: number } => {
-    const parent = cell.parent ? byId.get(cell.parent) : undefined;
-    if (!parent || !parent.vertex || isLayer(parent.id) || rootIds.has(parent.id)) return { x: cell.x, y: cell.y };
-    const origin = absolute(parent);
-    return { x: origin.x + cell.x, y: origin.y + cell.y };
+    let { x, y } = cell;
+    for (const parent of ancestors(cell)) {
+      if (isLayer(parent.id) || rootIds.has(parent.id)) break;
+      x += parent.x;
+      y += parent.y;
+    }
+    return { x, y };
   };
   /** The nearest container around a cell, looking through groups and lifted containers. */
-  const containerOf = (cell: Cell): Cell | undefined => {
-    for (let parent = cell.parent ? byId.get(cell.parent) : undefined; parent && parent.vertex; parent = parent.parent ? byId.get(parent.parent) : undefined) {
-      if (isContainer(parent)) return parent;
-    }
-    return undefined;
-  };
+  const containerOf = (cell: Cell): Cell | undefined => ancestors(cell).find(isContainer);
 
   const ids = new Map<string, string>();
   const containers: DiagramNode[] = [];

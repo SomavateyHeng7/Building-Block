@@ -4,7 +4,8 @@ import { ImportError, diagramFromImport, importDiagramText, isImportable } from 
 import { parseMermaidSequence } from "@/lib/diagram/importMermaid";
 import { parseDrawio, plainLabel } from "@/lib/diagram/importDrawio";
 import { absolutePosition, CONTAINER_HEADER } from "@/lib/diagram/layout";
-import { parseXml } from "@/lib/diagram/xml";
+import { readSequenceCode } from "@/lib/diagram/exportMermaid";
+import { findAll, parseXml } from "@/lib/diagram/xml";
 import type { DiagramNode, SequenceMessage } from "@/lib/diagram/types";
 
 const MODEL = `<mxGraphModel><root>
@@ -40,6 +41,14 @@ describe("reading XML", () => {
 
   it("keeps the text of draw.io's HTML labels", () => {
     expect(plainLabel("Core <b>Systems</b><br>v2&nbsp;")).toBe("Core Systems v2");
+  });
+
+  it("keeps character codes past Unicode as written, and finds elements nested deeper than the stack", () => {
+    expect(parseXml(`<a x="&#99999999;&#x110000;&#65;"/>`).attributes.x).toBe("&#99999999;&#x110000;A");
+    expect(plainLabel("x &#99999999; y")).toBe("x &#99999999; y");
+    const depth = 200_000;
+    const deep = parseXml(`<r>${"<a>".repeat(depth)}<b/>${"</a>".repeat(depth)}<b/></r>`);
+    expect(findAll(deep, "b")).toHaveLength(2);
   });
 });
 
@@ -84,6 +93,21 @@ describe("importing draw.io", () => {
   it("says what's wrong with files it can't use", async () => {
     await expect(parseDrawio("<svg></svg>")).rejects.toThrow(/isn't a draw.io file/);
     await expect(parseDrawio("<mxGraphModel><root><mxCell id='0'/></root></mxGraphModel>")).rejects.toThrow(/no shapes/);
+  });
+
+  it("imports shapes whose parents loop or nest very deep", async () => {
+    const shape = (id: string, parent: string, style = "") =>
+      `<mxCell id="${id}" value="${id}" style="${style}" vertex="1" parent="${parent}"><mxGeometry x="10" y="10" width="80" height="40" as="geometry"/></mxCell>`;
+    const model = (cells: string) => `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel>`;
+
+    const self = await parseDrawio(model(shape("Self", "Self")));
+    expect(find(self.sections[0].nodes, "Self").position).toEqual({ x: 10, y: 10 });
+    const loop = await parseDrawio(model(shape("A", "B") + shape("B", "A") + shape("G", "H", "group") + shape("H", "G", "group") + shape("C", "G")));
+    expect(loop.sections[0].nodes.map((node) => node.data.label).sort()).toEqual(["A", "B", "C"]);
+
+    const chain = Array.from({ length: 20_000 }, (_, index) => shape(`n${index}`, index ? `n${index - 1}` : "1", "group")).join("");
+    const deep = await importDiagramText(model(chain + shape("Leaf", "n19999")));
+    expect(find(deep.sections[0].nodes, "Leaf")).toBeDefined();
   });
 });
 
@@ -144,6 +168,12 @@ sequenceDiagram
     expect(parseMermaidSequence("# Doc\n```mermaid\nsequenceDiagram\nA->>B: hi\n```").sequence.steps).toHaveLength(1);
     expect(() => parseMermaidSequence("flowchart LR\nA-->B")).toThrow(/flowchart.*draw.io/);
     expect(() => parseMermaidSequence("pie\n")).toThrow(ImportError);
+  });
+
+  it("keeps #code; past Unicode as written, in an import and in the code view", () => {
+    const label = ({ sequence }: { sequence: { steps: unknown[] } }) => (sequence.steps[0] as SequenceMessage).label;
+    expect(label(parseMermaidSequence("sequenceDiagram\nA->>B: hi #99999999; #59; there"))).toBe("hi #99999999; ; there");
+    expect(label(readSequenceCode("sequenceDiagram\nA->>B: #99999999999999999999;"))).toBe("#99999999999999999999;");
   });
 });
 

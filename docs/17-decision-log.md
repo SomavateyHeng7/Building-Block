@@ -296,10 +296,19 @@ want to reverse.
 - Rewrite keeps the requested URL so the page can reload into it; 503 on every page (including `/maintenance`) is
   what the page polls for; the bypass token becomes an HttpOnly cookie and leaves the URL.
 
-### Partial security headers only
+### A nonce-based Content-Security-Policy, with pages rendered per request
 
-- Clickjacking, sniffing, referrer and permissions headers are set. A full CSP (needs nonces, makes pages dynamic)
-  and HSTS (host-dependent, hard to undo) are deliberately left for later.
+- **Context:** clickjacking, sniffing, referrer and permissions headers were set; scripts weren't restricted, so any
+  HTML-injection bug (say, in a future import path) would run code. Next.js and `next-themes` write inline scripts.
+- **Decision:** the proxy sets `script-src 'self' 'nonce-…' 'strict-dynamic'` with a fresh nonce per request, and
+  every page renders per request so Next.js can put that nonce on its scripts (see
+  [Security](14-security.md#content-security-policy)).
+- **Alternatives:** `'unsafe-inline'` scripts (keeps pages static, but an injected script runs, which is what the
+  policy is for); Next.js's experimental SRI (covers bundled scripts only, so the inline ones would still be
+  blocked); hashing each page's inline scripts after the build (fragile, custom tooling).
+- **Consequences:** pages are no longer pre-rendered; a few ms of server rendering per page view. Styles keep
+  `'unsafe-inline'` (React's `style` attributes). Each new external origin must be added in `src/lib/csp.ts`.
+  HSTS (host-dependent, hard to undo) is still left for later.
 
 ### Tests in `tests/`, mirroring `src/`
 

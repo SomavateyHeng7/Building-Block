@@ -341,7 +341,7 @@ Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call
 box.dispatchEvent(new Event("input", { bubbles: true }));
 ${ok}`,
       ),
-      act("Click 'Open' in the import dialog."),
+      act("Click 'Add as new tabs' in the import dialog."),
       expectCount("tabs", "[role=tab]", 1),
       assert("A new 'Platform' tab is selected."),
       js(

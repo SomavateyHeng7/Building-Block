@@ -9,6 +9,7 @@ backend, broken authentication) don't apply. What remains:
 | --- | --- | --- |
 | A **malicious diagram file** (shared by someone else) | Opening files | Strict parsing; React escapes text; SVG export escapes text; sizes capped |
 | **Spreadsheet formula injection** via exported CSV | CSV export | Cells starting with `= + - @ \t \r` are prefixed with `'` |
+| **Script injection** (a bug that lets file content become HTML) | All pages | React escapes text; the Content-Security-Policy runs only scripts carrying the page's nonce, so injected `<script>` tags and `onerror=` handlers don't run |
 | **Clickjacking** (the editor framed by another site) | All pages | `X-Frame-Options: DENY` and `frame-ancestors 'none'` |
 | **MIME sniffing** | All pages | `X-Content-Type-Options: nosniff` |
 | **Leaking URLs** to other sites | Links | `Referrer-Policy: strict-origin-when-cross-origin` |
@@ -50,12 +51,57 @@ headers: [{ source: "/:path*", headers: [
 ]}]
 ```
 
-`X-Frame-Options` and `frame-ancestors` say the same thing for old and new browsers.
+`X-Frame-Options` and `frame-ancestors` say the same thing for old and new browsers. The `frame-ancestors`-only
+policy here covers files (icons, the manifest); pages get the full policy below, which replaces it.
+
+### Content-Security-Policy
+
+Pages get a full policy from the proxy (`src/proxy.ts`), built by `contentSecurityPolicy()` in `src/lib/csp.ts`
+with a fresh random nonce per request:
+
+```
+default-src 'self';
+script-src 'self' 'nonce-<random>' 'strict-dynamic';   (+ 'unsafe-eval' in development only)
+style-src 'self' 'unsafe-inline';
+img-src 'self' data: blob:;
+font-src 'self';
+connect-src 'self' blob: <waitlist origin> https://cloudflareinsights.com;   (the last two only when configured)
+worker-src 'self'; manifest-src 'self'; frame-src 'none'; object-src 'none';
+base-uri 'self'; form-action 'self'; frame-ancestors 'none';
+upgrade-insecure-requests   (over HTTPS only)
+```
+
+**How the nonce gets to the scripts:** the proxy puts the policy and an `x-nonce` header on the *request*. Next.js
+reads the nonce from the request's policy and adds it to every script it writes, inline and bundled; the root
+layout reads `x-nonce` and passes it to `next-themes` for its theme script. `'strict-dynamic'` lets those scripts
+load others (code-split chunks, the Cloudflare beacon) without listing hosts.
+
+**Pages render per request.** A page built ahead of time would carry no nonce and its scripts would be blocked, so
+the root layout reads the request headers, which makes every page dynamic (`ƒ` in the build output). The pages are
+small and the diagram work is all in the browser, so the cost is a few milliseconds of server rendering per page
+view. The service worker caches pages together with their headers, so offline copies keep a matching nonce.
+
+Why each looser part is there:
+
+- **`style-src 'unsafe-inline'`:** React renders `style="…"` attributes (component colours, sizes, positions) that a
+  nonce can't cover. Injected CSS can't run code; it's the accepted trade-off.
+- **`img-src data: blob:`:** exports draw the diagram through `data:` and `blob:` images (`html-to-image`).
+- **`base-uri 'self'`, not `'none'`:** to embed fonts in an export, `html-to-image` sets a `<base>` to the
+  stylesheet's address. With `'none'` the fonts 404 and exports fall back to system fonts.
+- **`connect-src`:** the waitlist endpoint's origin (only an `https://` URL in `NEXT_PUBLIC_WAITLIST_URL`) and
+  Cloudflare's beacon endpoint (only with `NEXT_PUBLIC_CF_ANALYTICS_TOKEN`). The proxy reads them at runtime, so
+  set them for the build and the runtime alike (the host does); a mismatch also makes the waitlist pages fail to
+  hydrate (React error #418). `blob:` lets a page read back a file it made itself, which the TesterArmy tests do
+  to check downloads; only script already running on the page can create one.
+
+**Adding something external** (a script, font, image host, form endpoint): add its origin to the matching
+directive in `src/lib/csp.ts` and check the browser console for `Refused to …` messages. A blocked resource fails
+quietly otherwise.
 
 ### Deliberately not done (yet)
 
-- **A full Content-Security-Policy** (`script-src` etc.). Next.js and `next-themes` use inline scripts, so a strict
-  policy needs per-request nonces (making every page dynamic) and its own testing. Only `frame-ancestors` is set.
+- **A nonce for styles.** It would need every `style={…}` moved to classes or CSS variables set from script.
+- **Violation reports** (`report-to`). There's no endpoint to collect them.
 - **HSTS** (`Strict-Transport-Security`). It depends on the host serving HTTPS only; set it at the host or add it
   here once that's confirmed. A wrong HSTS header is hard to undo.
 
