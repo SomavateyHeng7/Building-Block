@@ -278,6 +278,28 @@ export function tidyContainer(nodes: DiagramNode[], containerId: string): Diagra
 }
 
 /**
+ * Re-arranges, in a grid, every container whose components overlap one another, and reports how many it did.
+ * Imports can pile shapes on top of each other (a draw.io layer, a coarse grid); containers whose components
+ * already sit clear of each other keep their layout.
+ */
+export function tidyOverlappingContainers(nodes: DiagramNode[]): { nodes: DiagramNode[]; tidied: number } {
+  const overlaps = (a: DiagramNode, b: DiagramNode) =>
+    a.position.x < b.position.x + b.size.width &&
+    b.position.x < a.position.x + a.size.width &&
+    a.position.y < b.position.y + b.size.height &&
+    b.position.y < a.position.y + a.size.height;
+  let result = nodes;
+  let tidied = 0;
+  for (const container of nodes.filter((node) => node.type === "container")) {
+    const children = childrenOf(nodes, container.id);
+    if (!children.some((child, index) => children.slice(index + 1).some((other) => overlaps(child, other)))) continue;
+    result = tidyContainer(result, container.id);
+    tidied += 1;
+  }
+  return { nodes: result, tidied };
+}
+
+/**
  * Settles components after a drag. `moved` gives each dragged node's new position (relative to its
  * current container, if any). A component belongs to the top-most container its centre is over, or to
  * none: so it can be dragged into a container, out of one, or into another. Inside, it is kept clear of

@@ -310,6 +310,24 @@ want to reverse.
   `'unsafe-inline'` (React's `style` attributes). Each new external origin must be added in `src/lib/csp.ts`.
   HSTS (host-dependent, hard to undo) is still left for later.
 
+### Reusing your own work without storing anything
+
+- **Need:** reuse a legend, a layout and a logo across diagrams (the Pro ideas on `/pricing`). **Constraint:** the app
+  keeps nothing in the browser ([principle 1](01-product-and-principles.md)). **Decision:** everything reusable is a
+  file the person owns: a legend file, a diagram file opened **as a copy** from `/templates`, and branding stored in
+  the diagram file itself.
+- **Alternatives:** a template library in `localStorage` (what earlier versions did, and removed); a separate branding
+  file (one more file to carry around). Version history is not built: it needs a file-format decision of its own.
+
+### Comments and history live in the file
+
+- **Need:** review comments and version history (the Team and Pro ideas on `/pricing`). **Constraint:** no server, no
+  copy in the browser. **Decision:** both are optional fields in the diagram file (no `schemaVersion` bump). Comments
+  are merged from a reviewer's copy by id, additively. Checkpoints are full copies, limited to 20.
+- **Alternatives:** a shared service (needs accounts and a server); storing deltas for history (smaller files, but a
+  harder format to repair and to read in git diffs). **Known trade-off:** deleting a component leaves its comments in
+  memory until the file is next opened, when they are dropped with a note.
+
 ### Tests in `tests/`, mirroring `src/`
 
 - Keeps shipped code and tests apart; imports use `@/`.

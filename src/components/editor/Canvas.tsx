@@ -125,8 +125,9 @@ export default function Canvas() {
   );
 
   const flowEdges = useMemo(
-    () => toFlowEdges(section.edges ?? [], selectedEdgeId, colorMode === "dark", marks),
-    [section.edges, selectedEdgeId, colorMode, marks],
+    () =>
+      toFlowEdges(section.edges ?? [], selectedEdgeId, colorMode === "dark", marks, new Map(section.nodes.map((node) => [node.id, node.data.label]))),
+    [section.edges, section.nodes, selectedEdgeId, colorMode, marks],
   );
 
   // Zoom to something found by search or picked in Compare. Going to another view remounts the canvas, so

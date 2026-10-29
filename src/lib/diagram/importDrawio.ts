@@ -1,6 +1,6 @@
 import { createId } from "./factory";
 import { ImportError } from "./importMermaid";
-import { containerInsets, growContainerToFit, suggestConnectionSides } from "./layout";
+import { containerInsets, growContainerToFit, suggestConnectionSides, tidyOverlappingContainers } from "./layout";
 import { MAX_INFLATED_BYTES } from "./limits";
 import type { ConnectionSide, DiagramEdge, DiagramNode, DiagramSection, LegendEntry } from "./types";
 import { decodeEntities, findAll, parseXml, type XmlElement } from "./xml";
@@ -178,7 +178,7 @@ function convertPage(
   name: string,
   cells: Cell[],
   categoryFor: (color: string) => string,
-  counts: { text: number; nested: number; edges: number },
+  counts: { text: number; nested: number; edges: number; tidied: number },
 ): DiagramSection {
   const byId = new Map(cells.map((cell) => [cell.id, cell]));
   const rootIds = new Set(cells.filter((cell) => !cell.parent).map((cell) => cell.id));
@@ -284,6 +284,10 @@ function convertPage(
   });
   nodes = [...nodes, ...placed];
   for (const container of containers) nodes = growContainerToFit(nodes, container.id);
+  // Components piled on top of each other can't be read: lay those containers out in a grid.
+  const tidy = tidyOverlappingContainers(nodes);
+  nodes = tidy.nodes;
+  counts.tidied += tidy.tidied;
 
   const edges: DiagramEdge[] = [];
   for (const cell of cells.filter((candidate) => candidate.edge)) {
@@ -346,7 +350,7 @@ export async function parseDrawio(source: string, legend: LegendEntry[] = []): P
     made.push(entry);
     return entry.key;
   };
-  const counts = { text: 0, nested: 0, edges: 0 };
+  const counts = { text: 0, nested: 0, edges: 0, tidied: 0 };
   const sections = pages
     .map((page) => convertPage(page.name, readCells(page.model), categoryFor, counts))
     .filter((section) => section.nodes.length);
@@ -357,6 +361,7 @@ export async function parseDrawio(source: string, legend: LegendEntry[] = []): P
     fixes.push(`Made ${made.length} legend categor${made.length === 1 ? "y" : "ies"} from the fill colours used, named "${IMPORTED_CATEGORY} #…". Rename them to say what each colour means.`);
   }
   if (counts.nested) fixes.push(`Lifted ${counts.nested} container${counts.nested === 1 ? "" : "s"} out of another: containers here are one level deep.`);
+  if (counts.tidied) fixes.push(`Rearranged the components in ${counts.tidied} container${counts.tidied === 1 ? "" : "s"} into a grid because they overlapped.`);
   if (counts.text) fixes.push(`Left out ${counts.text} free text label${counts.text === 1 ? "" : "s"} that weren't on a shape.`);
   if (counts.edges) fixes.push(`Left out ${counts.edges} arrow${counts.edges === 1 ? "" : "s"} that didn't join two shapes.`);
   return { sections, legend: made, fixes };

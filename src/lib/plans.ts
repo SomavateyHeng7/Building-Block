@@ -128,6 +128,20 @@ export interface LimitCheck {
   blocked: boolean;
 }
 
+/** From this share of a limit, people are told how much they have used. */
+const NOTICE_FROM = 0.8;
+
+/**
+ * What to tell someone about their use of a limit, or null while they are well inside it. Honest about whether the
+ * limit is applied: while it isn't enforced, going over is allowed and the message says so.
+ */
+export function limitNotice(check: LimitCheck, planName = "Free", unit = "lines"): string | null {
+  if (check.limit === undefined || check.used < check.limit * NOTICE_FROM) return null;
+  if (check.blocked) return `${check.used} of ${check.limit} ${unit}. The ${planName} plan allows ${check.limit}.`;
+  if (check.over) return `${check.used} ${unit}. The ${planName} plan includes ${check.limit}; nothing is blocked yet.`;
+  return `${check.used} of ${check.limit} ${unit} (${planName} plan).`;
+}
+
 /** Whether a sequence tab's Mermaid code fits the plan's line limit. */
 export function checkSequenceCodeLines(code: string, plan: Plan = currentPlan(), enforced = LIMITS_ENFORCED): LimitCheck {
   const used = countCodeLines(code);

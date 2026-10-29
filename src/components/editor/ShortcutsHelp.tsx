@@ -1,5 +1,8 @@
 "use client";
 
+import { useRef } from "react";
+import { useDialogFocus } from "./useDialogFocus";
+
 const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: "Ctrl/⌘ + S", action: "Save to the open file (asks where the first time)" },
   { keys: "Ctrl/⌘ + Shift + S", action: "Save as a new file" },
@@ -21,6 +24,8 @@ const SHORTCUTS: { keys: string; action: string }[] = [
 ];
 
 export default function ShortcutsHelp({ onClose }: { onClose: () => void }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -28,6 +33,7 @@ export default function ShortcutsHelp({ onClose }: { onClose: () => void }) {
       onKeyDown={(event) => event.key === "Escape" && onClose()}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Keyboard shortcuts"

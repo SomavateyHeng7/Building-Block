@@ -1,7 +1,8 @@
 import type { Rect } from "@xyflow/react";
 import { componentIcon } from "./componentIcons";
 import type { ActiveView } from "./store";
-import type { Diagram, DiagramEdge, DiagramNode, DiagramSection, LegendEntry } from "./types";
+import { hasBranding, LOGO_HEIGHT } from "./branding";
+import type { Branding, Diagram, DiagramEdge, DiagramNode, DiagramSection, LegendEntry } from "./types";
 
 const PADDING = 40;
 const HEADER_HEIGHT = 52;
@@ -18,10 +19,12 @@ export function exportPixelRatio(width: number, height: number): number {
 }
 const FONT_FAMILY = "Arial, Helvetica, sans-serif";
 
-/** Leaves editing handles (resize and connection dots) out of the picture. */
+/** Leaves editing handles (resize and connection dots) and comment badges out of the picture. */
 function keepInPicture(node: HTMLElement): boolean {
   const classes = node.classList;
-  return !classes?.contains("react-flow__resize-control") && !classes?.contains("react-flow__handle");
+  return (
+    !classes?.contains("react-flow__resize-control") && !classes?.contains("react-flow__handle") && !classes?.contains("bb-comment-marker")
+  );
 }
 
 export interface ImageExportOptions {
@@ -32,6 +35,28 @@ export interface ImageExportOptions {
   title: string;
   legend: LegendEntry[];
   dark: boolean;
+  /** A logo and accent colour for the title bar. */
+  branding?: Branding;
+}
+
+/** The accent bar across the top of a branded picture. */
+const ACCENT_HEIGHT = 6;
+/** The logo's height in the title bar. */
+const LOGO_DRAWN_HEIGHT = 32;
+
+/** A branded picture's logo, loaded and sized for the title bar; null without one, or if it won't load. */
+async function loadLogo(branding: Branding | undefined): Promise<{ image: HTMLImageElement; width: number; height: number } | null> {
+  if (!branding?.logo) return null;
+  const image = new Image();
+  image.src = branding.logo;
+  try {
+    await image.decode();
+  } catch {
+    return null;
+  }
+  if (!image.naturalWidth || !image.naturalHeight) return null;
+  const height = Math.min(LOGO_DRAWN_HEIGHT, LOGO_HEIGHT);
+  return { image, height, width: Math.round((image.naturalWidth / image.naturalHeight) * height) };
 }
 
 /** Legend entries actually used in a section, in legend order. */
@@ -95,7 +120,8 @@ export async function renderComposite(
   options: ImageExportOptions,
 ): Promise<{ canvas: HTMLCanvasElement; width: number; height: number }> {
   const { toCanvas } = await import("html-to-image");
-  const { viewport, bounds, title, legend, dark } = options;
+  const { viewport, bounds, title, legend, dark, branding } = options;
+  const logo = await loadLogo(branding);
 
   const width = Math.ceil(bounds.width + PADDING * 2);
   const height = Math.ceil(bounds.height + PADDING * 2);
@@ -128,10 +154,15 @@ export async function renderComposite(
   ctx.fillStyle = colors.background;
   ctx.fillRect(0, 0, totalWidth, totalHeight);
 
+  if (hasBranding(branding) && branding.color) {
+    ctx.fillStyle = branding.color;
+    ctx.fillRect(0, 0, totalWidth, ACCENT_HEIGHT);
+  }
   ctx.fillStyle = colors.text;
   ctx.font = `bold 18px ${FONT_FAMILY}`;
   ctx.textBaseline = "middle";
   ctx.fillText(title, PADDING, HEADER_HEIGHT / 2 + 8);
+  if (logo) ctx.drawImage(logo.image, totalWidth - PADDING - logo.width, (HEADER_HEIGHT + ACCENT_HEIGHT - logo.height) / 2, logo.width, logo.height);
 
   ctx.drawImage(diagramCanvas, 0, HEADER_HEIGHT, width, height);
 
@@ -233,7 +264,7 @@ export function componentsCsv(diagram: Diagram): Blob {
 export function componentRows(diagram: Diagram): string[][] {
   const categories = new Map(diagram.legend.map((entry) => [entry.key, entry.label]));
   const rows: string[][] = [
-    ["Section", "Part of", "Type", "Name", "Container", "Category", "Icon", "Technology", "Owner", "Description", "Notes"],
+    ["Section", "Part of", "Type", "Name", "Container", "Category", "Icon", "Technology", "Owner", "Description", "Notes", "Link"],
   ];
   for (const section of diagram.sections) {
     for (const view of viewsOf(section)) {
@@ -251,6 +282,7 @@ export function componentRows(diagram: Diagram): string[][] {
           node.data.owner ?? "",
           node.data.description ?? "",
           node.data.notes ?? "",
+          node.data.link ?? "",
         ]);
       }
     }
@@ -267,7 +299,8 @@ const escapeXml = (value: string) =>
  */
 export async function renderSvg(options: ImageExportOptions): Promise<Blob> {
   const { toSvg } = await import("html-to-image");
-  const { viewport, bounds, title, legend, dark } = options;
+  const { viewport, bounds, title, legend, dark, branding } = options;
+  const logo = await loadLogo(branding);
   const width = Math.ceil(bounds.width + PADDING * 2);
   const height = Math.ceil(bounds.height + PADDING * 2);
   const colors = dark
@@ -304,6 +337,10 @@ export async function renderSvg(options: ImageExportOptions): Promise<Blob> {
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="${totalHeight}" viewBox="0 0 ${totalWidth} ${totalHeight}" font-family="${FONT_FAMILY}">` +
     `<rect width="100%" height="100%" fill="${colors.background}"/>` +
+    (hasBranding(branding) && branding.color ? `<rect width="${totalWidth}" height="${ACCENT_HEIGHT}" fill="${branding.color}"/>` : "") +
+    (logo && branding?.logo
+      ? `<image x="${totalWidth - PADDING - logo.width}" y="${(HEADER_HEIGHT + ACCENT_HEIGHT - logo.height) / 2}" width="${logo.width}" height="${logo.height}" href="${branding.logo}"/>`
+      : "") +
     `<text x="${PADDING}" y="${HEADER_HEIGHT / 2 + 8}" fill="${colors.text}" font-size="18" font-weight="bold" dominant-baseline="middle">${escapeXml(title)}</text>` +
     `<image x="0" y="${HEADER_HEIGHT}" width="${width}" height="${height}" href="${diagramUri}"/>` +
     legendSvg +

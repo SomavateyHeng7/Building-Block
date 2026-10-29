@@ -1,3 +1,4 @@
+import type { Checkpoint } from "./checkpoints";
 import type { ComponentIconKey } from "./componentIcons";
 
 /** Key of a LegendEntry. Legends are user-defined, so any string is valid. */
@@ -25,6 +26,8 @@ export interface NodeDetails {
   owner?: string;
   description?: string;
   notes?: string;
+  /** An http(s) address for the ticket, decision record or document this relates to. */
+  link?: string;
 }
 
 export type HeaderPosition = "top" | "bottom" | "left" | "right";
@@ -185,6 +188,27 @@ export interface DiagramSection {
   sequence?: SequenceDiagram;
 }
 
+/** A reviewer's note on a component, container or connection. */
+export interface ReviewComment {
+  id: string;
+  /** The id of what it is about: a node or a connection, on any tab or internal design. */
+  targetId: string;
+  /** The name typed when it was written; there are no accounts. */
+  author: string;
+  text: string;
+  /** ISO time. */
+  createdAt: string;
+  resolved?: boolean;
+}
+
+/** A logo and an accent colour for exports. */
+export interface Branding {
+  /** A small PNG, JPEG or WebP as a data address. */
+  logo?: string;
+  /** #rrggbb. */
+  color?: string;
+}
+
 export interface Diagram {
   schemaVersion: 1;
   id: string;
@@ -196,6 +220,12 @@ export interface Diagram {
   activeDetailId?: string;
   /** Show each component's technology under its label. Defaults to true. */
   showTechnology?: boolean;
+  /** Added to exports: a logo and an accent colour. */
+  branding?: Branding;
+  /** Review comments, newest last. */
+  comments?: ReviewComment[];
+  /** Named snapshots of the diagram, oldest first (see checkpoints.ts). */
+  checkpoints?: Checkpoint[];
   createdAt: string;
   updatedAt: string;
 }

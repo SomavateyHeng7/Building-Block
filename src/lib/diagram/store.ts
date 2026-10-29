@@ -1,5 +1,8 @@
 import { create } from "zustand";
 import { createBlankDiagram, createBlankSection, createId, isSequenceSection } from "./factory";
+import { hasBranding } from "./branding";
+import { MAX_CHECKPOINTS, snapshotOf, nextCheckpointName, type Checkpoint } from "./checkpoints";
+import { MAX_COMMENTS, commentTargets, mergeComments, type MergeResult } from "./comments";
 import { nextLegendColor } from "./palette";
 import { syncLinkedParticipants } from "./sequence";
 import {
@@ -15,6 +18,7 @@ import {
 import type { ComponentIconKey } from "./componentIcons";
 import type {
   BlockColorKey,
+  Branding,
   ComponentDetail,
   ConnectionSide,
   ContainerStyle,
@@ -25,6 +29,7 @@ import type {
   LegendEntry,
   NodeDetails,
   Position,
+  ReviewComment,
   SequenceDiagram,
 } from "./types";
 
@@ -278,6 +283,21 @@ interface DiagramState {
   fitAllContainers: () => void;
   tidyContainer: (id: string) => void;
   setShowTechnology: (show: boolean) => void;
+  /** Sets the logo and accent colour added to exports; undefined (or an empty one) removes them. */
+  setBranding: (branding: Branding | undefined) => void;
+  /** Adds a review comment about a node or connection; returns it, or null when there is no text or no such target. */
+  addComment: (targetId: string, text: string, author: string) => ReviewComment | null;
+  setCommentResolved: (id: string, resolved: boolean) => void;
+  deleteComment: (id: string) => void;
+  /** Keeps the diagram as it is now under a name; returns it, or null at the limit (MAX_CHECKPOINTS). */
+  saveCheckpoint: (name: string) => Checkpoint | null;
+  /** Puts a checkpoint's name, legend, tabs and branding back as the diagram, as one undo step. */
+  restoreCheckpoint: (id: string) => void;
+  /** Adds a checkpoint's architecture tabs as new tabs (named "Checkpoint — Tab"), to compare with Compare tabs. */
+  addCheckpointAsTabs: (id: string) => void;
+  deleteCheckpoint: (id: string) => void;
+  /** Brings in the comments from another copy of this diagram (see `mergeComments`). */
+  mergeComments: (incoming: ReviewComment[]) => MergeResult;
   setActiveSectionNodes: (nodes: DiagramNode[], options?: NodesChangeOptions) => void;
   addContainer: (position: Position) => void;
   addBlock: (position: Position, parentId?: string | null, colorKey?: BlockColorKey) => void;
@@ -305,12 +325,14 @@ interface DiagramState {
   updateSequence: (fn: (sequence: SequenceDiagram) => SequenceDiagram, coalesceKey?: string) => void;
   /** Adds imported tabs (and the legend entries they use) after the others, and opens the first. */
   addImportedSections: (sections: DiagramSection[], legend: LegendEntry[]) => void;
+  /** Adds categories (e.g. from a preset) whose names the legend doesn't have yet, and returns how many were added. */
+  addLegendEntries: (entries: { label: string; color: string }[]) => number;
   renameSection: (id: string, name: string) => void;
   deleteSection: (id: string) => void;
   duplicateSection: (id: string) => void;
 }
 
-export const useDiagramStore = create<DiagramState>((set) => ({
+export const useDiagramStore = create<DiagramState>((set, get) => ({
   diagram: createBlankDiagram(),
   selectedNodeIds: [],
   selectedEdgeId: null,
@@ -591,6 +613,156 @@ export const useDiagramStore = create<DiagramState>((set) => ({
 
   tidyContainer: (id) =>
     set((state) => commit(state, mapActiveSection(state.diagram, (nodes) => tidyContainer(nodes, id)))),
+
+  addComment: (targetId, text, author) => {
+    const body = text.trim();
+    const current = get().diagram;
+    if (!body || (current.comments?.length ?? 0) >= MAX_COMMENTS || !commentTargets(current).has(targetId)) return null;
+    const comment: ReviewComment = {
+      id: createId("comment"),
+      targetId,
+      author: author.trim() || "Reviewer",
+      text: body,
+      createdAt: new Date().toISOString(),
+    };
+    set((state) => commit(state, touch({ ...state.diagram, comments: [...(state.diagram.comments ?? []), comment] })));
+    return comment;
+  },
+
+  setCommentResolved: (id, resolved) =>
+    set((state) => {
+      const comments = state.diagram.comments;
+      if (!comments?.some((comment) => comment.id === id && !!comment.resolved !== resolved)) return state;
+      return commit(
+        state,
+        touch({
+          ...state.diagram,
+          comments: comments.map((comment) => {
+            if (comment.id !== id) return comment;
+            const next = { ...comment };
+            delete next.resolved;
+            return resolved ? { ...next, resolved: true } : next;
+          }),
+        }),
+      );
+    }),
+
+  deleteComment: (id) =>
+    set((state) => {
+      const comments = state.diagram.comments;
+      if (!comments?.some((comment) => comment.id === id)) return state;
+      const rest = comments.filter((comment) => comment.id !== id);
+      const diagram = { ...state.diagram };
+      delete diagram.comments;
+      return commit(state, touch(rest.length ? { ...diagram, comments: rest } : diagram));
+    }),
+
+  saveCheckpoint: (name) => {
+    const current = get().diagram;
+    if ((current.checkpoints?.length ?? 0) >= MAX_CHECKPOINTS) return null;
+    const checkpoint: Checkpoint = {
+      id: createId("checkpoint"),
+      name: name.trim().slice(0, 80) || nextCheckpointName(current.checkpoints),
+      createdAt: new Date().toISOString(),
+      snapshot: snapshotOf(current),
+    };
+    set((state) => commit(state, touch({ ...state.diagram, checkpoints: [...(state.diagram.checkpoints ?? []), checkpoint] })));
+    return checkpoint;
+  },
+
+  restoreCheckpoint: (id) =>
+    set((state) => {
+      const checkpoint = state.diagram.checkpoints?.find((candidate) => candidate.id === id);
+      if (!checkpoint) return state;
+      const { snapshot } = checkpoint;
+      const diagram = { ...state.diagram, name: snapshot.name, legend: snapshot.legend, sections: snapshot.sections };
+      delete diagram.branding;
+      if (snapshot.branding) diagram.branding = snapshot.branding;
+      const keepsTab = snapshot.sections.some((section) => section.id === state.diagram.activeSectionId);
+      return {
+        ...commit(
+          state,
+          touch({ ...diagram, activeSectionId: keepsTab ? state.diagram.activeSectionId : snapshot.sections[0].id, activeDetailId: undefined }),
+        ),
+        selectedNodeIds: [],
+        selectedEdgeId: null,
+      };
+    }),
+
+  addCheckpointAsTabs: (id) =>
+    set((state) => {
+      const checkpoint = state.diagram.checkpoints?.find((candidate) => candidate.id === id);
+      const sections = checkpoint?.snapshot.sections.filter((section) => !isSequenceSection(section) && section.nodes.length) ?? [];
+      if (!checkpoint || !sections.length) return state;
+      // Fresh ids, so the copies don't clash with the tabs they came from.
+      const copies = sections.map((source): DiagramSection => {
+        const idMap = new Map(source.nodes.map((node) => [node.id, createId(node.type)]));
+        return {
+          id: createId("section"),
+          name: `${checkpoint.name} — ${source.name}`,
+          nodes: source.nodes.map((node) => ({
+            ...node,
+            id: idMap.get(node.id)!,
+            parentId: node.parentId ? idMap.get(node.parentId) : undefined,
+            data:
+              node.data.kind === "block"
+                ? { ...node.data, containerId: node.data.containerId ? (idMap.get(node.data.containerId) ?? null) : null }
+                : { ...node.data },
+          })),
+          ...(source.edges?.length ? { edges: copyEdges(source.edges, idMap) } : {}),
+        };
+      });
+      // Categories the checkpoint used that have since been removed come back, so the copies keep their colours.
+      const known = new Set(state.diagram.legend.map((entry) => entry.key));
+      const missing = checkpoint.snapshot.legend.filter((entry) => !known.has(entry.key));
+      return {
+        ...commit(
+          state,
+          touch({
+            ...state.diagram,
+            legend: [...state.diagram.legend, ...missing],
+            sections: [...state.diagram.sections, ...copies],
+            activeSectionId: copies[0].id,
+            activeDetailId: undefined,
+          }),
+        ),
+        selectedNodeIds: [],
+        selectedEdgeId: null,
+      };
+    }),
+
+  deleteCheckpoint: (id) =>
+    set((state) => {
+      const checkpoints = state.diagram.checkpoints;
+      if (!checkpoints?.some((checkpoint) => checkpoint.id === id)) return state;
+      const rest = checkpoints.filter((checkpoint) => checkpoint.id !== id);
+      const diagram = { ...state.diagram };
+      delete diagram.checkpoints;
+      return commit(state, touch(rest.length ? { ...diagram, checkpoints: rest } : diagram));
+    }),
+
+  mergeComments: (incoming) => {
+    const current = get().diagram;
+    const result = mergeComments(current.comments, incoming, commentTargets(current));
+    if (result.added || result.resolved) {
+      set((state) => commit(state, touch({ ...state.diagram, comments: result.comments })));
+    }
+    return result;
+  },
+
+  setBranding: (branding) =>
+    set((state) => {
+      const next = hasBranding(branding) ? branding : undefined;
+      if (next === state.diagram.branding) return state;
+      const diagram = { ...state.diagram };
+      delete diagram.branding;
+      return commit(
+        state,
+        touch(next ? { ...diagram, branding: next } : diagram),
+        // Dragging the colour picker undoes as one step; changing the logo is a step of its own.
+        next?.logo !== state.diagram.branding?.logo ? "branding:logo" : "branding:color",
+      );
+    }),
 
   setShowTechnology: (show) =>
     set((state) => commit(state, touch({ ...state.diagram, showTechnology: show }))),
@@ -894,6 +1066,22 @@ export const useDiagramStore = create<DiagramState>((set) => ({
         `legend:${key}:${Object.keys(patch).join(",")}`,
       ),
     ),
+
+  addLegendEntries: (entries) => {
+    const known = new Set(get().diagram.legend.map((entry) => entry.label.trim().toLowerCase()));
+    const fresh = entries
+      .filter((entry) => {
+        const name = entry.label.trim().toLowerCase();
+        if (known.has(name)) return false;
+        known.add(name);
+        return true;
+      })
+      .map((entry) => ({ key: createId("legend"), label: entry.label, color: entry.color }));
+    if (fresh.length) {
+      set((state) => commit(state, touch({ ...state.diagram, legend: [...state.diagram.legend, ...fresh] })));
+    }
+    return fresh.length;
+  },
 
   addLegendEntry: () => {
     const key = createId("legend");

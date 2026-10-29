@@ -14,6 +14,7 @@ unsaved changes, and holds the file store.
 | `saved` | **The exact diagram object last written to a file.** `null` when never saved. |
 | `saving` | A write is in progress (prevents overlapping writes). |
 | `error` | The last write failed (stops autosave, shows "Not saved"). |
+| `savedAt` | When the diagram was last written or downloaded (ms); `null` until then. Shown in the toolbar tooltip. |
 
 `startDiagram(diagram, file?)` makes a diagram the open one: loads it into the diagram store (clearing history)
 and resets the file store. With `file` (opened from disk) it is clean; without (new or template) it has no file.
@@ -34,6 +35,12 @@ export function supportsFilePicker() {
 The types for the API are declared in `src/types/file-system-access.d.ts` because TypeScript's DOM library
 doesn't include them yet. The UI adapts its wording: "Save as…" becomes "Download a copy", and the File menu and
 start page explain that the browser can't save over a file.
+
+**Browsers without the API** (Safari, Firefox) never autosave, so they get three extra cues: a **"Downloaded
+plan.json"** toast on each Save, a **"Changed since download"** toolbar status (tooltip gives the time of the last
+download), and a **"You have unsaved changes"** reminder with a **Download** button every 5 minutes
+(`DOWNLOAD_REMINDER_MS` in `EditorApp.tsx`) while changes are unsaved. **Why:** each Save creates another file
+(`plan (1).json`…), so people need to know which download is the latest and when they last made one.
 
 ## Saving — `saveDiagramToFile({ saveAs })`
 

@@ -19,7 +19,14 @@ device, like draw.io's device storage. The app holds the diagram in memory only 
   its own containers, components and connections. The details panel shows the component's L1 connections
   alongside, a bar above the canvas leads back, and an **L2** badge marks components that have one. It is
   saved inside the same `.json` file, one level deep
-- Details per component: technology, owner, description, notes
+- Details per component: technology, owner, description, notes, and a link to a ticket, decision record or document
+- **Review comments** on components and connections, saved in the file. A reviewer adds theirs to a copy and sends it
+  back; **File → Merge comments from a file** brings them in. Open comments show in **Check**
+- **Version history:** *File → Version history* saves named checkpoints inside the file (up to 20), restores one
+  (undoable) or opens its tabs beside the current ones so **Compare tabs** shows what changed
+- **Solution document:** a Markdown write-up of every tab (components, connections, internal designs), the legend, open
+  comments and version history, linking the PNGs exported with it
+- Export as code: a **Mermaid** flowchart (or sequence code) or **C4-PlantUML** per tab, for documentation kept in git
 - **Find (Ctrl/⌘+F):** search names, technology, owner, category, notes and connections across every tab and
   internal design; picking a result opens its tab, selects it and zooms to it
 - A built-in icon per component (service, API, web, mobile, database, cache, storage, queue, event stream,
@@ -32,11 +39,19 @@ device, like draw.io's device storage. The app holds the diagram in memory only 
   changed (on the newer tab) and removed (on the older one); exports taken while it's shown include the marks and
   a legend for them
 - Built-in templates (L0 architecture, three-tier web application, event-driven microservices with an internal
-  design, current vs target state); to reuse your own layout, save it as a file and open that
+  design, current vs target state); to reuse your own layout and legend, save it as a file and use **Start from a
+  file** on the templates page, which opens a copy and leaves the file alone
 - Export dialog: pick any mix of PNG, SVG, PDF, component list (CSV), connection list (CSV) and the diagram
   file (JSON), and which tabs and internal designs to picture. Download it all as **one file** (a `.zip`,
   or a single PDF with a page per view) or as **separate files**. The dialog shows exactly what you'll get;
   the CSVs say which component each internal item is part of
+- **Check before you share:** lists components nothing connects to, connections with no protocol and components with
+  no owner, and jumps to each
+- Legend presets for **C4** and **ArchiMate** colours, and legends saved to a file and added to another diagram
+- **Branding:** a logo and accent colour in the export dialog, saved in the diagram file and used by PNG, SVG, PDF and
+  the viewer
+- An **interactive viewer** export: one offline `.html` file with a tab per view, pan and zoom, for reviewers who
+  don't have Building Block
 - Works on desktop, tablet and phone (see [Devices](#devices))
 - Keyboard shortcuts (press `?` in the editor)
 
@@ -68,7 +83,7 @@ Unsaved work exists only in memory:
 - **New**, **Open** and **Start** ask Save / Don't save / Cancel.
 - A reload with nothing saved returns you to the start page.
 
-Only your theme, collapsed panels, last export choices and privacy-notice acceptance use `localStorage`,
+Only your theme, collapsed panels, last export choices, the name you last used on a review comment and privacy-notice acceptance use `localStorage`,
 never diagram data.
 
 ### Privacy notice

@@ -7,6 +7,7 @@ import { useTheme } from "next-themes";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import {
   downloadBlob,
+  mergeCommentsFromDevice,
   openDiagramFromDevice,
   saveDiagramToFile,
   startDiagram,
@@ -27,7 +28,11 @@ import {
   renderSvg,
   type RenderedComposite,
 } from "@/lib/diagram/export";
-import { DATA_FORMATS, IMAGE_FORMATS, describeFiles, planExport, type ExportFormat } from "@/lib/diagram/exportPlan";
+import { DATA_FORMATS, IMAGE_FORMATS, describeFiles, planExport, type ExportFormat, type ExportView } from "@/lib/diagram/exportPlan";
+import HistoryDialog from "./HistoryDialog";
+import { buildViewerHtml } from "@/lib/diagram/exportViewer";
+import { solutionDocument } from "@/lib/diagram/exportDocument";
+import { codeForView } from "@/lib/diagram/exportCode";
 import { createZip } from "@/lib/zip";
 import ExportDialog, { type ExportChoice, type ExportPrefs } from "./ExportDialog";
 import ImportDialog, { describeImport } from "./ImportDialog";
@@ -95,6 +100,8 @@ function FileMenu({
   onImport,
   onSave,
   onSaveAs,
+  onMergeComments,
+  onHistory,
 }: {
   onNew: () => void;
   onOpen: () => void;
@@ -102,6 +109,10 @@ function FileMenu({
   onImport?: () => void;
   onSave: () => void;
   onSaveAs: () => void;
+  /** Absent in view mode. */
+  onMergeComments?: () => void;
+  /** Absent in view mode. */
+  onHistory?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   // On phones the toolbar wraps and File can land near the right edge: open leftwards then.
@@ -113,6 +124,8 @@ function FileMenu({
     { label: "Open…", run: onOpen, keys: "" },
     ...(onImport ? [{ label: "Import draw.io or Mermaid…", run: onImport, keys: "" }] : []),
     { label: "Save", run: onSave, keys: `${mod}S` },
+    ...(onHistory ? [{ label: "Version history…", run: onHistory, keys: "" }] : []),
+    ...(onMergeComments ? [{ label: "Merge comments from a file…", run: onMergeComments, keys: "" }] : []),
     { label: supportsFilePicker() ? "Save as…" : "Download a copy", run: onSaveAs, keys: supportsFilePicker() ? `${mod}⇧S` : "" },
   ];
   return (
@@ -186,9 +199,13 @@ function FileMenu({
 }
 
 /** What has happened to the diagram since it was last written to a file. */
+function formatTime(ms: number): string {
+  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 function SaveStatus() {
   const dirty = useIsDirty();
-  const { fileName, handle, saving, error } = useFileStore();
+  const { fileName, handle, saving, error, savedAt } = useFileStore();
   const pill = "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium";
   const dot = (color: string) => <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${color}`} />;
   if (error) {
@@ -203,17 +220,23 @@ function SaveStatus() {
     return (
       <span
         className={`${pill} bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300`}
-        title={handle ? "Saving to the file in a moment." : "Not in a file yet. Save to keep it: Building Block doesn't store diagrams."}
+        title={
+          handle
+            ? "Saving to the file in a moment."
+            : savedAt
+              ? `Changed since you last downloaded it at ${formatTime(savedAt)}. Save to download the latest.`
+              : "Not in a file yet. Save to keep it: Building Block doesn't store diagrams."
+        }
       >
         {dot("bg-amber-500")}
-        <span className="hidden sm:inline">{handle ? "Unsaved changes" : "Not saved to a file"}</span>
+        <span className="hidden sm:inline">{handle ? "Unsaved changes" : savedAt ? "Changed since download" : "Not saved to a file"}</span>
         <span className="sm:hidden">Unsaved</span>
       </span>
     );
   }
   if (fileName) {
     return (
-      <span className={`${pill} min-w-0 text-zinc-500`} title={`Saved to ${fileName}`}>
+      <span className={`${pill} min-w-0 text-zinc-500`} title={savedAt ? `Saved to ${fileName} at ${formatTime(savedAt)}` : `Saved to ${fileName}`}>
         {dot("bg-emerald-500")}
         <span className="hidden max-w-48 truncate md:inline">{fileName}</span>
         <span className="md:hidden">Saved</span>
@@ -229,6 +252,7 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
   const { theme, resolvedTheme, setTheme } = useTheme();
   const [exportOpen, setExportOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const diagram = useDiagramStore((state) => state.diagram);
   const renameDiagram = useDiagramStore((state) => state.renameDiagram);
   const setSelection = useDiagramStore((state) => state.setSelection);
@@ -326,7 +350,15 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
     const originalId = diagram.activeSectionId;
     const originalDetailId = diagram.activeDetailId;
     const { setActiveSection, openDetail } = useDiagramStore.getState();
-    const pictured = [...new Map(plan.files.flatMap((file) => file.views).map((view) => [view.id, view])).values()];
+    // Only pictures need the canvas; code is written from the diagram itself.
+    const pictured = [
+      ...new Map(
+        plan.files
+          .filter((file) => IMAGE_FORMATS.includes(file.format))
+          .flatMap((file) => file.views)
+          .map((view) => [view.id, view]),
+      ).values(),
+    ];
     const needs = (format: ExportFormat) => plan.files.some((file) => file.format === format);
     setExporting(true);
     // The picture is taken from the canvas's DOM, so mount the parts that are off screen too.
@@ -358,27 +390,58 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
                 ...(changeMarksForView(diagram, useCompareView.getState().pair, view)?.legend ?? []),
               ],
               dark: choice.theme === "dark",
+              branding: diagram.branding,
             };
             if (needs("png") || needs("pdf")) pages.set(target.id, await renderComposite(options));
-            if (needs("svg")) svgs.set(target.id, await renderSvg(options));
+            if (needs("svg") || needs("html")) svgs.set(target.id, await renderSvg(options));
           }
         });
       }
 
+      /** The viewer page for some views: their SVG pictures, one tab each. */
+      const viewerFile = async (views: ExportView[]) => {
+        const pagesForViewer = await Promise.all(
+          views.map(async (view) => ({
+            label: view.tabLabel ? `${view.tabLabel} › ${view.label}` : view.label,
+            svg: await svgs.get(view.id)!.text(),
+          })),
+        );
+        return new Blob([buildViewerHtml(diagram.name || "Diagram", pagesForViewer, choice.theme === "dark", diagram.branding)], { type: "text/html" });
+      };
+
+      // The document links the PNGs exported with it by file name.
+      const pictureNames = new Map(plan.files.filter((file) => file.format === "png").map((file) => [file.views[0].id, file.name]));
+
+      /** The contents of one planned file. */
+      const fileBlob = async (file: (typeof plan.files)[number]): Promise<Blob> => {
+        switch (file.format) {
+          case "png":
+            return canvasToPng(pages.get(file.views[0].id)!.canvas);
+          case "pdf":
+            return pdfFromPages(file.views.map((view) => pages.get(view.id)!));
+          case "svg":
+            return svgs.get(file.views[0].id)!;
+          case "html":
+            return viewerFile(file.views);
+          case "mermaid":
+          case "plantuml":
+            return new Blob([codeForView(diagram, file.views[0], file.format) ?? ""], { type: "text/plain;charset=utf-8" });
+          case "document":
+            return new Blob([solutionDocument(diagram, { images: pictureNames, date: new Date().toISOString().slice(0, 10) })], {
+              type: "text/markdown;charset=utf-8",
+            });
+          case "components-csv":
+            return componentsCsv(diagram);
+          case "connections-csv":
+            return connectionsCsv(diagram);
+          case "json":
+            return new Blob([JSON.stringify(diagram, null, 2)], { type: "application/json" });
+        }
+      };
+
       const blobs: { name: string; blob: Blob }[] = [];
       for (const file of plan.files) {
-        const blob =
-          file.format === "png"
-            ? await canvasToPng(pages.get(file.views[0].id)!.canvas)
-            : file.format === "pdf"
-              ? await pdfFromPages(file.views.map((view) => pages.get(view.id)!))
-              : file.format === "svg"
-                ? svgs.get(file.views[0].id)!
-                : file.format === "components-csv"
-                  ? componentsCsv(diagram)
-                  : file.format === "connections-csv"
-                    ? connectionsCsv(diagram)
-                    : new Blob([JSON.stringify(diagram, null, 2)], { type: "application/json" });
+        const blob = await fileBlob(file);
         blobs.push({ name: file.name, blob });
       }
 
@@ -460,6 +523,8 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
         onImport={readOnly ? undefined : () => setImportOpen(true)}
         onSave={() => void saveDiagramToFile()}
         onSaveAs={() => void saveDiagramToFile({ saveAs: true })}
+        onMergeComments={readOnly ? undefined : () => void mergeCommentsFromDevice()}
+        onHistory={readOnly ? undefined : () => setHistoryOpen(true)}
       />
 
       <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
@@ -508,6 +573,7 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
         </button>
       </div>
       {unsavedDialog}
+      {historyOpen && <HistoryDialog onClose={() => setHistoryOpen(false)} />}
       {importOpen && (
         <ImportDialog
           legend={diagram.legend}

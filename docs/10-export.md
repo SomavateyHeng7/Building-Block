@@ -8,6 +8,10 @@ Files involved:
 | `src/lib/diagram/exportPlan.ts` | Pure: which views exist, which files a choice produces, their names |
 | `src/components/editor/Toolbar.tsx` (`runExport`) | Orchestration: steps through views, renders, bundles, downloads |
 | `src/lib/diagram/export.ts` | Rendering pictures (PNG canvas, SVG), PDF, CSV rows |
+| `src/lib/diagram/branding.ts` | Reading, checking and scaling the logo and accent colour added to exports |
+| `src/lib/diagram/exportDocument.ts` | The solution document's Markdown |
+| `src/lib/diagram/exportCode.ts` | Mermaid flowchart and C4-PlantUML text for a view |
+| `src/lib/diagram/exportViewer.ts` | The interactive viewer: one HTML page from the SVG pictures |
 | `src/lib/zip.ts` | The `.zip` writer |
 | `src/lib/diagram/file.ts` (`downloadBlob`, `fileBaseName`) | Downloading and file names |
 
@@ -18,6 +22,10 @@ Files involved:
 | **PNG** | One picture per chosen view | Slides, documents |
 | **SVG** | One per chosen view | Sharp at any size; title and legend are real text |
 | **PDF** | One file with a page per view, or one file per view | Printing, sharing |
+| **Solution document** | One `<diagram>-document.md` for the whole diagram: per tab its components table (with owner, technology, link), connections table, notes and internal designs; sequence tabs as a `mermaid` block; then legend, **open** review comments and checkpoints. Pictures are *linked* by file name when PNG is exported in the same download (so use the zip), never embedded | The write-up that goes with the diagram |
+| **Mermaid** | One `.mmd` per chosen view: a `flowchart LR` (containers as subgraphs, connections with label, protocol, direction and dashed lines); a sequence tab gives `sequenceDiagram` code | Documentation kept in git |
+| **PlantUML (C4)** | One `.puml` per chosen architecture view, a C4 container diagram (`Boundary`, `Container`, `Rel`/`BiRel`). Not offered for sequence tabs | Same |
+| **Interactive viewer** | One `.html` file with a tab per view (or one file per view), pan and zoom, no network | Reviewers who don't have Building Block |
 | **Component list (CSV)** | The whole diagram | The solution document's component catalogue |
 | **Connection list (CSV)** | The whole diagram | Interface lists |
 | **Diagram file (JSON)** | The whole diagram | A copy to open again |
@@ -55,6 +63,7 @@ stem: `plan` (single tab), `plan-current` (several tabs), `plan-current-orders-i
 | Format | Files |
 | --- | --- |
 | PNG, SVG | One per non-empty chosen view: `<stem>.png` |
+| Interactive viewer | Same as PDF: bundled (or a single view) is **one** `.html` with a tab per view; separate is one per view. Built from each view's SVG, embedded as an `<img>` data address so a diagram can't run script in the page; the page's own script and styles are inline and call nothing external. |
 | PDF | Bundled (or a single view): **one** PDF with a page per view, `<diagram>.pdf` (or `<stem>.pdf` for one view). Separate: one per view. |
 | Component list | `<diagram>-components.csv` |
 | Connection list | `<diagram>-connections.csv` |

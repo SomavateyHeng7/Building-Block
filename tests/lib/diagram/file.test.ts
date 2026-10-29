@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createBlankDiagram } from "@/lib/diagram/factory";
-import { fileBaseName, isDirty, saveDiagramToFile, startDiagram, useFileStore } from "@/lib/diagram/file";
+import { fileBaseName, isDirty, openDiagramFromDevice, saveDiagramToFile, startDiagram, useFileStore } from "@/lib/diagram/file";
 import { useDiagramStore } from "@/lib/diagram/store";
 
 function fakeHandle(name = "plan.json") {
@@ -21,7 +21,7 @@ function stubWindow(extra: Record<string, unknown>) {
 
 beforeEach(() => {
   stubWindow({});
-  useFileStore.setState({ opened: false, handle: null, fileName: null, saved: null, saving: false, error: false });
+  useFileStore.setState({ opened: false, handle: null, fileName: null, saved: null, saving: false, error: false, savedAt: null });
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -52,6 +52,24 @@ describe("dirty tracking", () => {
     expect(isDirty()).toBe(false);
     useDiagramStore.getState().addContainer({ x: 0, y: 0 });
     expect(isDirty()).toBe(true);
+  });
+});
+
+describe("saveDiagramToFile without the file picker", () => {
+  it("downloads a copy, marks it saved and records when", async () => {
+    const click = vi.fn();
+    stubWindow({});
+    vi.stubGlobal("document", { createElement: () => ({ click }) });
+    vi.stubGlobal("URL", { createObjectURL: () => "blob:x", revokeObjectURL: () => {} });
+    startDiagram(createBlankDiagram());
+    useDiagramStore.getState().addContainer({ x: 0, y: 0 });
+    expect(useFileStore.getState().savedAt).toBeNull();
+
+    expect(await saveDiagramToFile()).toBe(true);
+
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(isDirty()).toBe(false);
+    expect(useFileStore.getState().savedAt).toBeGreaterThan(0);
   });
 });
 
@@ -133,5 +151,36 @@ describe("fileBaseName", () => {
     ["Café Ü", "café-ü"],
   ])("%j → %j", (name, expected) => {
     expect(fileBaseName(name)).toBe(expected);
+  });
+});
+
+describe("opening a file as a copy", () => {
+  function pickerReturning(diagram: unknown) {
+    const text = JSON.stringify(diagram);
+    const handle = { name: "layout.json", getFile: async () => ({ name: "layout.json", size: text.length, text: async () => text }) };
+    stubWindow({ showOpenFilePicker: vi.fn(async () => [handle]), showSaveFilePicker: vi.fn() });
+  }
+
+  it("opens it as a new, unsaved diagram, so Save never writes over the file", async () => {
+    const original = createBlankDiagram("Layout");
+    original.sections[0].nodes = [
+      { id: "a", type: "block", position: { x: 0, y: 0 }, size: { width: 100, height: 50 }, data: { kind: "block", label: "Web", containerId: null } },
+    ];
+    pickerReturning(original);
+
+    const opened = await openDiagramFromDevice({ asCopy: true });
+
+    expect(opened?.id).not.toBe(original.id);
+    expect(useFileStore.getState()).toMatchObject({ opened: true, handle: null, fileName: null, saved: null });
+    expect(isDirty()).toBe(true);
+  });
+
+  it("keeps the file as the place to save when opened normally", async () => {
+    const original = createBlankDiagram("Layout");
+    pickerReturning(original);
+    const opened = await openDiagramFromDevice();
+    expect(opened?.id).toBe(original.id);
+    expect(useFileStore.getState().fileName).toBe("layout.json");
+    expect(useFileStore.getState().handle).not.toBeNull();
   });
 });

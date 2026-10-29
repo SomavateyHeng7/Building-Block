@@ -9,6 +9,7 @@ import { readableTextOn } from "@/lib/diagram/palette";
 import { useDiagramStore } from "@/lib/diagram/store";
 import type { BlockNodeData } from "@/lib/diagram/types";
 import { showDetails } from "../detailsPanel";
+import { CommentMarker } from "./CommentMarker";
 import { useReadOnly } from "../viewMode";
 
 export type BlockFlowNode = Node<BlockNodeData, "block">;
@@ -29,7 +30,8 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
   // Escape leaves the name as it was; the blur that follows must not save what was typed.
   const cancelled = useRef(false);
 
-  const entryColor = legend.find((entry) => entry.key === data.colorKey)?.color;
+  const entry = legend.find((candidate) => candidate.key === data.colorKey);
+  const entryColor = entry?.color;
   const color = entryColor ?? "#ffffff";
   const icon = componentIcon(data.icon);
 
@@ -54,7 +56,10 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
       {SIDES.map((side) => (
         <Handle key={side.id} id={side.id} type="source" position={side.position} className="bb-handle" />
       ))}
+      {/* Colour alone says nothing to a screen reader, so the category is said in words. */}
+      {entry && <span className="sr-only">Category: {entry.label}</span>}
       {data.notes && <NotesMarker id={id} notes={data.notes} />}
+      <CommentMarker id={id} />
       {data.detail?.nodes.length ? <DetailBadge id={id} count={data.detail.nodes.length} /> : null}
       {editing ? (
         <input

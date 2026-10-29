@@ -80,6 +80,22 @@ describe("importing draw.io", () => {
     expect(fixes.join(" ")).toMatch(/1 arrow that didn't join two shapes/);
   });
 
+  it("lays out a container's components in a grid when they overlap, and leaves tidy ones alone", async () => {
+    const lane = `<mxCell id="lane" value="Core" style="swimlane;" vertex="1" parent="1"><mxGeometry x="0" y="0" width="500" height="300" as="geometry"/></mxCell>`;
+    const cell = (id: string, x: number) =>
+      `<mxCell id="${id}" value="${id}" vertex="1" parent="lane"><mxGeometry x="${x}" y="50" width="120" height="60" as="geometry"/></mxCell>`;
+    const wrap = (cells: string) => `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${lane}${cells}</root></mxGraphModel>`;
+
+    const piled = await parseDrawio(wrap(cell("A", 20) + cell("B", 40)));
+    const [a, b] = ["A", "B"].map((label) => find(piled.sections[0].nodes, label));
+    expect(a.position).not.toEqual(b.position);
+    expect(piled.fixes.join(" ")).toMatch(/Rearranged the components in 1 container/);
+
+    const apart = await parseDrawio(wrap(cell("A", 20) + cell("B", 200)));
+    expect(find(apart.sections[0].nodes, "B").position.x).toBe(200);
+    expect(apart.fixes.join(" ")).not.toMatch(/Rearranged/);
+  });
+
   it("reads compressed pages, one tab each, and reuses imported categories already in the legend", async () => {
     const compressed = (xml: string) => deflateRawSync(Buffer.from(encodeURIComponent(xml))).toString("base64");
     const file = `<mxfile><diagram name="Current">${compressed(MODEL)}</diagram><diagram name="Target"><![CDATA[]]>${MODEL}</diagram></mxfile>`;

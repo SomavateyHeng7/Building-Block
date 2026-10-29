@@ -2,6 +2,10 @@ import { COMPONENT_ICON_KEYS } from "./componentIcons";
 import { DEFAULT_LEGEND } from "./defaultLegend";
 import { createBlankSection, createId } from "./factory";
 import { MAX_EDGES, MAX_NAME_LENGTH, MAX_NODES, MAX_PARTICIPANTS, MAX_SECTIONS, MAX_STEPS, MAX_TEXT_LENGTH } from "./limits";
+import { parseBranding } from "./branding";
+import { MAX_CHECKPOINTS, snapshotOf, type Checkpoint } from "./checkpoints";
+import { MAX_COMMENTS, commentTargets } from "./comments";
+import { safeWebAddress } from "./webAddress";
 import { syncLinkedParticipants } from "./sequence";
 import type {
   ConnectionSide,
@@ -12,6 +16,7 @@ import type {
   DiagramSection,
   LegendEntry,
   NodeDetails,
+  ReviewComment,
   SequenceDiagram,
   SequenceParticipant,
   SequenceStep,
@@ -143,6 +148,9 @@ function parseNode(
     const value = text(data[key])?.trim();
     if (value) details[key] = value;
   }
+  // A link is only kept if it is a plain web address, so a file can't carry a javascript: or data: link into the app.
+  const link = safeWebAddress(text(data.link));
+  if (link) details.link = link;
   const colorKey = text(data.colorKey);
   const icon = type === "block" ? oneOf(data.icon, COMPONENT_ICON_KEYS) : undefined;
   const unknownIcon = type === "block" && data.icon !== undefined && !icon;
@@ -432,6 +440,68 @@ function checkSize(sections: unknown[]): void {
  * Turns anything read from a file or storage into a diagram the editor can safely render.
  * Throws DiagramFileError only when the input isn't a diagram at all.
  */
+/** Each checkpoint's snapshot is read like a diagram of its own, so it gets every check and repair an opened file does. */
+function parseCheckpoints(raw: unknown, fixes: string[]): Checkpoint[] {
+  if (!Array.isArray(raw)) return [];
+  // Reading a snapshot restarts the count of cut texts, which belongs to the file being read.
+  const outerCut = cutTexts;
+  const seen = new Set<string>();
+  const checkpoints: Checkpoint[] = [];
+  let dropped = Math.max(0, raw.length - MAX_CHECKPOINTS);
+  for (const item of raw.slice(0, MAX_CHECKPOINTS)) {
+    const id = isObject(item) ? text(item.id) : undefined;
+    const snapshot = isObject(item) && isObject(item.snapshot) ? item.snapshot : undefined;
+    if (!isObject(item) || !id || !snapshot || seen.has(id)) {
+      dropped += 1;
+      continue;
+    }
+    try {
+      const { diagram } = parseDiagram({ ...snapshot, schemaVersion: 1, activeSectionId: undefined, checkpoints: undefined, comments: undefined });
+      const createdAt = text(item.createdAt);
+      seen.add(id);
+      checkpoints.push({
+        id,
+        name: nameText(item.name)?.trim() || `Checkpoint ${checkpoints.length + 1}`,
+        createdAt: createdAt && !Number.isNaN(Date.parse(createdAt)) ? createdAt : new Date(0).toISOString(),
+        snapshot: snapshotOf(diagram),
+      });
+    } catch {
+      dropped += 1;
+    }
+  }
+  cutTexts = outerCut;
+  if (dropped) fixes.push(`Left out ${dropped} checkpoint${dropped === 1 ? "" : "s"} that couldn't be read.`);
+  return checkpoints;
+}
+
+function parseComments(raw: unknown, targets: Set<string>, fixes: string[]): ReviewComment[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const comments: ReviewComment[] = [];
+  let dropped = 0;
+  for (const item of raw) {
+    const id = isObject(item) ? text(item.id) : undefined;
+    const targetId = isObject(item) ? text(item.targetId) : undefined;
+    const body = isObject(item) ? text(item.text)?.trim() : undefined;
+    if (!isObject(item) || !id || !targetId || !body || seen.has(id) || !targets.has(targetId) || comments.length >= MAX_COMMENTS) {
+      dropped += 1;
+      continue;
+    }
+    seen.add(id);
+    const createdAt = text(item.createdAt);
+    comments.push({
+      id,
+      targetId,
+      author: nameText(item.author)?.trim() || "Reviewer",
+      text: body,
+      createdAt: createdAt && !Number.isNaN(Date.parse(createdAt)) ? createdAt : new Date(0).toISOString(),
+      ...(item.resolved === true ? { resolved: true } : {}),
+    });
+  }
+  if (dropped) fixes.push(`Left out ${dropped} review comment${dropped === 1 ? "" : "s"} that were empty, repeated or about something no longer in the diagram.`);
+  return comments;
+}
+
 export function parseDiagram(input: unknown): ParsedDiagram {
   if (!isObject(input)) throw new DiagramFileError("That file isn't a Building Block diagram.");
   if (typeof input.schemaVersion === "number" && input.schemaVersion > 1) {
@@ -478,6 +548,13 @@ export function parseDiagram(input: unknown): ParsedDiagram {
     updatedAt: text(input.updatedAt) ?? now,
   };
   if (typeof input.showTechnology === "boolean") diagram.showTechnology = input.showTechnology;
+  const checkpoints = parseCheckpoints(input.checkpoints, fixes);
+  if (checkpoints.length) diagram.checkpoints = checkpoints;
+  const comments = parseComments(input.comments, commentTargets({ sections }), fixes);
+  if (comments.length) diagram.comments = comments;
+  const branding = parseBranding(input.branding);
+  if (branding) diagram.branding = branding;
+  else if (input.branding !== undefined) fixes.push("Left out the export logo and colour: they weren't a valid picture and colour.");
   // Reopen the internal design that was open when the file was saved, if that component is still there.
   const activeDetailId = text(input.activeDetailId);
   const activeSection = sections.find((section) => section.id === diagram.activeSectionId)!;

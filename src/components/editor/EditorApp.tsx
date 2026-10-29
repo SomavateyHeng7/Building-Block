@@ -19,6 +19,7 @@ import DetailBar from "./DetailBar";
 import CompareBar from "./CompareBar";
 import SearchDialog from "./SearchDialog";
 import ShortcutsHelp from "./ShortcutsHelp";
+import Announcer from "./Announcer";
 import DeleteContainerDialog from "./DeleteContainerDialog";
 import { ungroup } from "./deletePrompt";
 import { useDetailsRequest } from "./detailsPanel";
@@ -28,12 +29,14 @@ import ViewSheet from "./ViewSheet";
 import { ReadOnlyContext, useMediaQuery } from "./viewMode";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { nextSlotInContainer, nudgeNodes } from "@/lib/diagram/layout";
-import { saveDiagramToFile, useFileStore, useIsDirty } from "@/lib/diagram/file";
+import { saveDiagramToFile, supportsFilePicker, useFileStore, useIsDirty } from "@/lib/diagram/file";
 import { clearRecoveryCopy, useRecoveryEnabled, writeRecoveryCopy } from "@/lib/diagram/recovery";
 import { toast } from "@/lib/toast";
 
 /** Wait this long after the last edit before writing to the open file. */
 const AUTOSAVE_DELAY_MS = 1000;
+/** How long changes can sit unsaved, in a browser that can't autosave, before we remind people to download. */
+const DOWNLOAD_REMINDER_MS = 5 * 60_000;
 /** Wait this long after the last edit before updating the recovery copy (when it's turned on). */
 const RECOVERY_DELAY_MS = 500;
 
@@ -254,6 +257,18 @@ export default function EditorApp() {
     return () => clearTimeout(timeout);
   }, [opened, handle, dirty, diagram, saving, saveFailed]);
 
+  // Browsers that can't write to a file never autosave, so remind people every few minutes while changes are unsaved.
+  useEffect(() => {
+    if (!opened || !dirty || supportsFilePicker()) return;
+    const interval = setInterval(() => {
+      toast.warning("You have unsaved changes", {
+        description: "This browser can't autosave. Download the diagram to keep them.",
+        action: { label: "Download", onClick: () => void saveDiagramToFile() },
+      });
+    }, DOWNLOAD_REMINDER_MS);
+    return () => clearInterval(interval);
+  }, [opened, dirty]);
+
   // With recovery copies on, unsaved changes are kept in the browser until saved; a clean diagram needs none.
   const recoveryOn = useRecoveryEnabled();
   useEffect(() => {
@@ -301,7 +316,8 @@ export default function EditorApp() {
         <SectionTabs />
         <DetailBar />
         <CompareBar />
-        <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        <Announcer />
+        <main aria-label="Diagram editor" className="relative flex min-h-0 flex-1 overflow-hidden">
           {drawer && (
             <button
               type="button"
@@ -413,7 +429,7 @@ export default function EditorApp() {
               <PanelToggle side="right" expanded={false} label="details and legend" onClick={() => togglePanel("properties")} />
             </div>
           )}
-        </div>
+        </main>
       </div>
       {helpOpen && <ShortcutsHelp onClose={() => setHelpOpen(false)} />}
       {searchOpen && <SearchDialog onClose={() => setSearchOpen(false)} />}

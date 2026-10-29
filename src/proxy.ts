@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { contentSecurityPolicy, NONCE_HEADER } from "@/lib/csp";
-import { BYPASS_COOKIE, BYPASS_PARAM, readMaintenanceConfig, retryAfterSeconds } from "@/lib/maintenance";
+import { BYPASS_COOKIE, BYPASS_PARAM, readMaintenanceConfig, retryAfterSeconds, safeEqual } from "@/lib/maintenance";
 
 const MAINTENANCE_PATH = "/maintenance";
 
@@ -43,7 +43,7 @@ export function proxy(request: NextRequest) {
 
   if (config.bypassToken) {
     // ?preview=<token> remembers this browser, then drops the token from the address bar.
-    if (searchParams.get(BYPASS_PARAM) === config.bypassToken) {
+    if (safeEqual(searchParams.get(BYPASS_PARAM) ?? "", config.bypassToken)) {
       const clean = request.nextUrl.clone();
       clean.searchParams.delete(BYPASS_PARAM);
       const response = NextResponse.redirect(clean);
@@ -56,7 +56,7 @@ export function proxy(request: NextRequest) {
       });
       return response;
     }
-    if (request.cookies.get(BYPASS_COOKIE)?.value === config.bypassToken) return csp.secure(NextResponse.next({ request: csp.request }));
+    if (safeEqual(request.cookies.get(BYPASS_COOKIE)?.value ?? "", config.bypassToken)) return csp.secure(NextResponse.next({ request: csp.request }));
   }
 
   // Keep the visitor's URL, so the page can send them back to it once we're done. /maintenance itself

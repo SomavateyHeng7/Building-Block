@@ -120,6 +120,7 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 | `diagram/legacy.ts` | Finds, downloads and removes diagrams left by earlier versions |
 | `diagram/sequence.ts` | Sequence diagrams: editing helpers (pure) and `layoutSequence` |
 | `diagram/importFile.ts` | Import entry point: picks draw.io or Mermaid, checks the result with `parseDiagram` |
+| `diagram/hints.ts` | "Check before you share": unconnected components, connections without a protocol, components without an owner |
 | `diagram/importDrawio.ts` | draw.io (.drawio/.xml, compressed or not) → architecture tabs |
 | `diagram/importMermaid.ts` | Mermaid `sequenceDiagram` → a sequence; `ImportError` |
 | `diagram/exportMermaid.ts` | A sequence → Mermaid code, and code applied back keeping colours, descriptions and links |

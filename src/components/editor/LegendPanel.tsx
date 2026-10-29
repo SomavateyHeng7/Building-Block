@@ -1,9 +1,14 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { everyNode, useDiagramStore } from "@/lib/diagram/store";
 import { Icon } from "./Icon";
 import ColorPicker from "./ColorPicker";
+import { LEGEND_PRESETS } from "@/lib/diagram/defaultLegend";
+import { toast } from "@/lib/toast";
+import { downloadBlob, fileBaseName } from "@/lib/diagram/file";
+import { legendFileName, legendToJson, parseLegendFile } from "@/lib/diagram/legendFile";
+import { DiagramFileError } from "@/lib/diagram/validate";
 
 export default function LegendPanel() {
   const legend = useDiagramStore((state) => state.diagram.legend);
@@ -12,6 +17,47 @@ export default function LegendPanel() {
   const addLegendEntry = useDiagramStore((state) => state.addLegendEntry);
   const removeLegendEntry = useDiagramStore((state) => state.removeLegendEntry);
   const moveLegendEntry = useDiagramStore((state) => state.moveLegendEntry);
+  const addLegendEntries = useDiagramStore((state) => state.addLegendEntries);
+  const [presetsOpen, setPresetsOpen] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+
+  // An open menu takes focus, closes when the pointer goes elsewhere, and is moved through with the arrow keys.
+  useEffect(() => {
+    if (!presetsOpen) return;
+    menu.current?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])')?.focus();
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Node;
+      if (!menu.current?.contains(target) && !menuButton.current?.contains(target)) setPresetsOpen(false);
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [presetsOpen]);
+
+  function handleMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      setPresetsOpen(false);
+      menuButton.current?.focus();
+      return;
+    }
+    if (event.key === "Tab") {
+      setPresetsOpen(false);
+      return;
+    }
+    const items = [...(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])') ?? [])];
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    const next =
+      event.key === "ArrowDown" ? (at + 1) % items.length
+      : event.key === "ArrowUp" ? (at - 1 + items.length) % items.length
+      : event.key === "Home" ? 0
+      : event.key === "End" ? items.length - 1
+      : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    items[next]?.focus();
+  }
 
   // The entry whose name is being edited: a new one, or one double-clicked.
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -50,6 +96,36 @@ export default function LegendPanel() {
     return users;
   }
 
+  function addPreset(id: string) {
+    const preset = LEGEND_PRESETS.find((candidate) => candidate.id === id);
+    if (!preset) return;
+    setPresetsOpen(false);
+    const added = addLegendEntries(preset.entries);
+    if (added) toast.success(`Added ${added} ${preset.name} categor${added === 1 ? "y" : "ies"}`);
+    else toast.info(`${preset.name} is already in the legend`);
+  }
+
+  function saveLegendFile() {
+    setPresetsOpen(false);
+    const name = legendFileName(diagram.name, fileBaseName);
+    downloadBlob(new Blob([legendToJson(legend)], { type: "application/json" }), name);
+    toast.success(`Downloaded ${name}`, { description: "Add it to another diagram with Reuse → Add from a file." });
+  }
+
+  async function addLegendFile(file: File) {
+    try {
+      const { entries, skipped } = parseLegendFile(await file.text());
+      const added = addLegendEntries(entries);
+      const note = skipped ? `Skipped ${skipped} unusable ${skipped === 1 ? "entry" : "entries"}.` : undefined;
+      if (added) toast.success(`Added ${added} categor${added === 1 ? "y" : "ies"} from ${file.name}`, { description: note });
+      else toast.info("Those categories are already in the legend", { description: note });
+    } catch (error) {
+      toast.error(`Couldn't read "${file.name}"`, {
+        description: error instanceof DiagramFileError ? error.message : "Please check it's a legend saved from Building Block.",
+      });
+    }
+  }
+
   function handleRemove(key: string) {
     if ((usage.get(key) ?? 0) > 0) setRemoving({ key, into: "" });
     else removeLegendEntry(key);
@@ -76,6 +152,82 @@ export default function LegendPanel() {
     <div className="flex flex-col gap-3 p-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Legend</h2>
+        <div className="relative ml-auto mr-1">
+          <button
+            ref={menuButton}
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={presetsOpen}
+            title="Reuse a legend: a standard such as C4 or ArchiMate, or one saved to a file"
+            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            onClick={() => setPresetsOpen((open) => !open)}
+          >
+            Reuse
+          </button>
+          {presetsOpen && (
+            <div
+              ref={menu}
+              role="menu"
+              aria-label="Reuse a legend"
+              className="absolute right-0 top-full z-20 mt-1 w-64 rounded-lg border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+              onKeyDown={handleMenuKeyDown}
+            >
+              {LEGEND_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  onClick={() => addPreset(preset.id)}
+                >
+                  <span className="flex items-center gap-1.5 text-sm font-medium">
+                    {preset.name}
+                    <span className="flex gap-0.5" aria-hidden>
+                      {preset.entries.map((entry) => (
+                        <span key={entry.label} className="h-2.5 w-2.5 rounded-sm border border-black/20" style={{ background: entry.color }} />
+                      ))}
+                    </span>
+                  </span>
+                  <span className="text-xs text-zinc-500">{preset.hint}</span>
+                </button>
+              ))}
+              <div className="my-1 border-t border-zinc-200 dark:border-zinc-700" />
+              <button
+                type="button"
+                role="menuitem"
+                className="w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                onClick={() => {
+                  setPresetsOpen(false);
+                  fileInput.current?.click();
+                }}
+              >
+                Add from a file…
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!legend.length}
+                className="w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-zinc-100 disabled:opacity-40 dark:hover:bg-zinc-800"
+                onClick={saveLegendFile}
+              >
+                Save this legend to a file
+              </button>
+            </div>
+          )}
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".json,application/json"
+            className="sr-only"
+            tabIndex={-1}
+            aria-label="Choose a legend file"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) void addLegendFile(file);
+            }}
+          />
+        </div>
         <button
           type="button"
           title="Add legend entry"

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { useDialogFocus } from "./useDialogFocus";
 import { useDiagramStore } from "@/lib/diagram/store";
 import {
   compareSections,
@@ -12,6 +13,7 @@ import {
   type FieldChange,
   type NodeChange,
 } from "@/lib/diagram/compare";
+import type { Checkpoint } from "@/lib/diagram/checkpoints";
 import { toCsv } from "@/lib/diagram/export";
 import { downloadBlob, fileBaseName } from "@/lib/diagram/file";
 import { toast } from "@/lib/toast";
@@ -33,29 +35,59 @@ const ORDER: ChangeKind[] = ["added", "removed", "changed"];
 /**
  * Compares two tabs (e.g. current and target state) and lists what is added, removed and changed. Picking
  * an item opens the tab it is on with it selected; the list downloads as a CSV for the solution document.
+ *
+ * With a `checkpoint` it compares that saved version with the diagram as it is now, tab by tab, without adding
+ * anything to the diagram: "From" is the checkpoint's tabs, "To" the current ones. What was removed since can't be
+ * shown on a tab (it is no longer there), so those rows only describe it.
  */
-export default function CompareDialog({ onClose }: { onClose: () => void }) {
+export default function CompareDialog({
+  onClose,
+  checkpoint,
+  onShown,
+}: {
+  onClose: () => void;
+  checkpoint?: Checkpoint;
+  /** Called after jumping to an item, instead of `onClose` (so a dialog behind this one can close as well). */
+  onShown?: () => void;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   const diagram = useDiagramStore((state) => state.diagram);
   const setActiveSection = useDiagramStore((state) => state.setActiveSection);
   const showCompare = useCompareView((state) => state.show);
   const { activeSectionId } = diagram;
   // Comparing is about boxes and connections, so sequence tabs aren't offered.
   const sections = useMemo(() => diagram.sections.filter((section) => section.kind !== "sequence"), [diagram.sections]);
+  const fromSections = useMemo(
+    () => (checkpoint ? checkpoint.snapshot.sections.filter((section) => section.kind !== "sequence") : sections),
+    [checkpoint, sections],
+  );
+  // The checkpoint may have had categories that were removed since; they keep their names in the comparison.
+  const compareDiagram = useMemo(() => {
+    if (!checkpoint) return diagram;
+    const known = new Set(diagram.legend.map((entry) => entry.key));
+    return { ...diagram, legend: [...diagram.legend, ...checkpoint.snapshot.legend.filter((entry) => !known.has(entry.key))] };
+  }, [checkpoint, diagram]);
 
   // Tabs usually run from "current" to "target": compare the tab on screen with the one before it, or, on
   // the first tab, with the one after it.
   const [initialFrom, initialTo] = (() => {
+    if (checkpoint) {
+      const current = sections.find((section) => section.id === activeSectionId) ?? sections[0];
+      const before = fromSections.find((section) => section.id === current.id) ?? fromSections.find((section) => section.name === current.name) ?? fromSections[0];
+      return [before, current];
+    }
     const index = Math.max(0, sections.findIndex((section) => section.id === activeSectionId));
     return index > 0 ? [sections[index - 1], sections[index]] : [sections[0], sections[1] ?? sections[0]];
   })();
   const [fromId, setFromId] = useState(initialFrom.id);
   const [toId, setToId] = useState(initialTo.id);
-  const from = sections.find((section) => section.id === fromId);
+  const from = fromSections.find((section) => section.id === fromId);
   const to = sections.find((section) => section.id === toId);
 
   const comparison = useMemo(
-    () => (from && to && from !== to ? compareSections(diagram, from, to) : null),
-    [diagram, from, to],
+    () => (from && to && (checkpoint || from !== to) ? compareSections(compareDiagram, from, to) : null),
+    [compareDiagram, checkpoint, from, to],
   );
   const counts = comparison ? countChanges(comparison) : null;
   const total = counts ? counts.added + counts.removed + counts.changed : 0;
@@ -69,8 +101,13 @@ export default function CompareDialog({ onClose }: { onClose: () => void }) {
   }, [onClose]);
 
   function show(change: NodeChange | ConnectionChange, kind: "node" | "connection") {
+    // Something removed since a checkpoint is on the checkpoint's tab, which isn't in the diagram.
+    if (!diagram.sections.some((section) => section.id === change.sectionId)) {
+      toast.info("That isn't in the diagram any more", { description: "It was removed since this checkpoint." });
+      return;
+    }
     goTo({ sectionId: change.sectionId, kind: kind === "node" ? "node" : "edge", id: change.id });
-    onClose();
+    (onShown ?? onClose)();
   }
 
   /** Marks the differences on both tabs and opens the "to" tab, where additions and changes are. */
@@ -83,7 +120,9 @@ export default function CompareDialog({ onClose }: { onClose: () => void }) {
 
   function download() {
     if (!comparison || !from || !to) return;
-    const name = `${fileBaseName(diagram.name)}-${fileBaseName(from.name)}-vs-${fileBaseName(to.name)}.csv`;
+    const name = checkpoint
+      ? `${fileBaseName(diagram.name)}-${fileBaseName(checkpoint.name)}-vs-now.csv`
+      : `${fileBaseName(diagram.name)}-${fileBaseName(from.name)}-vs-${fileBaseName(to.name)}.csv`;
     downloadBlob(new Blob([toCsv(comparisonRows(comparison))], { type: "text/csv;charset=utf-8" }), name);
     toast.success(`Downloaded ${name}`);
   }
@@ -94,6 +133,7 @@ export default function CompareDialog({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onClose}>
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="compare-title"
@@ -102,7 +142,7 @@ export default function CompareDialog({ onClose }: { onClose: () => void }) {
       >
         <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
           <h2 id="compare-title" className="text-base font-semibold">
-            Compare tabs
+            {checkpoint ? `Changes since “${checkpoint.name}”` : "Compare tabs"}
           </h2>
           <button
             type="button"
@@ -119,13 +159,14 @@ export default function CompareDialog({ onClose }: { onClose: () => void }) {
             <label className="flex min-w-0 flex-1 flex-col gap-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300">
               From
               <select autoFocus className={FIELD} value={fromId} onChange={(event) => setFromId(event.target.value)}>
-                {sections.map((section) => (
+                {fromSections.map((section) => (
                   <option key={section.id} value={section.id}>
-                    {section.name}
+                    {checkpoint ? `${checkpoint.name}: ${section.name}` : section.name}
                   </option>
                 ))}
               </select>
             </label>
+            {!checkpoint && (
             <button
               type="button"
               title="Swap"
@@ -138,8 +179,9 @@ export default function CompareDialog({ onClose }: { onClose: () => void }) {
             >
               <Icon name="swap" />
             </button>
+            )}
             <label className="flex min-w-0 flex-1 flex-col gap-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300">
-              To
+              {checkpoint ? "Now" : "To"}
               <select className={FIELD} value={toId} onChange={(event) => setToId(event.target.value)}>
                 {sections.map((section) => (
                   <option key={section.id} value={section.id}>
@@ -211,7 +253,7 @@ export default function CompareDialog({ onClose }: { onClose: () => void }) {
 
         <div className="flex flex-col gap-3 border-t border-zinc-200 bg-zinc-50 px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] dark:border-zinc-800 dark:bg-zinc-950/40">
           <p className="text-xs text-zinc-500">
-            Matched by name. Moving or resizing isn&apos;t counted as a change. Pick an item to see it on its tab.
+            Matched by name. Moving or resizing isn&apos;t counted as a change. Pick an item to see it on its tab{checkpoint ? "; removed items are no longer on any tab" : ""}.
           </p>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <button
@@ -223,6 +265,7 @@ export default function CompareDialog({ onClose }: { onClose: () => void }) {
             </button>
             <button
               type="button"
+              hidden={!!checkpoint}
               disabled={!total}
               title="Outline what changed on both tabs; exports include the marks while they're shown"
               className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:hover:bg-zinc-800"

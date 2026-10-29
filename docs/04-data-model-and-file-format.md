@@ -16,6 +16,9 @@ classDiagram
     activeSectionId: string
     activeDetailId?: string
     showTechnology?: boolean
+    branding?: { logo?: string; color?: string }
+    comments?: ReviewComment[]
+    checkpoints?: Checkpoint[]
     createdAt: ISO string
     updatedAt: ISO string
   }
@@ -48,7 +51,11 @@ classDiagram
 | `sections` | The tabs. Always at least one. | |
 | `activeSectionId` | Which tab is open. | Saved, so a file reopens on the tab it was saved on. **Navigation, not content:** ignored by dirty tracking. |
 | `activeDetailId` | The component in the active tab whose internal design (L2) is open. | Same as above: reopening a file returns to where you were, but opening a design isn't an edit. |
+| (node) `data.link` | An http(s) address for a ticket, decision record or document. Anything else (`javascript:`, `data:`, relative) is dropped on open. | Only plain web addresses are ever made into links. |
 | `showTechnology` | Show `[technology]` under component names. Absent means `true`. | Optional so older files keep their default. |
+| `comments` | `{ id, targetId, author, text, createdAt, resolved? }`. `targetId` is a node or connection id on any tab or internal design. At most 5,000. | Optional, no version bump. Review notes travel with the file; there is no server, so `author` is just the name typed. Comments that are empty, repeated or about something no longer there are dropped on open, with a note. |
+| `checkpoints` | `{ id, name, createdAt, snapshot }`, oldest first, at most 20. `snapshot` is `{ name, legend, sections, branding? }`, read with the same checks as an opened file. | Optional, no version bump. Version history without a server. Each one is a full copy, so files grow; the history dialog shows how much each adds. Restoring replaces name, legend, tabs and branding; comments and other checkpoints stay. |
+| `branding` | `logo`: a PNG, JPEG or WebP **data address** (at most 400,000 characters; the editor scales logos down to about 96 px tall); `color`: `#rrggbb`. Added to the title bar of exported pictures, PDF pages and the viewer. | Optional, so no `schemaVersion` bump. Kept in the diagram file because the app stores nothing itself. SVG logos and web addresses are refused so a file can't smuggle script or make the export fetch anything. An invalid value is dropped with a note. |
 | `createdAt`, `updatedAt` | ISO timestamps. `updatedAt` changes on every edit (`touch()` in the store). | Informational. |
 
 ### `LegendEntry`

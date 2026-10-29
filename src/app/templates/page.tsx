@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { templates } from "@/templates";
-import { startDiagram } from "@/lib/diagram/file";
+import { openDiagramFromDevice, startDiagram } from "@/lib/diagram/file";
 import { ThemeToggle } from "@/components/theme-toggle";
 import TemplatePreview from "@/components/TemplatePreview";
 import { useUnsavedGuard } from "@/components/editor/useUnsavedGuard";
@@ -23,6 +23,15 @@ export default function TemplatesPage() {
       startDiagram(template.build());
       router.push("/editor");
     });
+  }
+
+  function startFromFile() {
+    guard(
+      async () => {
+        if (await openDiagramFromDevice({ asCopy: true })) router.push("/editor");
+      },
+      { picker: { continueLabel: "Choose a file…", next: "Now choose the file to start from." } },
+    );
   }
 
   return (
@@ -46,9 +55,20 @@ export default function TemplatesPage() {
         ))}
       </div>
 
-      <p className="text-sm text-zinc-500">
-        To reuse your own layout and legend, save a diagram as a file, then use <strong>Open file</strong> on the start page next time.
-      </p>
+      <div className="flex flex-col items-start gap-2 rounded-lg border border-dashed border-zinc-300 p-4 dark:border-zinc-700">
+        <h2 className="font-medium text-zinc-900 dark:text-zinc-100">Your own template</h2>
+        <p className="text-sm text-zinc-500">
+          Save a diagram with your layout and legend as a file. Start from it here to get a copy: the file itself is never
+          changed, and Save asks where to put the new diagram.
+        </p>
+        <button
+          type="button"
+          onClick={startFromFile}
+          className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+        >
+          Start from a file…
+        </button>
+      </div>
       {unsavedDialog}
     </div>
   );

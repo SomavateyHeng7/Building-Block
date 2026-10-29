@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | Diagrams | Memory while open; the user's `.json` file | **Never** |
 | Exports | Generated in the browser, downloaded | Never |
-| Preferences (theme, panels, export choices) | `localStorage` | Never |
+| Preferences (theme, panels, export choices, the name used on review comments) | `localStorage` | Never |
 | Privacy-notice acceptance | `localStorage` (`bb:consent`) | Never |
 | Waitlist email + consent record | Sent to the form provider | **Only if** `NEXT_PUBLIC_WAITLIST_URL` is set **and** the user ticks the box and submits |
 | Maintenance bypass cookie | Cookie, HttpOnly | Sent to our server (team only) |
@@ -23,6 +23,7 @@ stored or sent, update the notice and bump `PRIVACY_VERSION`** (below).
 | `theme` | `next-themes` | `"light"`, `"dark"` or `"system"` |
 | `bb:panels` | `EditorApp` | `{ palette: boolean, properties: boolean }`: which side panels are collapsed |
 | `bb:export` | `Toolbar` | `{ formats, bundle, theme }`: the last export choices |
+| `bb:author` | `CommentsSection` | The name last typed on a review comment, so it isn't retyped. Only a convenience: comments themselves are saved in the diagram file |
 | `bb:exportTheme` | *(earlier versions)* | Still read once as the default export style; never written |
 | `bb:consent` | `src/lib/consent.ts` | `{ version, acceptedAt }` |
 | `bb:diagram:*`, `bb:templates`, `bb:index`, `bb:backups` | *(earlier versions)* | Old diagrams; only read and, on request, removed (see [legacy](06-files-saving-and-unsaved-changes.md#leftovers-from-earlier-versions)) |

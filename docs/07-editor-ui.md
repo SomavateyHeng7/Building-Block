@@ -229,7 +229,60 @@ in view mode too. *Write Mermaid code* on an empty tab shows it and puts the cur
 From **Import from draw.io or Mermaid** on the start page (opens a new diagram; dropping a `.drawio`, `.xml`,
 `.mmd` or `.md` file there does the same) or **File › Import draw.io or Mermaid…** in the editor (adds tabs to the
 open diagram, one undo step). Choose a file or paste text. A toast says what came in and lists anything simplified.
+After a draw.io import, containers whose components overlap are re-arranged in a grid (`tidyOverlappingContainers` in
+`layout.ts`) and the import notes say how many; containers that are already tidy keep draw.io's positions.
 See the [decision log](17-decision-log.md#import-drawio-for-architecture-mermaid-for-sequences).
+
+## Screen readers and keyboard focus on the canvas
+
+- **Live region** (`Announcer.tsx`, sentences in `src/lib/diagram/describe.ts`): out of sight, `role="status"`, polite. It says
+  what a selection is ("Orders, component in Back office. Category: New. Technology: Java. 2 connections. 1 open
+  comment."), what a connection joins and carries, what was added or removed with the new count, and which tab or
+  internal design you arrived on. Moving a box and typing say nothing. Changes within 250 ms are said once.
+- **Names:** React Flow gives each box and connection `aria-label` (`flowAdapter.ts`): "Orders, component",
+  "Connection from Web to Orders: Place order (REST)". A component also holds a hidden "Category: New" so colour isn't the only
+  signal.
+- **Landmarks:** the editor row is a `<main aria-label="Diagram editor">`.
+- **Focus** is outlined on boxes and connections (`globals.css`), so Tab through the canvas is visible.
+- **Dialogs:** every modal dialog uses `useDialogFocus` (see below).
+- **Still to check by hand:** moving a box with the arrow keys is announced as nothing; drawing a connection is done in
+  the details panel (**Connect to…**), which a screen-reader user should try on a real reader. Not yet tested with
+  VoiceOver, NVDA or JAWS.
+
+## Keyboard and focus in dialogs and menus
+
+- Modal dialogs that use `useDialogFocus` (all of them: Check, Export, History, Compare, Import, Find, Shortcuts, Unsaved changes, Delete container) keep Tab and Shift+Tab inside, and return focus to the button
+  that opened them when they close. New dialogs should use it too.
+- The legend's **Reuse** menu is a real menu: it takes focus when opened, ↑ ↓ Home End move between items, Escape closes
+  it and returns focus to its button, and a click elsewhere or Tab closes it.
+
+## Comments, history and links
+
+- **Comments** (details panel, for a component, container or connection): add, resolve or reopen, delete. Saved in the
+  diagram (`comments`). **File → Merge comments from a file…** (`mergeCommentsFromDevice`) takes only the comments from
+  another copy: new ones are added, ones resolved there become resolved, nothing is deleted or reopened, and
+  comments about things not in this diagram are skipped and counted. Open comments are listed in **Check**.
+- **Comment badges** (`nodes/CommentMarker.tsx`): a blue badge with the open-comment count at a component or container's
+  top-left, and beside the middle of a connection. Clicking selects it and puts the cursor in the new-comment field. The
+  badges carry the class `bb-comment-marker`, which `keepInPicture` leaves out of exported pictures.
+- **File → Version history…** (`HistoryDialog`): save a named checkpoint, **Restore…** (asks, undoable), **Open as tabs to
+  compare** (adds the checkpoint's architecture tabs as new tabs for **Compare tabs**), **What changed since** (the same comparison dialog, checkpoint tab on the left and the current tab on the right, with nothing added to the diagram; removed items are listed but can't be jumped to), or delete. Limit 20.
+- **Link** field: shown with an *Open the link* anchor only if it is a plain http(s) address (`safeWebAddress`).
+
+## Check before you share, and legend presets
+
+- **Check** (tab bar, with a count): `HintsDialog` lists, from `diagramHints` (`src/lib/diagram/hints.ts`), components
+  nothing connects to (only on a canvas that has connections at all), connections with no protocol, and L0 components
+  with no owner, across every tab and internal design. Picking one opens it. Hints never block saving or exporting.
+- **Legend → Reuse:** adds the categories of **C4** or **ArchiMate** (`LEGEND_PRESETS` in `defaultLegend.ts`), or of a
+  legend file (**Add from a file…**), that the legend doesn't already have by name, as one undo step
+  (`addLegendEntries`). **Save this legend to a file** downloads names and colours only (`legendFile.ts`); a whole
+  diagram file works as a legend file too.
+- **Templates → Start from a file…:** opens a diagram file as a *copy* (`openDiagramFromDevice({ asCopy: true })`): new
+  id, no file handle, so Save asks where to put it and the original is never written over. This is how people reuse
+  their own layout and legend without the app keeping templates in the browser.
+- **Export → Branding:** a logo (scaled to a small PNG) and an accent colour, saved in the diagram (`branding`) and
+  drawn in the title bar of PNG, SVG, PDF and the viewer.
 
 ## Node components — `nodes/`
 

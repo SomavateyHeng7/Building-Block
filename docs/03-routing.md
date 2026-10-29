@@ -9,6 +9,7 @@ renders it, and every rule that sends a visitor somewhere else.
 | --- | --- | --- | --- | --- |
 | `/` | `src/app/page.tsx` | Per request | Landing page: product pitch, features, roadmap, waitlist | No |
 | `/diagrams` | `src/app/diagrams/page.tsx` | Per request, client | Start page: new diagram, open a file (or drop one), templates, old-version leftovers | **Yes** |
+| `/changelog` | `src/app/changelog/page.tsx` | Per request | What's new: `CHANGELOG` from `src/lib/changelog.ts`, newest first | No |
 | `/templates` | `src/app/templates/page.tsx` | Per request, client | All templates with previews | **Yes** |
 | `/editor` | `src/app/editor/page.tsx` → `EditorApp` | Per request, client | The editor. Only works when a diagram is open in memory | **Yes** |
 | `/privacy` | `src/app/privacy/page.tsx` | Per request | Privacy notice, acceptance status, withdraw button | No |

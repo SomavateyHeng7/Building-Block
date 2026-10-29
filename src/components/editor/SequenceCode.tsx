@@ -6,7 +6,7 @@ import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { applySequenceCode, mermaidLineOf, readSequenceCode, toMermaidSequence } from "@/lib/diagram/exportMermaid";
 import { ImportError } from "@/lib/diagram/importMermaid";
 import { downloadBlob, fileBaseName } from "@/lib/diagram/file";
-import { checkSequenceCodeLines } from "@/lib/plans";
+import { checkSequenceCodeLines, limitNotice } from "@/lib/plans";
 import { toast } from "@/lib/toast";
 import { Icon } from "./Icon";
 import PanelToggle from "./PanelToggle";
@@ -118,6 +118,9 @@ export default function SequenceCode({ className = "", onCollapse }: { className
   const dirty = draft !== undefined && draft !== generated;
   const code = draft ?? generated;
   const lineCount = code.split("\n").length;
+  // Say how much of the plan's line limit is used once it's close, so hitting it later is no surprise.
+  const limitCheck = checkSequenceCodeLines(code);
+  const limitNote = limitNotice(limitCheck);
   const shownError = error?.tab === view.id ? error.message : null;
 
   // Asked to show the code: once the panel is on screen, focus it at the line asked for (or keep the cursor).
@@ -316,6 +319,11 @@ export default function SequenceCode({ className = "", onCollapse }: { className
         {shownError && (
           <p role="alert" className="text-red-700 dark:text-red-400">
             {shownError}
+          </p>
+        )}
+        {limitNote && (
+          <p className={limitCheck.over ? "text-amber-700 dark:text-amber-400" : undefined} aria-live="polite">
+            {limitNote}
           </p>
         )}
         {readOnly ? (

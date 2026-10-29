@@ -41,6 +41,16 @@ free and that plans and prices may change.
 - **Why no payments yet:** nothing is for sale. A config of plans keeps the page honest now and makes launch a
   small change, without a server or webhooks to maintain in the meantime.
 
+## What's new — `src/app/changelog/page.tsx` and `src/lib/changelog.ts`
+
+A public page (no consent needed) listing `CHANGELOG`, newest first, linked from the footer. Entries are written for
+the people who use the app: what they can now do, one sentence each. **Add an entry with any release people will
+notice.** `tests/lib/changelog.test.ts` checks the order and that each entry says something.
+
+**Plan limits:** while `LIMITS_ENFORCED` is off, the sequence code panel still shows how many lines are used once it
+passes 80 % of the Free limit (`limitNotice` in `plans.ts`), and says plainly that nothing is blocked yet. Turning
+enforcement on changes that wording to "allows", and `/pricing` must say so too.
+
 ## Start page — `src/app/diagrams/page.tsx`
 
 - **New blank diagram** (default legend), **Open a diagram file** (the picker), or **drop a `.json` anywhere** on

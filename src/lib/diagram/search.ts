@@ -99,6 +99,7 @@ function buildIndex(diagram: Diagram): Entry[] {
         byName: true,
         fields: [
           ...field("Technology", node.data.technology),
+          ...field("Link", node.data.link),
           ...field("Owner", node.data.owner),
           ...field("Category", node.data.colorKey ? categories.get(node.data.colorKey) : undefined),
           ...field("Icon", icon),

@@ -23,7 +23,9 @@ in TesterArmy, against a deployed copy of the app (see [Browser tests](#browser-
 Tests live in **`tests/`**, in folders that mirror `src/`: `src/lib/diagram/store.ts` is tested in
 `tests/lib/diagram/…`. They import the code with the `@/` alias (`import { parseDiagram } from
 "@/lib/diagram/validate"`). Vitest only looks in `tests/` (`vitest.config.mts`), and runs in a **Node**
-environment: no browser, so tests cover the pure logic and the stores.
+environment, so most tests cover the pure logic and the stores. Component tests live in `tests/components/*.test.tsx`
+and opt in to a browser-like environment with `// @vitest-environment jsdom` on their first line (React Testing
+Library and jsdom are dev dependencies).
 
 **Why a separate folder:** keeps `src/` to shipped code only, and makes the suite easy to find and run as a whole.
 

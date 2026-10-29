@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# The checks only read the code: no write access for the token, in case a dependency or action is compromised.
+permissions:
+  contents: read
+
 jobs:
   checks:
     runs-on: ubuntu-latest

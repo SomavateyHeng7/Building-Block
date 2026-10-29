@@ -47,7 +47,9 @@ headers: [{ source: "/:path*", headers: [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
-  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), interest-cohort=()" },
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin" },   // no other window keeps a handle on this one
+  { key: "Cross-Origin-Resource-Policy", value: "same-origin" }, // other sites can't embed our files
 ]}]
 ```
 
@@ -103,9 +105,35 @@ quietly otherwise.
 - **A nonce for styles.** It would need every `style={…}` moved to classes or CSS variables set from script.
 - **Violation reports** (`report-to`). There's no endpoint to collect them.
 - **HSTS** (`Strict-Transport-Security`). It depends on the host serving HTTPS only; set it at the host or add it
-  here once that's confirmed. A wrong HSTS header is hard to undo.
+  here once that's confirmed. A wrong HSTS header is hard to undo, and `includeSubDomains` also affects every other
+  subdomain of the site's domain. Start with a short `max-age` (for example 300), raise it over a few weeks, and
+  only then think about `preload`.
+
+## Files and exports are untrusted input, both ways
+
+A diagram, legend or comment file can come from anyone, so what is read from it is checked (above), and what the app
+**writes out** must keep it as text, because other tools open those files. Found and fixed in the last review:
+
+| Output | Risk | What stops it |
+| --- | --- | --- |
+| Solution document (Markdown) | A name like `[x](javascript:…)`, an image, HTML, or a web address containing `)` could turn text into a live link in a Markdown viewer | `cell()` backslash-escapes Markdown syntax and `<`/`>`; link targets are percent-encoded (`target()`); only http(s) addresses (`safeWebAddress`) become links |
+| PlantUML export | PlantUML runs `%function()` calls (such as `%getenv`) found in text when it renders | `%` is written as `<U+0025>`; newlines are flattened so a name can't start a `!include` line |
+| Mermaid export | A name starting a new line (`click … call …`) | Names are flattened to one line and quoted |
+| CSV | Spreadsheet formulas (`=HYPERLINK(…)`) | `csvCell` prefixes risky cells (see [export](10-export.md)) |
+| Viewer (`.html`) | Diagram text running as script in the downloaded page | Everything is HTML-escaped; pictures are `<img>` data addresses (images never run script); the logo must be a PNG/JPEG/WebP data address |
+
+`tests/lib/security.test.ts` holds hostile inputs for each. **Any new export or import must add one.**
+
+## Maintenance bypass token
+
+`MAINTENANCE_BYPASS_TOKEN` lets anyone who has it past maintenance mode, so it must be at least 16 random characters
+(a shorter one is ignored), generated, not chosen (`openssl rand -hex 24`). It is compared in constant time. It sits in
+the address once and then in an HttpOnly, Secure, 12-hour cookie. Rotate it after use.
 
 ## Dependencies
+
+Run `pnpm audit --prod` before releases (CI fails on high-severity ones). Dependabot (`.github/dependabot.yml`) opens weekly
+pull requests for packages and GitHub Actions; CI and the browser-test workflow run with read-only tokens (`permissions: contents: read`).
 
 Run `pnpm audit --prod` before releases. At the time of writing it reports no known vulnerabilities. The
 runtime dependency list is deliberately short (see [principles](01-product-and-principles.md#tech-stack-and-why-each-piece)).

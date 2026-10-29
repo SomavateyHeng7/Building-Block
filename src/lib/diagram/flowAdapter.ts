@@ -55,6 +55,8 @@ export function toFlowNodes(nodes: DiagramNode[], selectedIds: ReadonlySet<strin
       zIndex: node.zIndex,
       selected,
       className,
+      // The name a screen reader gives the box when focus lands on it (the live region says the rest).
+      ariaLabel: `${node.data.label || "Untitled"}, ${node.type === "container" ? "container" : "component"}`,
       data: node.data,
     };
     flowNodeCache.set(node, { selected, className, flow });
@@ -115,6 +117,8 @@ export function toFlowEdges(
   selectedId: string | null,
   dark: boolean,
   marks?: ChangeMarks | null,
+  /** Node id → name, so a connection can be named by its ends. */
+  names?: ReadonlyMap<string, string>,
 ): FlowEdge[] {
   return edges.map((edge) => {
     const change = marks?.edges.get(edge.id);
@@ -129,6 +133,7 @@ export function toFlowEdges(
       sourceHandle: edge.sourceSide ?? null,
       targetHandle: edge.targetSide ?? null,
       type: "connection",
+      ariaLabel: `Connection from ${names?.get(edge.source) ?? "a component"} to ${names?.get(edge.target) ?? "a component"}${caption ? `: ${caption}` : ""}`,
       data: { shape: edge.shape ?? "step", ...(edge.bend ? { bend: edge.bend } : {}) },
       selected: edge.id === selectedId,
       interactionWidth: 24,

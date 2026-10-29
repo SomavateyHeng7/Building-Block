@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  CODE_FORMATS,
   DATA_FORMATS,
   IMAGE_FORMATS,
   describeFiles,
@@ -13,6 +14,9 @@ import {
   type ExportView,
 } from "@/lib/diagram/exportPlan";
 import type { Diagram } from "@/lib/diagram/types";
+import { logoFromFile } from "@/lib/diagram/branding";
+import { useDiagramStore } from "@/lib/diagram/store";
+import { useDialogFocus } from "./useDialogFocus";
 
 export type ExportTheme = "light" | "dark";
 
@@ -30,8 +34,12 @@ const FORMAT_INFO: Record<ExportFormat, { label: string; hint: string }> = {
   png: { label: "PNG image", hint: "For slides and documents" },
   svg: { label: "SVG image", hint: "Stays sharp at any size" },
   pdf: { label: "PDF", hint: "For printing and sharing" },
+  html: { label: "Interactive viewer", hint: "One HTML file with pan and zoom; opens offline" },
+  mermaid: { label: "Mermaid", hint: "A flowchart per tab (sequence tabs as sequence code), for docs in git" },
+  plantuml: { label: "PlantUML (C4)", hint: "C4 container diagram per tab, for docs in git" },
   "components-csv": { label: "Component list", hint: "CSV: every container and component, with details" },
   "connections-csv": { label: "Connection list", hint: "CSV: who talks to whom, how, and what flows" },
+  document: { label: "Solution document", hint: "Markdown: components, connections, open comments. Pick PNG too to include the pictures" },
   json: { label: "Diagram file", hint: "JSON you can open again with File → Open" },
 };
 
@@ -83,7 +91,22 @@ export default function ExportDialog({
   onCancel: () => void;
   onExport: (choice: ExportChoice) => void;
 }) {
+  const dialog = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialog);
+  const setBranding = useDiagramStore((state) => state.setBranding);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const logoInput = useRef<HTMLInputElement>(null);
+  const branding = diagram.branding;
   const views = useMemo(() => exportViews(diagram), [diagram]);
+
+  async function chooseLogo(file: File) {
+    setLogoError(null);
+    try {
+      setBranding({ ...branding, logo: await logoFromFile(file) });
+    } catch (error) {
+      setLogoError(error instanceof Error ? error.message : "That picture couldn't be used.");
+    }
+  }
   const pictureable = views.filter((view) => view.nodeCount > 0);
   const current = views.find((view) => view.id === currentViewId);
   const [formats, setFormats] = useState<ExportFormat[]>(prefs.formats);
@@ -104,6 +127,7 @@ export default function ExportDialog({
 
   const chosenViews = views.filter((view) => viewIds.includes(view.id));
   const pictures = formats.some((format) => IMAGE_FORMATS.includes(format));
+  const needsViews = pictures || formats.some((format) => CODE_FORMATS.includes(format));
   const asOne = planExport(diagram, { views: chosenViews, formats, bundle: "one" });
   const asSeparate = planExport(diagram, { views: chosenViews, formats, bundle: "separate" });
   const plan = bundle === "one" ? asOne : asSeparate;
@@ -112,8 +136,8 @@ export default function ExportDialog({
 
   const problem = !formats.length
     ? "Choose at least one format."
-    : pictures && !chosenViews.length
-      ? "Choose at least one tab or internal design to picture."
+    : needsViews && !chosenViews.length
+      ? "Choose at least one tab or internal design."
       : !plan.files.length
         ? "There's nothing to export yet. Add a container or component first."
         : null;
@@ -128,6 +152,7 @@ export default function ExportDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onCancel}>
       <div
+        ref={dialog}
         role="dialog"
         aria-modal="true"
         aria-labelledby="export-title"
@@ -153,12 +178,29 @@ export default function ExportDialog({
         <div className="flex flex-col gap-6 overflow-y-auto px-5 py-5">
           <Section title="Formats">
             <p className="-mt-1 text-xs text-zinc-500">Pick as many as you like.</p>
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2">
               {IMAGE_FORMATS.map((format) => (
                 <label key={format} className={`${OPTION} ${OPTION_IDLE} sm:flex-col sm:gap-1.5`}>
                   <input
                     type="checkbox"
                     autoFocus={format === IMAGE_FORMATS[0]}
+                    checked={formats.includes(format)}
+                    onChange={(event) => setFormats(toggle(formats, format, event.target.checked))}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-zinc-900 dark:accent-zinc-100"
+                  />
+                  <span>
+                    <span className="block font-medium">{FORMAT_INFO[format].label}</span>
+                    <span className="text-xs text-zinc-500">{FORMAT_INFO[format].hint}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <p className="mt-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">Diagram as code (one file per tab you choose)</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {CODE_FORMATS.map((format) => (
+                <label key={format} className={`${OPTION} ${OPTION_IDLE}`}>
+                  <input
+                    type="checkbox"
                     checked={formats.includes(format)}
                     onChange={(event) => setFormats(toggle(formats, format, event.target.checked))}
                     className="mt-0.5 h-4 w-4 shrink-0 accent-zinc-900 dark:accent-zinc-100"
@@ -189,9 +231,9 @@ export default function ExportDialog({
             </div>
           </Section>
 
-          {pictures && (
+          {needsViews && (
             <Section
-              title="What to picture"
+              title="Which tabs and internal designs"
               aside={
                 <span className="flex gap-3 text-xs font-medium">
                   {current?.nodeCount ? (
@@ -259,6 +301,67 @@ export default function ExportDialog({
                   </label>
                 ))}
               </div>
+            </Section>
+          )}
+
+          {pictures && (
+            <Section title="Branding">
+              <p className="-mt-1 text-xs text-zinc-500">
+                Added to the title bar of pictures, PDF pages and the viewer. Kept in the diagram file, so it&apos;s there next time.
+              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  ref={logoInput}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="sr-only"
+                  tabIndex={-1}
+                  aria-label="Choose a logo picture"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) void chooseLogo(file);
+                  }}
+                />
+                {branding?.logo && (
+                  // A data address, so there is nothing for the framework's image loader to optimise.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={branding.logo} alt="Your logo" className="h-8 w-auto rounded border border-zinc-200 bg-white p-0.5 dark:border-zinc-700" />
+                )}
+                <button
+                  type="button"
+                  className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                  onClick={() => logoInput.current?.click()}
+                >
+                  {branding?.logo ? "Change logo…" : "Add a logo…"}
+                </button>
+                {branding?.logo && (
+                  <button type="button" className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400" onClick={() => setBranding({ ...branding, logo: undefined })}>
+                    Remove logo
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  Accent colour
+                  <input
+                    type="color"
+                    value={branding?.color ?? "#1f2937"}
+                    onChange={(event) => setBranding({ ...branding, color: event.target.value })}
+                    className="h-8 w-10 cursor-pointer rounded border border-zinc-300 bg-transparent p-0.5 dark:border-zinc-700"
+                  />
+                </label>
+                {branding?.color && (
+                  <button type="button" className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400" onClick={() => setBranding({ ...branding, color: undefined })}>
+                    Remove colour
+                  </button>
+                )}
+              </div>
+              {logoError && (
+                <p role="alert" className="text-xs text-red-600 dark:text-red-400">
+                  {logoError}
+                </p>
+              )}
             </Section>
           )}
 

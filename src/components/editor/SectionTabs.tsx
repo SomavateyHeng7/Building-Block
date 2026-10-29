@@ -1,9 +1,11 @@
 "use client";
 
-import { useRef, useState, type KeyboardEvent } from "react";
+import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { useDiagramStore } from "@/lib/diagram/store";
 import CompareDialog from "./CompareDialog";
+import HintsDialog from "./HintsDialog";
+import { diagramHints } from "@/lib/diagram/hints";
 import { Icon } from "./Icon";
 import { useReadOnly } from "./viewMode";
 
@@ -19,10 +21,13 @@ export default function SectionTabs() {
   const deleteSection = useDiagramStore((state) => state.deleteSection);
   const duplicateSection = useDiagramStore((state) => state.duplicateSection);
 
+  const comments = useDiagramStore((state) => state.diagram.comments);
+  const hintCount = useMemo(() => diagramHints({ sections, comments }).length, [sections, comments]);
   const readOnly = useReadOnly();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [comparing, setComparing] = useState(false);
+  const [checking, setChecking] = useState(false);
   const tablist = useRef<HTMLDivElement>(null);
   // Escape leaves the name as it was; some browsers blur the field as it goes, which must not save.
   const cancelledRename = useRef(false);
@@ -186,11 +191,29 @@ export default function SectionTabs() {
             <span className="hidden sm:inline">Sequence</span>
           </button>
         )}
+        {sections.some((section) => section.kind !== "sequence") && (
+          <button
+            type="button"
+            title="Check for components with no connections or owner, and connections with no protocol"
+            className="mb-1 ml-auto inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-sm text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            onClick={() => setChecking(true)}
+          >
+            <Icon name="check" className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Check</span>
+            <span className="sr-only sm:hidden">Check</span>
+            {hintCount > 0 && (
+              <span className="rounded-full bg-amber-100 px-1.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                {hintCount}
+                <span className="sr-only"> to look at</span>
+              </span>
+            )}
+          </button>
+        )}
         {sections.filter((section) => section.kind !== "sequence").length > 1 && (
           <button
             type="button"
             title="Compare two tabs: what is added, removed and changed"
-            className="mb-1 ml-auto inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-sm text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            className="mb-1 inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-sm text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
             onClick={() => setComparing(true)}
           >
             <Icon name="swap" className="h-3.5 w-3.5" />
@@ -200,6 +223,7 @@ export default function SectionTabs() {
         )}
       </div>
       {/* Portalled: a dialog doesn't belong inside the tab bar. */}
+      {checking && createPortal(<HintsDialog onClose={() => setChecking(false)} />, document.body)}
       {comparing && createPortal(<CompareDialog onClose={() => setComparing(false)} />, document.body)}
     </div>
   );

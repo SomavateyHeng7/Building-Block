@@ -1,5 +1,7 @@
 "use client";
 
+import { safeWebAddress } from "@/lib/diagram/webAddress";
+import CommentsSection from "./CommentsSection";
 import type { ReactNode } from "react";
 import { getActiveSection, useDiagramStore, type ActiveView } from "@/lib/diagram/store";
 import { suggestConnectionSides, type ArrangeOp } from "@/lib/diagram/layout";
@@ -37,6 +39,7 @@ const DETAIL_FIELDS: {
   { key: "owner", label: "Owner", placeholder: "Team, vendor or contact" },
   { key: "description", label: "Description", placeholder: "What it does and why it's here", multiline: true },
   { key: "notes", label: "Notes", placeholder: "Assumptions, risks, open questions", multiline: true },
+  { key: "link", label: "Link", placeholder: "https://… ticket, decision record or document" },
 ];
 
 const ARRANGE_GROUPS: { title: string; ops: { op: ArrangeOp; label: string; icon: string }[] }[] = [
@@ -283,6 +286,18 @@ function IconPicker({ value, onPick }: { value?: ComponentIconKey; onPick: (icon
  * Notes, with one-click starters for the kinds of note architects keep. The box grows with the text, and the
  * note badge on the canvas opens it (see NotesMarker).
  */
+/** Under the link field: an Open link when it's a web address, or why it isn't one. */
+function LinkHint({ value }: { value: string | undefined }) {
+  if (!value?.trim()) return null;
+  const href = safeWebAddress(value);
+  if (!href) return <span className="text-xs font-normal text-amber-700 dark:text-amber-400">Use a full web address starting with https://</span>;
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-xs font-normal text-blue-600 hover:underline dark:text-blue-400">
+      Open the link<span className="sr-only"> (opens in a new tab)</span>
+    </a>
+  );
+}
+
 function NotesField({ value, placeholder, onChange }: { value: string; placeholder: string; onChange: (notes: string) => void }) {
   function addLine(kind: NoteKind) {
     const next = `${value.trimEnd()}${value.trim() ? "\n" : ""}${kind}: `;
@@ -575,6 +590,8 @@ function ConnectionPanel({ edge, action }: { edge: DiagramEdge; action?: ReactNo
         <span className="text-[11px] font-normal text-zinc-400">Dashed is the usual way to show asynchronous calls.</span>
       </div>
 
+      <CommentsSection targetId={edge.id} />
+
       <div className="flex gap-2">
         <button type="button" className={ACTION_BUTTON} onClick={() => reverseConnection(edge.id)}>
           Reverse direction
@@ -814,11 +831,14 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
               value={node.data[field.key] ?? ""}
               onChange={(event) => updateNodeDetails(node.id, { [field.key]: event.target.value })}
             />
+            {field.key === "link" && <LinkHint value={node.data.link} />}
           </label>
         );
       })}
 
       <ConnectionsSection nodeId={node.id} />
+
+      <CommentsSection targetId={node.id} />
 
       {node.data.kind === "block" && !section.parent && (
         <InternalDesignSection nodeId={node.id} count={node.data.detail?.nodes.length ?? 0} />

@@ -7,6 +7,7 @@ import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { CONTAINER_MIN, containerInsets, contentExtents } from "@/lib/diagram/layout";
 import type { ContainerNodeData, HeaderAlign, HeaderPosition } from "@/lib/diagram/types";
 import { NotesMarker, SIDES } from "./BlockNode";
+import { CommentMarker } from "./CommentMarker";
 import { useReadOnly } from "../viewMode";
 
 export type ContainerFlowNode = Node<ContainerNodeData, "container">;
@@ -113,6 +114,7 @@ function ContainerNodeComponent({ id, data, selected }: NodeProps<ContainerFlowN
         </NodeToolbar>
       )}
       {data.notes && <NotesMarker id={id} notes={data.notes} />}
+      <CommentMarker id={id} />
       <div
         data-container-header={headerPosition}
         className={`flex shrink-0 items-center text-xs font-semibold text-zinc-800 dark:text-zinc-100 ${

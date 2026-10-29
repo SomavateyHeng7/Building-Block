@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useDialogFocus } from "./useDialogFocus";
 import { IMPORT_EXTENSIONS, ImportError, importDiagramText, readImportText, type ImportResult } from "@/lib/diagram/importFile";
 import type { LegendEntry } from "@/lib/diagram/types";
 
@@ -31,6 +32,8 @@ export default function ImportDialog({
   onImport: (result: ImportResult) => void;
   onClose: () => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -59,6 +62,7 @@ export default function ImportDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="import-title"

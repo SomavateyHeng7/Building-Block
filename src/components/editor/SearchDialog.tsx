@@ -1,6 +1,7 @@
 "use client";
 
 import { useDeferredValue, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useDialogFocus } from "./useDialogFocus";
 import { useDiagramStore } from "@/lib/diagram/store";
 import { highlightWords, prepareSearch, searchDiagram, searchWords, type SearchResult } from "@/lib/diagram/search";
 import { goTo } from "./canvasFocus";
@@ -35,6 +36,8 @@ const KIND_LABEL: Record<SearchResult["kind"], string> = {
  * results; Enter or a click opens the tab it's on, selects it and zooms to it.
  */
 export default function SearchDialog({ onClose }: { onClose: () => void }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   const diagram = useDiagramStore((state) => state.diagram);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -84,6 +87,7 @@ export default function SearchDialog({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-3 pt-[12vh] sm:p-4 sm:pt-[12vh]" onClick={onClose}>
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Find in diagram"
