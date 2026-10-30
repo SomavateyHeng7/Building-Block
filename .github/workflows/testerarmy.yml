@@ -39,7 +39,7 @@ jobs:
           TESTERARMY_GROUP_ID: ${{ vars.TESTERARMY_GROUP_ID }}
           TARGET_URL: ${{ github.event.deployment_status.environment_url || inputs.url }}
           COMMIT_SHA: ${{ github.event.deployment.sha || github.sha }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: testerarmy-result
