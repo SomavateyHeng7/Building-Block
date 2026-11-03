@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { flowchartTemplate } from "@/templates/flowchart";
+import { l0ArchitectureTemplate } from "@/templates/l0-architecture";
+import { isFlowchart } from "@/components/editor/flowchartView";
 import { templates } from "@/templates";
 import { parseDiagram } from "@/lib/diagram/validate";
 import { flowchartMermaid } from "@/lib/diagram/exportCode";
@@ -45,26 +47,23 @@ describe("updateNodeShape", () => {
   });
 });
 
-describe("draw.io look", () => {
-  it("is how the flowchart is drawn, in draw.io's fills, and survives a saved file", () => {
+describe("flowchart look", () => {
+  it("is drawn in the app's own look, with colours from its palette, and offers quick add", () => {
     const diagram = flowchartTemplate.build();
-    expect(diagram.sections[0].look).toBe("drawio");
-    expect(diagram.legend.map((entry) => entry.color)).toEqual(["#d5e8d4", "#dae8fc", "#fff2cc", "#f8cecc"]);
-    expect(parseDiagram(JSON.parse(JSON.stringify(diagram))).diagram.sections[0].look).toBe("drawio");
+    expect(diagram.sections[0]).not.toHaveProperty("look");
+    expect(diagram.legend.map((entry) => entry.color)).toEqual(["#8fd19e", "#7dd3fc", "#f6d860", "#fda4af"]);
+    expect(isFlowchart(diagram.sections[0].nodes)).toBe(true);
   });
 
-  it("is set per tab, as one undo step, and carried into internal designs", () => {
-    const store = useDiagramStore.getState;
-    store().loadDiagram(createBlankDiagram());
-    store().setSectionLook("drawio");
-    expect(getActiveSection(store().diagram).look).toBe("drawio");
-    store().addBlock({ x: 0, y: 0 });
-    store().openDetail(store().selectedNodeIds[0]);
-    expect(getActiveSection(store().diagram).look).toBe("drawio");
-    store().closeDetail();
-    store().undo();
-    store().undo();
-    expect(getActiveSection(store().diagram)).not.toHaveProperty("look");
+  it("offers quick add only on tabs with flowchart shapes, so architecture tabs are unchanged", () => {
+    expect(isFlowchart(l0ArchitectureTemplate.build().sections[0].nodes)).toBe(false);
+  });
+
+  it("drops a look saved by an earlier version", () => {
+    const diagram = flowchartTemplate.build();
+    const saved = JSON.parse(JSON.stringify(diagram));
+    saved.sections[0].look = "drawio";
+    expect(parseDiagram(saved).diagram.sections[0]).not.toHaveProperty("look");
   });
 });
 

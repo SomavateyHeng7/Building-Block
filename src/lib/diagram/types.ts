@@ -227,17 +227,9 @@ export interface SequenceDiagram {
   numbered?: boolean;
 }
 
-/**
- * How an architecture tab is drawn: the app's own look (the default), or draw.io's: outlined shapes in its fills,
- * black Helvetica text, square boxes, thin black right-angled lines and a line grid.
- */
-export type SectionLook = "drawio";
-
 export interface DiagramSection {
   id: string;
   name: string;
-  /** Absent for the app's own look. */
-  look?: SectionLook;
   /**
    * What the tab holds: containers, components and connections (the default), or a sequence diagram. A sequence
    * tab keeps `nodes` empty and its content in `sequence`.

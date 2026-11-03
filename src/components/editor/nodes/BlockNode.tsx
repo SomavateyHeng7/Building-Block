@@ -6,13 +6,13 @@ import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflo
 import { componentIcon } from "@/lib/diagram/componentIcons";
 import { shapeInfo } from "@/lib/diagram/shapes";
 import { defaultLabel } from "@/lib/diagram/factory";
-import { outlineFor, readableTextOn } from "@/lib/diagram/palette";
+import { readableTextOn } from "@/lib/diagram/palette";
 import { useDiagramStore } from "@/lib/diagram/store";
 import type { BlockNodeData } from "@/lib/diagram/types";
 import { showDetails } from "../detailsPanel";
 import { CommentMarker } from "./CommentMarker";
 import { useReadOnly } from "../viewMode";
-import { useDrawioLook } from "../look";
+import { useIsFlowchart } from "../flowchartView";
 
 export type BlockFlowNode = Node<BlockNodeData, "block">;
 
@@ -37,27 +37,24 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
   const color = entryColor ?? "#ffffff";
   const icon = componentIcon(data.icon);
   const shape = data.shape ?? "process";
-  // draw.io outlines each shape in a darker shade of its own fill, with square corners on a box.
-  const drawio = useDrawioLook();
-  const edge = drawio ? outlineFor(color) : "rgba(0,0,0,0.25)";
-  const outline = selected && !drawio ? "#2563eb" : edge;
-  const corners = shape === "terminal" ? "rounded-full px-3" : drawio ? "rounded-none" : "rounded";
+  const outline = selected ? "#2563eb" : "rgba(0,0,0,0.25)";
+  const corners = shape === "terminal" ? "rounded-full px-3" : "rounded";
+  // Quick-add arrows on a flowchart tab (one with flowchart shapes on it), as draw.io offers them.
+  const flowchart = useIsFlowchart();
   const info = shapeInfo(shape);
   // Shapes other than a box or pill are an SVG outline behind the label, inset so the text stays inside.
   const drawn = !!info.path;
 
   return (
     <div
-      className={`relative flex h-full w-full items-center justify-center text-center text-xs ${drawio ? "font-normal" : "font-medium"} ${
-        drawn ? "" : `border ${corners}`
-      } ${drawio && selected ? "outline outline-1 outline-offset-2 outline-dashed outline-[#2563eb]" : ""}`}
+      className={`relative flex h-full w-full items-center justify-center text-center text-xs font-medium ${drawn ? "" : `border ${corners}`}`}
       title={data.description ?? (entryColor ? undefined : "No legend category assigned")}
       style={{
         backgroundColor: drawn ? undefined : color,
         paddingInline: drawn ? `${info.inset}%` : undefined,
         borderColor: outline,
         borderStyle: entryColor ? "solid" : "dashed",
-        color: drawio && readableTextOn(color) !== "#f9fafb" ? "#000000" : readableTextOn(color),
+        color: readableTextOn(color),
       }}
       onDoubleClick={() => {
         if (readOnly) return;
@@ -71,15 +68,15 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
           <path
             d={info.path}
             fill={color}
-            stroke={selected && drawio ? "#2563eb" : outline}
-            strokeWidth={selected ? (drawio ? 1.5 : 2) : 1}
+            stroke={outline}
+            strokeWidth={selected ? 2 : 1}
             strokeDasharray={entryColor ? undefined : "4 3"}
             vectorEffect="non-scaling-stroke"
           />
           {info.detail && <path d={info.detail} fill="none" stroke={outline} strokeWidth={1} vectorEffect="non-scaling-stroke" />}
         </svg>
       )}
-      {drawio && !readOnly && <QuickAdd id={id} />}
+      {flowchart && !readOnly && <QuickAdd id={id} />}
       <NodeResizer minWidth={80} minHeight={32} isVisible={selected && !readOnly} />
       {/* Every side starts and ends connections (the canvas uses loose connection mode). */}
       {SIDES.map((side) => (

@@ -14,6 +14,11 @@ cards, three "how it works" steps, the **roadmap**, the team waitlist, a final c
 - **Anchors** (`#features`, `#how-it-works`, `#roadmap`) use `scroll-mt-20` so the sticky header doesn't cover the
   heading. The footer links use `/#…` so they work from other pages.
 
+**Page width:** the landing page, start page, templates page, their headers and the footer share one width,
+`max-w-7xl` (1,280 px), so their edges line up from page to page and wide screens aren't left mostly empty. Pages
+that are mostly reading (privacy, what's new, contact) stay narrow (`max-w-2xl`) for comfortable line lengths;
+pricing is `max-w-5xl`.
+
 ## Footer — `src/components/landing/Footer.tsx`
 
 Product links (including **Pricing**), Get started links, © year, **Privacy**, **Contact**, and "Your diagrams are your files".
@@ -35,7 +40,7 @@ free and that plans and prices may change.
   bump `PRIVACY_VERSION`), and tax and invoicing for where you sell.
 - **Limits (built, not enforced):** a plan's `limits` say what it allows; Free has `sequenceCodeLines:
   FREE_SEQUENCE_CODE_LINES` (100 non-blank lines of Mermaid code per sequence tab). `checkSequenceCodeLines` works
-  out `used`, `limit`, `over` and `blocked`; the code panel's Apply refuses only when `blocked`, which needs
+  out `used`, `limit`, `over` and `blocked`; the code panel refuses to draw the code only when `blocked`, which needs
   `LIMITS_ENFORCED = true`. Everyone is on `currentPlan()` (Free) until there are accounts. Turning limits on also
   means saying so on the Free card, which still says "Unlimited".
 - **Why no payments yet:** nothing is for sale. A config of plans keeps the page honest now and makes launch a
@@ -55,7 +60,13 @@ enforcement on changes that wording to "allows", and `/pricing` must say so too.
 
 - **New blank diagram** (default legend), **Open a diagram file** (the picker), or **drop a `.json` anywhere** on
   the page (a full-page overlay appears while a file is dragged over; leaving it means the drag left the window).
-- **Start from a template:** cards with a `TemplatePreview`; a lone last card spans the row.
+- The three ways in (**New**, **Open**, **Import from draw.io or Mermaid**) sit in one row on wide screens.
+- **Start from a template:** cards with the template's real `TemplatePreview` (the same picture as on the templates
+  page), 2, 3 or 4 to a row as the screen widens.
+- **Changes lost on the way here:** after leaving a diagram with unsaved changes that no recovery copy kept, an
+  amber notice says so once and offers **Turn on recovery copies** (`takeLostUnsaved`, see
+  [files](06-files-saving-and-unsaved-changes.md#warnings-before-losing-work)). A kept copy shows the
+  **Unsaved changes** box with Recover and Discard instead.
 - **"Your diagrams are your files"** box, explaining whether this browser can save in place (only shown after
   mounting, because which browser it is is only known in the browser).
 - **Leftovers from earlier versions:** see [files](06-files-saving-and-unsaved-changes.md#leftovers-from-earlier-versions).
@@ -77,12 +88,13 @@ still builds, is tested, and is found by `getTemplate`; removing `hidden` brings
 | `event-driven` | Clients → API gateway → order services → event broker → downstream services, a payment provider, and an **internal design (L2)** for the Order Service. |
 | `serverless` | Clients → CDN and API gateway → functions → a table, a queue that triggers a worker, and a bucket. |
 | `data-platform` | Sources → ingestion (CDC, batch connectors, an event stream) → a lake and a warehouse → ML, dashboards and reverse ETL. |
-| `flowchart` | In the **draw.io look**, with draw.io's green, blue, yellow and red fills: an order-fulfilment process top to bottom: start/end pills, steps, two decision diamonds with Yes/No connections to exception paths, and a title text box. Laid out by hand (to the pixel) with its own four-entry legend, not built from columns. |
+| `flowchart` | In the app's palette (Mint, Sky, Butter, Rose): an order-fulfilment process top to bottom: start/end pills, steps, two decision diamonds with Yes/No connections to exception paths, a "Stock levels" database feeding a step, and a title text box. Laid out by hand (to the pixel) with its own four-entry legend, not built from columns. |
 | `current-vs-target` | **Hidden for now.** Two tabs, **Current** and **Target**, that differ in added, removed and recategorised components, made to show **Compare tabs**. Browser tests that open it are held back from the TesterArmy sync until it's shown again. |
-| `sequence` | A checkout flow as a sequence tab: calls, a self-call, replies, async events and a note. |
+| `sequence` | A checkout flow as a sequence tab, **written as Mermaid code**: calls, a self-call, replies, async events, a note, an `alt`/`else` frame, an `opt` frame with a `loop` inside, and activation bars. |
 
-Sequence templates are written as data too (participants and steps by name) and built by `buildSequenceDiagram` in
-`src/templates/sequence-build.ts`. Every architecture template is written as data (columns of containers holding components, and connections by
+Sequence templates are written as Mermaid code and built by `sequenceFromMermaid` in
+`src/templates/sequence-build.ts` (participant colours by name alongside); `buildSequenceDiagram` there builds one
+from participants and steps written as data. Every architecture template is written as data (columns of containers holding components, and connections by
 component name) and laid out by `buildDiagram` / `buildCanvas` in `src/templates/build.ts`: fixed column widths and
 gaps, containers stacked within a column, and connection sides facing each other (right → left across columns,
 bottom → top within one). `tests/templates/templates.test.ts` checks every template opens without repairs, mints
@@ -91,8 +103,11 @@ fresh ids, connects only components that exist, and fits every component inside 
 `build()` creates fresh ids every time, so two diagrams from the same template never share ids.
 
 `src/components/TemplatePreview.tsx` draws a scaled-down SVG of a template's first tab from the same data the
-editor loads (containers, components with their colours, and connections as curves), so previews can't drift from
-what opens. It calls `build()` once per card (`useState(build)`), because each call mints new ids.
+editor loads (containers, components with their colours and flowchart shapes, text boxes, and connections leaving
+the sides they're attached to; a sequence tab as its participants, lifelines, messages and frames), so previews
+can't drift from what opens. Every preview sits in the same 16:10 frame, the picture fitted inside, so cards in a
+row line up however tall the template is; labels shrink to fit their boxes. It calls `build()` once per card (`useState(build)`), because each call mints new
+ids.
 
 ## Maintenance page — `src/app/maintenance/`
 

@@ -23,7 +23,7 @@ Files involved:
 | **SVG** | One per chosen view | Sharp at any size; title and legend are real text |
 | **PDF** | One file with a page per view, or one file per view | Printing, sharing |
 | **Solution document** | One `<diagram>-document.md` for the whole diagram: per tab its components table (with owner, technology, link), connections table, notes and internal designs; sequence tabs as a `mermaid` block; then legend, **open** review comments and checkpoints. Pictures are *linked* by file name when PNG is exported in the same download (so use the zip), never embedded | The write-up that goes with the diagram |
-| **Mermaid** | One `.mmd` per chosen view: a `flowchart LR` (containers as subgraphs, connections with label, protocol, direction and dashed lines); a sequence tab gives `sequenceDiagram` code | Documentation kept in git |
+| **Mermaid** | One `.mmd` per chosen view: a `flowchart LR` (containers as subgraphs, connections with label, protocol, direction and dashed lines; flowchart shapes as Mermaid's nearest: `{…}` decision, `([…])` start/end, `[/…/]` data, `[(…)]` database, `[[…]]` subprocess, a document as a box); a sequence tab gives `sequenceDiagram` code with its frames and activation marks | Documentation kept in git |
 | **PlantUML (C4)** | One `.puml` per chosen architecture view, a C4 container diagram (`Boundary`, `Container`, `Rel`/`BiRel`). Not offered for sequence tabs | Same |
 | **Interactive viewer** | One `.html` file with a tab per view (or one file per view), pan and zoom, no network | Reviewers who don't have Building Block |
 | **Component list (CSV)** | The whole diagram | The solution document's component catalogue |
@@ -31,7 +31,10 @@ Files involved:
 | **Diagram file (JSON)** | The whole diagram | A copy to open again |
 
 A *view* is a tab or a component's internal design. Pictures include a **title** above and a **legend** below
-listing **only the categories used in that view**.
+listing **only the categories used in that view**. Pictures are taken from the canvas, so they show text boxes,
+and flowchart shapes as drawn, and a sequence picture its frames and activation bars (zoom on a
+sequence sheet doesn't change the picture: it's on wrappers outside `.bb-sequence-sheet`). Text boxes aren't
+components, so they're left out of the CSV and the document's component tables, and of the C4 PlantUML.
 
 ## The export dialog — `ExportDialog.tsx`
 

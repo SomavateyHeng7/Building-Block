@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import {
   Background,
-  BackgroundVariant,
   Controls,
   MiniMap,
   ConnectionMode,
@@ -207,9 +206,8 @@ export default function Canvas() {
         colorMode === "dark",
         marks,
         new Map(section.nodes.map((node) => [node.id, node.data.label])),
-        section.look,
       ),
-    [section.edges, section.nodes, selectedEdgeId, colorMode, marks, section.look],
+    [section.edges, section.nodes, selectedEdgeId, colorMode, marks],
   );
 
   // Zoom to something found by search or picked in Compare. Going to another view remounts the canvas, so
@@ -421,7 +419,6 @@ export default function Canvas() {
   return (
     <ReactFlow
       key={section.id}
-      className={section.look === "drawio" ? "bb-look-drawio" : undefined}
       nodes={flowNodes}
       edges={flowEdges}
       nodeTypes={nodeTypes}
@@ -468,15 +465,7 @@ export default function Canvas() {
       onlyRenderVisibleElements={!renderEverything}
       fitView
     >
-      {section.look === "drawio" ? (
-        // draw.io's grid: fine lines every 10 px, stronger ones every 40.
-        <>
-          <Background id="minor" variant={BackgroundVariant.Lines} gap={10} color={colorMode === "dark" ? "#1c1c1c" : "#f0f0f0"} />
-          <Background id="major" variant={BackgroundVariant.Lines} gap={40} color={colorMode === "dark" ? "#2a2a2a" : "#e0e0e0"} />
-        </>
-      ) : (
-        <Background gap={16} />
-      )}
+      <Background gap={16} />
       <PixelGuides />
       <Controls />
       {wide && <MiniMap pannable zoomable />}

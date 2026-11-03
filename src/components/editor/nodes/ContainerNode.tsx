@@ -9,7 +9,6 @@ import type { ContainerNodeData, HeaderAlign, HeaderPosition } from "@/lib/diagr
 import { NotesMarker, SIDES } from "./BlockNode";
 import { CommentMarker } from "./CommentMarker";
 import { useReadOnly } from "../viewMode";
-import { useDrawioLook } from "../look";
 
 export type ContainerFlowNode = Node<ContainerNodeData, "container">;
 
@@ -56,8 +55,6 @@ function ContainerNodeComponent({ id, data, selected }: NodeProps<ContainerFlowN
   const contentRight = useDiagramStore((state) => contentExtents(getActiveSection(state.diagram).nodes).get(id)?.right ?? 0);
   const contentBottom = useDiagramStore((state) => contentExtents(getActiveSection(state.diagram).nodes).get(id)?.bottom ?? 0);
   const readOnly = useReadOnly();
-  // draw.io's container: a square, thin-edged box (grey edge unless it has a colour of its own).
-  const drawio = useDrawioLook();
   const [editing, setEditing] = useState(false);
   // Escape leaves the name as it was; the blur that follows must not save what was typed.
   const cancelled = useRef(false);
@@ -70,16 +67,12 @@ function ContainerNodeComponent({ id, data, selected }: NodeProps<ContainerFlowN
 
   return (
     <div
-      className={`group relative flex h-full w-full ${drawio ? "rounded-none border" : "rounded-md border-2"} bg-white/60 dark:bg-black/30 ${
-        selected
-          ? drawio
-            ? "outline outline-1 outline-offset-2 outline-dashed outline-[#2563eb]"
-            : "ring-2 ring-blue-600 ring-offset-1 dark:ring-offset-zinc-900"
-          : ""
+      className={`group relative flex h-full w-full rounded-md border-2 bg-white/60 dark:bg-black/30 ${
+        selected ? "ring-2 ring-blue-600 ring-offset-1 dark:ring-offset-zinc-900" : ""
       }`}
       style={{
         flexDirection: BOX_DIRECTION[headerPosition],
-        borderColor: data.outlineColor ?? accentColor ?? (drawio ? "#666666" : "#9ca3af"),
+        borderColor: data.outlineColor ?? accentColor ?? "#9ca3af",
         borderStyle: data.outlineStyle ?? "solid",
       }}
     >

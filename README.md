@@ -8,7 +8,16 @@ device, like draw.io's device storage. The app holds the diagram in memory only 
 
 ## Features
 
-- Containers and components with drag-in nesting, resize, snap-to-grid and a minimap
+- Containers and components with drag-in nesting, resize and a minimap
+- **Pixel-exact layout:** drags snap to other boxes' edges and middles with alignment guides and the gaps shown in px;
+  arrow keys move 1 px (Shift 10); X / Y / W / H fields; hold Alt and point at another box to measure the distance
+- **Text boxes** (press `T`): headings, captions and notes written straight on the canvas
+- **Flowcharts:** draw.io's flowchart shapes (process, decision, start/end, data, document, database, subprocess), its
+  blue quick-add arrows that add a connected shape in one click
+- **Sequence diagrams** as tabs, drawn the way Mermaid draws them: participants and actors, calls, replies, async
+  messages, notes, `loop` / `alt` / `opt` / `par` / `critical` / `break` frames and activation bars. Edit them in
+  **live Mermaid code** (the sheet follows as you type, highlighted, bad lines marked), from a toolbar, by
+  double-clicking to rename in place, or in the details panel; participants can stand for components on another tab
 - A user-defined legend with a named colour palette (it marks colours another category already uses) and
   custom colours; exports include only the categories used
 - Connections between components (L1): drag from the dot on a component's edge to another, or pick one in
@@ -39,7 +48,7 @@ device, like draw.io's device storage. The app holds the diagram in memory only 
   changed (on the newer tab) and removed (on the older one); exports taken while it's shown include the marks and
   a legend for them
 - Built-in templates (L0 architecture, three-tier web application, event-driven microservices with an internal
-  design, flowchart, current vs target state); to reuse your own layout and legend, save it as a file and use **Start from a
+  design, serverless API, data platform, a draw.io-style flowchart and a sequence diagram); to reuse your own layout and legend, save it as a file and use **Start from a
   file** on the templates page, which opens a copy and leaves the file alone
 - Export dialog: pick any mix of PNG, SVG, PDF, component list (CSV), connection list (CSV) and the diagram
   file (JSON), and which tabs and internal designs to picture. Download it all as **one file** (a `.zip`,
@@ -81,10 +90,12 @@ Unsaved work exists only in memory:
 
 - Closing or reloading the tab warns first while there are unsaved changes.
 - **New**, **Open** and **Start** ask Save / Don't save / Cancel.
-- A reload with nothing saved returns you to the start page.
+- A reload with nothing saved returns you to the start page, which says the diagram couldn't be brought back and
+  offers to turn on **recovery copies** (off unless you turn them on), which keep unsaved changes in this browser
+  across reloads until you save.
 
-Only your theme, collapsed panels, last export choices, the name you last used on a review comment and privacy-notice acceptance use `localStorage`,
-never diagram data.
+Only your theme, collapsed panels, last export choices, the code panel's width, the name you last used on a review
+comment and privacy-notice acceptance use `localStorage`, never diagram data, unless you turn on recovery copies.
 
 ### Privacy notice
 

@@ -15,8 +15,9 @@ is the reminder to update the expectations when a level ships.
 
 ## L1 — connections
 
-A connection (`DiagramEdge`) joins two **components** in the same canvas. Containers can't be connected: in L1,
-interactions are between systems, and a container is a grouping.
+A connection (`DiagramEdge`) joins two **components** (or containers) in the same canvas. Text boxes can't be
+connected: they're notes on the canvas, not things that talk to each other, so they have no dots, and the store,
+the canvas and the file reader all refuse a line to one.
 
 **Creating one:**
 
@@ -24,8 +25,10 @@ interactions are between systems, and a container is a grouping.
   start or end a connection; the sides are stored (`sourceSide`, `targetSide`) so the line keeps its route.
 - Or select a component and use **Connect to…** in the details panel, which picks facing sides
   (`suggestConnectionSides`).
+- On a flowchart tab, click one of a shape's blue quick-add arrows to add a new shape that way, already connected
+  (`addConnectedBlock`, see [flowcharts](07-editor-ui.md#flowcharts)).
 
-`addConnection` refuses self-connections, containers, and an *exact* duplicate (same ends **and** sides). Two
+`addConnection` refuses self-connections, text boxes, and an *exact* duplicate (same ends **and** sides). Two
 connections between the same components on different sides are allowed (e.g. a request and a separate event
 stream).
 

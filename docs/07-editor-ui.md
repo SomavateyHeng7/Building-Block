@@ -9,10 +9,11 @@ flowchart TB
   RFP --> SectionTabs
   RFP --> DetailBar
   RFP --> Body[canvas row]
-  Body --> Sidebar["Sidebar (palette)"]
-  Body --> Canvas
-  Body --> Aside["aside: PropertiesPanel + LegendPanel"]
-  Canvas --> ContainerNode & BlockNode
+  Body --> Sidebar["Sidebar (palette), or SequenceCode on a sequence tab"]
+  Body --> Canvas["Canvas, or SequenceCanvas on a sequence tab"]
+  Body --> Aside["aside: PropertiesPanel (SequencePanel on a sequence tab) + LegendPanel"]
+  Canvas --> ContainerNode & BlockNode & TextNode
+  Canvas --> PixelGuides
   Toolbar --> FileMenu & SaveStatus & ExportDialog & UnsavedChangesDialog
   Aside --> ColorPicker
   RFP --> ShortcutsHelp
@@ -30,7 +31,9 @@ Responsibilities, top to bottom:
 2. **Keyboard shortcuts** (a `window` keydown listener; list below).
 3. **Autosave** (see [files](06-files-saving-and-unsaved-changes.md#autosave--in-editorapptsx)).
 4. **`beforeunload` warning** while dirty. `event.preventDefault()` plus `returnValue = ""` is what browsers need to
-   show their own "Leave site?" prompt (custom text isn't allowed any more).
+   show their own "Leave site?" prompt (custom text isn't allowed any more). If the person leaves anyway,
+   `pagehide` writes the recovery copy (when on) or marks the changes as lost for the start page to mention (see
+   [files](06-files-saving-and-unsaved-changes.md#warnings-before-losing-work)).
 5. **Layout:** toolbar, tabs, the L2 bar, then the row of palette / canvas / details. See [responsive layout](#responsive-layout).
 6. **Collapsed panels** on wide screens, remembered in `localStorage["bb:panels"]` (`{ palette, properties }`).
 
@@ -163,6 +166,22 @@ and every change React Flow reports is turned into a store action.
 | `colorMode` | Follows the app theme once mounted (avoids a hydration flash). |
 | `<MiniMap>` | Only at ≥768px wide (`useIsWide` via `matchMedia`): on a phone it would cover the canvas. |
 
+### Pixel precision — `guides.ts` and `PixelGuides.tsx`
+
+- **Whole pixels:** every drag, nudge, resize, drop and X/Y/W/H entry is rounded, so positions stay comparable.
+- **Snapping while dragging** (`snapDrag` in `Canvas.tsx`): the dragged boxes (together, by their bounding box) snap
+  so an edge or middle meets another box's edge or middle within 6 screen pixels (`snapToBoxes`). Children of a
+  dragged container are left out. Alt held: no snapping, but the guides still show exact matches.
+- **What's drawn** (`PixelGuides`, in a `ViewportPortal` so it's in canvas coordinates, with line widths divided by
+  the zoom): pink lines through every edge or middle shared to the pixel (`alignmentLines`), orange measures with the
+  gap in px to the nearest box on each side that faces it (`nearestGaps`), and a readout under the box: `x · y`
+  while moving, `W × H` while resizing. Guide state is a small zustand store (`useGuides`), not the diagram.
+- **Alt + hover:** with one box selected, pointing at another shows the space between them, or each edge's inset when
+  one is inside the other (`distancesBetween`).
+- **Arrow keys** move 1 px (Shift: 10). React Flow moves a focused node 5 px by itself, so the canvas's
+  `onKeyDownCapture` stops that and nudges instead (stopping a React event also stops it reaching the window, so the
+  editor's own handler wouldn't run).
+
 **Empty state:** an empty view shows a card with **Container** and **Component** buttons (adding at the centre of
 what's on screen), a hint about C/B/? on devices with a mouse, and, inside an internal design, "What is *X* made of?".
 
@@ -178,24 +197,17 @@ what's on screen), a hint about C/B/? on devices with a mouse, and, inside an in
   because image export renders the DOM outside the canvas, where those variables are undefined.
 - `historyKey(kind, ids)`: see [undo](05-diagram-store-and-undo.md#committing-changes-and-undo).
 
-## The draw.io look
+## Flowcharts
 
-**Look** in the Diagram panel (nothing selected) draws an architecture tab the way draw.io does
-(`DiagramSection.look = "drawio"`, read with `useDrawioLook` in `look.ts`); the Flowchart template uses it.
+Flowcharts are drawn in the app's own look, like every architecture tab; draw.io is the inspiration for how they're
+**edited**, not for how they look.
 
-- **Shapes:** each outlined in 1 px of a darker shade of its own fill (`outlineFor` in `palette.ts`: draw.io's own
-  pairing for its fills, e.g. `#dae8fc` → `#6c8ebf`, otherwise the fill at 55%); boxes have square corners; text is
-  12 px Helvetica, black on light fills. A selected shape gets draw.io's dashed blue outline. Containers have a thin
-  grey edge.
-- **Lines:** 1 px black (light grey on a dark canvas), right angles without rounded corners, a filled arrowhead of
-  the same size whatever the line width, and labels on a borderless patch of the canvas colour.
-- **Grid:** draw.io's lines every 10 px with stronger ones every 40, instead of dots.
-- draw.io's six fills (blue, green, orange, yellow, red, purple) are the last row of every colour picker.
-- Exports picture the canvas, so they come out in the same look.
-- **Quick add**, as in draw.io: a hovered or selected component shows a blue arrow off each side. Clicking one adds
-  the same kind of shape that way (Shift-click: a decision), 60 px below or 80 px beside it, stepping past anything in
-  the way, connected from that side (`addConnectedBlock`), as one undo step. Ways out of a decision are labelled
-  "Yes", then "No"; a pill after a pill is called "End".
+- **Quick add**, as in draw.io: on a **flowchart tab** (one with at least one flowchart shape on it: `isFlowchart` in
+  `flowchartView.ts`, worked out once per nodes array), a hovered or selected component shows a blue arrow off each
+  side. Clicking one adds the same kind of shape that way (Shift-click: a decision), 60 px below or 80 px beside it,
+  stepping past anything in the way, connected from that side (`addConnectedBlock`), as one undo step. Ways out of a
+  decision are labelled "Yes", then "No"; a pill after a pill is called "End". Tabs without flowchart shapes (L0
+  architecture) don't show the arrows, so editing them is unchanged.
 
 ### Flowchart shapes
 
@@ -345,6 +357,10 @@ See the [decision log](17-decision-log.md#import-drawio-for-architecture-mermaid
 - Filled with its category colour; **dashed border and white when unassigned** (tooltip says so); text colour
   chosen for contrast (`readableTextOn`).
 - `NodeResizer` when selected (minimum 80×32).
+- **Shape** (`data.shape`): a box or pill in CSS; the other flowchart shapes are an SVG outline from `shapes.ts`
+  behind the label, stretched to the box, with the label kept inside by the shape's `inset` (a diamond's corners are
+  where its connection dots are).
+- On a flowchart tab, the quick-add arrows (`QuickAdd`): see [flowcharts](#flowcharts).
 - Four `Handle`s (`bb-handle` class), hidden until hover, selection, or while a connection is being dragged (CSS in
   `globals.css`); always visible on touch screens.
 - Double-click to rename inline. Enter or blur saves (blank → "Untitled"); Escape cancels.
@@ -369,9 +385,20 @@ See the [decision log](17-decision-log.md#import-drawio-for-architecture-mermaid
 - When selected and not empty: a floating `NodeToolbar` with **Fit to contents** and **Tidy layout**.
 - Double-click the header to rename; Escape cancels.
 
+### `TextNode.tsx` (a text box)
+
+- Text as written, line breaks kept, in its font size, alignment and weight; no fill or border (a dashed outline on
+  hover, blue when selected). An empty one says "Double-click to write" (nothing in view mode).
+- Double-click, or Enter when selected, opens a textarea: Enter adds a line, Ctrl/⌘+Enter, Esc (cancels) or
+  clicking away finishes. Keys typed there don't reach the canvas shortcuts.
+- **Grows to fit:** when the text needs more height than the box has (typing, a bigger font, an edit in the panel),
+  the box grows (`setNodeGeometry`); it never shrinks by itself.
+- No handles: a text box can't be connected (the store and `isValidConnection` refuse it too).
+
 ## `Sidebar.tsx` — the palette
 
-One "Container" item and one "component" item per legend entry. Each item is draggable (`dataTransfer` type
+Sections: **Containers**, **Text** (a text box, T), **Components** (one per legend entry) and **Flowchart** (the
+shapes from `shapes.ts`, drawn by `ShapeIcon`, see [flowchart shapes](#flowchart-shapes)). Each item is draggable (`dataTransfer` type
 `application/building-block-node`, JSON payload) **and** clickable/Enter/Space to add. **Why both:** touch screens
 can't drag from a list into React Flow reliably, so a tap adds at the centre of what's on screen (or into the
 selected container, below its lowest component via `nextSlotInContainer`). On small screens adding closes the
@@ -389,8 +416,9 @@ panel is showing (`PanelTitle`'s `action`).
 | A connection | **Connection** | From → To (click to select either end), What flows, Protocol, Description, Arrows (one way / both / none), Line (solid / dashed), Reverse, Delete |
 | Several nodes | **N items selected** | Align (6), Distribute & size (4), Color all, Grouping (Group in container; Ungroup when a container is involved), Duplicate, Delete all |
 | Nothing (on a tab) | **Diagram** | Show technology switch, Fit all containers (if any are nested), a how-to hint |
+| A text box | **Text box** | Text (a textarea), Size (10–48 px), Bold, Align, Position & size, Comments, Delete |
 | Nothing (in an internal design) | **Internal design** | The component it belongs to, its technology and description, **its connections at L1**, Back |
-| One node | **Component** / **Container** | "In *container*" link, Label (blank → default on blur), Color (legend swatches), Icon (components only: None plus the built-in set), Technology (components only), Owner, Description, Notes (grows with the text; + Assumption / Risk / Open question / Decision starters), then: Connections (list + "Connect to…" picker, with Components and Containers groups; containers have it too) and **Internal design (L2)** for components on a tab; Header, Outline and Layout (Tidy, Fit, Ungroup) for containers; Group in container (components not in one); Delete |
+| One node | **Component** / **Container** | "In *container*" link, Label (blank → default on blur), **Position & size** (X, Y, W, H in whole px, relative to the container for a component in one; arrow keys step 1, Shift 10; `setNodeGeometry` grows the container to keep it inside), Color (legend swatches), **Shape** (components: the seven flowchart shapes), Icon (components only: None plus the built-in set), Technology (components only), Owner, Description, Notes (grows with the text; + Assumption / Risk / Open question / Decision starters), then: Connections (list + "Connect to…" picker, with Components and Containers groups; containers have it too) and **Internal design (L2)** for components on a tab; Header, Outline and Layout (Tidy, Fit, Ungroup) for containers; Group in container (components not in one); Delete |
 
 **Why "Connect to…" exists as well as dragging:** dragging between small handles is hard on touch screens and for
 keyboard users. The picker suggests sensible sides with `suggestConnectionSides` (the sides facing each other).

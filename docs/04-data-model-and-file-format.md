@@ -23,10 +23,11 @@ classDiagram
     updatedAt: ISO string
   }
   class LegendEntry { key; label; color "#rrggbb" }
-  class DiagramSection { id; name; nodes: DiagramNode[]; edges?: DiagramEdge[] }
-  class DiagramNode { id; type "container"|"block"; position; size; parentId?; zIndex?; data }
+  class DiagramSection { id; name; kind?; nodes: DiagramNode[]; edges?: DiagramEdge[]; sequence? }
+  class DiagramNode { id; type "container"|"block"|"text"; position; size; parentId?; zIndex?; data }
   class ContainerNodeData { kind "container"; label; colorKey?; details; header/outline style }
-  class BlockNodeData { kind "block"; label; colorKey?; containerId; details; detail?: ComponentDetail }
+  class BlockNodeData { kind "block"; label; colorKey?; containerId; details; icon?; shape?; detail?: ComponentDetail }
+  class TextNodeData { kind "text"; label; fontSize?; align?; bold? }
   class ComponentDetail { nodes: DiagramNode[]; edges?: DiagramEdge[] }
   class DiagramEdge { id; source; target; sourceSide?; targetSide?; label?; protocol?; description?; direction?; style? }
   Diagram "1" *-- "many" LegendEntry
@@ -35,6 +36,7 @@ classDiagram
   DiagramSection "1" *-- "many" DiagramEdge
   DiagramNode <|-- ContainerNodeData : data
   DiagramNode <|-- BlockNodeData : data
+  DiagramNode <|-- TextNodeData : data
   BlockNodeData "1" *-- "0..1" ComponentDetail : L2
   ComponentDetail *-- DiagramNode
   ComponentDetail *-- DiagramEdge
@@ -69,9 +71,6 @@ form.
 
 `nodes` holds containers and components in one array; `edges` holds connections. `edges` is optional because
 files from before connections existed don't have it.
-
-`look` (architecture tabs only) is `"drawio"` to draw the tab, and its internal designs, the way draw.io does; absent
-is the app's own look. It changes only how things are drawn, never what's in the tab.
 
 `kind` says what the tab holds: absent (or `"architecture"`) for boxes and connections, or `"sequence"` for a
 sequence diagram. A sequence tab keeps `nodes: []` and its content in `sequence`, so code that walks nodes needs
@@ -111,12 +110,12 @@ always reads top to bottom and never needs tidying.
 
 | Field | Meaning |
 | --- | --- |
-| `type` | `"container"` or `"block"` (a component). |
-| `position` | Top-left corner. **Relative to the parent container** when `parentId` is set, otherwise canvas coordinates. This is React Flow's convention, kept so no conversion is needed when rendering. |
-| `size` | Width and height in canvas pixels. |
+| `type` | `"container"`, `"block"` (a component) or `"text"` (a text box). |
+| `position` | Top-left corner. **Relative to the parent container** when `parentId` is set, otherwise canvas coordinates. This is React Flow's convention, kept so no conversion is needed when rendering. Whole pixels: drags, nudges and the X/Y fields round to them. |
+| `size` | Width and height in canvas pixels, whole pixels, at least `MIN_NODE_SIZE` for the type (`layout.ts`). |
 | `parentId` | The container a component sits in. Only components have one, and only containers can be parents. |
 | `zIndex` | Optional stacking order. |
-| `data` | `ContainerNodeData` or `BlockNodeData`, told apart by `data.kind`. |
+| `data` | `ContainerNodeData`, `BlockNodeData` or `TextNodeData`, told apart by `data.kind`. |
 
 **Why `data.kind` as well as `type`:** TypeScript narrows unions by a field *inside* the object; `node.data.kind`
 lets code that only has `data` (e.g. React Flow node components) know which kind it has. They always agree.
@@ -140,6 +139,23 @@ without rewriting files.
 `COMPONENT_ICONS` in `componentIcons.ts`, e.g. `"database"`; absent means none), and optional `detail`: the
 component's internal design (L2). Files store the icon's **key**, so keys must never be renamed; labels and
 drawings can change.
+
+Optional `shape` says how it's drawn, after draw.io's Flowchart palette: `process` (a box, the default and never
+written), `terminal` (a pill for a start or end), `decision` (a diamond), `data` (a parallelogram), `document`,
+`database` (a cylinder) or `subprocess` (a box with double sides). `shapes.ts` holds each shape's meaning, usual
+size and outline. An unknown shape is read as a box.
+
+### `TextNodeData` (a text box)
+
+A heading, caption or note written on the canvas: not a component, so it has no category, details, connections,
+container or internal design. `label` holds the text **as written, line breaks included** (so search and compare
+read it like a name); `fontSize` (8–96 px, default 14), `align` (`left` default, `center`, `right`) and `bold` are
+optional. Text boxes are left out of the component list (CSV) and the document's component tables.
+
+```json
+{ "id": "text_k1", "type": "text", "position": { "x": 200, "y": 0 }, "size": { "width": 520, "height": 32 },
+  "data": { "kind": "text", "label": "Order fulfilment flow", "fontSize": 20, "bold": true } }
+```
 
 ### `ComponentDetail` (L2)
 
@@ -221,9 +237,9 @@ The store and the validator together keep these true. Code may rely on them.
 1. A diagram has at least one section, and `activeSectionId` names one of them.
 2. Node ids are unique within their canvas (a tab, or one internal design). Section ids are unique.
 3. Only components have `parentId`, it names a **container in the same canvas**, and containers have no parent
-   (one level of nesting).
+   (one level of nesting). Text boxes are never in a container.
 4. A component's `data.containerId` equals its `parentId` (or `null`).
-5. Every edge joins two different components that exist in the same canvas. Deleting a component deletes its
+5. Every edge joins two different components (or containers) that exist in the same canvas, never a text box. Deleting a component deletes its
    edges (`withoutDanglingEdges` in the store).
 6. `colorKey`, when set, names an entry in `legend`. Removing a legend entry unassigns it everywhere, including
    inside internal designs.
@@ -231,7 +247,9 @@ The store and the validator together keep these true. Code may rely on them.
 8. Colours are `#rrggbb`.
 9. A sequence tab has `kind: "sequence"`, `nodes: []` and a `sequence`. Participant and step ids are unique within
    it; every message names participants that exist; every note is over one or two of them. Removing a participant
-   removes its messages (`removeParticipant`). Removing a legend entry recolours participants too.
+   removes its messages (`removeParticipant`). Removing a legend entry recolours participants too. Frame markers
+   pair up: every `block` has one `end` after it, and an `else` is only inside an open frame (`balanceSteps`
+   repairs files; removing any marker removes the whole frame, keeping what was inside).
 
 ## Ids — `createId()` in `src/lib/diagram/factory.ts`
 
@@ -240,8 +258,8 @@ saved file, and ids only need to be unique within one diagram, not globally. Cop
 (paste, duplicate, duplicate tab, templates).
 
 `factory.ts` also builds blank sections and diagrams (`createBlankDiagram` copies `DEFAULT_LEGEND` so editing one
-diagram's legend never changes the defaults) and `defaultLabel(type)` ("Untitled" / "Untitled Container"), used
-whenever a name is left blank.
+diagram's legend never changes the defaults) and `defaultLabel(type)` ("Untitled" / "Untitled Container" / "Text"),
+used whenever a name is left blank.
 
 ## How files are read — `validate.ts`
 
@@ -276,9 +294,12 @@ throws `DiagramFileError`, whose message is shown to the user.
 | Detail fields (`technology` etc.) | Kept if text (numbers converted), trimmed; blanks dropped. | — |
 | `colorKey` not in the legend | Dropped (the node becomes unassigned). | — |
 | `icon` not a built-in key, or on a container | Dropped. | "removed N icons this version doesn't have" |
+| Component `shape` not one of the flowchart shapes | Dropped (drawn as a box). | — |
+| Text box: text kept as written (line breaks too, up to 10,000 characters); `fontSize` rounded and kept to 8–96; `align` not `center`/`right`, or `bold` not `true` | Dropped (defaults apply). Size defaults to 160×32. A text box with a `parentId` is taken out of the container. | — |
+| Section `look` (written by one earlier version for a draw.io look) | Ignored. | — |
 | Container style values not in the allowed lists | Dropped (defaults apply). | — |
 | `parentId` naming something that isn't a container, or a container having a parent | Parent removed; position converted to canvas coordinates so the node stays where it was on screen. | "took N items out of a container…" |
-| Connection not joining two different, existing components; duplicate id; missing id | Dropped. | "skipped N connections that didn't join two components" |
+| Connection not joining two different, existing components (a text box doesn't count); duplicate id; missing id | Dropped. | "skipped N connections that didn't join two components" |
 | `edges` present but not an array | All dropped. | "skipped connections that couldn't be read" |
 | Connection `shape` not in the list, or `bend` without two numbers | Dropped (defaults apply); a `bend` is capped at ±100,000. | — |
 | `detail` that isn't an object | Ignored. | "skipped the internal design of X, which couldn't be read" |
@@ -289,10 +310,14 @@ throws `DiagramFileError`, whose message is shown to the user.
 | `activeSectionId` not found | First section. | — |
 | `activeDetailId` not a component in the active section | Dropped (opens at L1). | — |
 | Missing `id`, `name`, `createdAt`, `updatedAt` | New id; "Imported diagram"; now. | — |
+| Sequence step of an unknown type, a frame with an unknown `kind`, or a message naming a missing participant | Dropped. `activate`/`deactivate` kept only when `true`. | "skipped N steps that couldn't be read…" |
+| Sequence frame markers that don't pair up (an `end` or `else` with no frame open, a frame never closed) | Stray markers dropped; open frames closed at the bottom (`balanceSteps`). | "paired up the starts and ends of loop/alt/opt frames" |
 
 **Trap — trusting the file's shape:** the parser never spreads raw objects into the diagram. Every field is read
 explicitly and checked (`text()`, `finite()`, `oneOf()`, `hexColor()`), so unexpected keys (including
 `__proto__`) can't sneak into the store, and a hostile file can't inject markup (React escapes text, and SVG
 export escapes it again).
 
-The rules are covered by `tests/lib/diagram/validate.test.ts` and `tests/lib/diagram/detail.test.ts`.
+The rules are covered by `tests/lib/diagram/validate.test.ts`, `tests/lib/diagram/detail.test.ts`,
+`tests/lib/diagram/textBox.test.ts`, `tests/lib/diagram/sequenceFrames.test.ts` and
+`tests/templates/flowchart.test.ts` (shapes and flowchart tabs).

@@ -4,16 +4,16 @@ import { shapeInfo } from "@/lib/diagram/shapes";
 import type { TemplateDefinition } from "./types";
 
 /**
- * A process flowchart in draw.io's look, top to bottom: pills start and end it, boxes are steps, diamonds are decisions with
+ * A process flowchart, top to bottom: pills start and end it, boxes are steps, diamonds are decisions with
  * Yes/No ways out. Laid out by hand (to the pixel) rather than in containers, as a flowchart isn't grouped.
  */
 
-/** draw.io's own fills: green, blue, yellow and red (each drawn with draw.io's outline for it). */
+/** Colours from the app's own palette: Mint, Sky, Butter and Rose. */
 const LEGEND: LegendEntry[] = [
-  { key: "terminal", label: "Start / end", color: "#d5e8d4" },
-  { key: "step", label: "Step", color: "#dae8fc" },
-  { key: "decision", label: "Decision", color: "#fff2cc" },
-  { key: "exception", label: "Exception path", color: "#f8cecc" },
+  { key: "terminal", label: "Start / end", color: "#8fd19e" },
+  { key: "step", label: "Step", color: "#7dd3fc" },
+  { key: "decision", label: "Decision", color: "#f6d860" },
+  { key: "exception", label: "Exception path", color: "#fda4af" },
 ];
 
 const MAIN_X = 200;
@@ -114,11 +114,10 @@ function buildCanvas(): { nodes: DiagramNode[]; edges: DiagramEdge[] } {
 export const flowchartTemplate: TemplateDefinition = {
   id: "flowchart",
   name: "Flowchart",
-  description: "A process from start to end, with steps, Yes/No decisions and the exception paths they lead to, drawn the way draw.io draws it.",
+  description: "A process from start to end, with steps, Yes/No decisions and the exception paths they lead to. Hover a shape and click a blue arrow to add the next step.",
   build: () => {
     const diagram = createBlankDiagram("Order Fulfilment Flowchart");
-    // Drawn the way draw.io draws a flowchart.
-    const section = { ...createBlankSection("Flow"), look: "drawio" as const, ...buildCanvas() };
+    const section = { ...createBlankSection("Flow"), ...buildCanvas() };
     return { ...diagram, legend: LEGEND, sections: [section], activeSectionId: section.id };
   },
 };

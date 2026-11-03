@@ -114,7 +114,7 @@ returns to that tab, because the restored diagram carries its own `activeSection
 | `renameDiagram(name)` | Sets the name. | Coalesced |
 | `setSelection(ids)` | Selects nodes; clears the edge selection when ids are given. | No |
 | `setSelectedEdge(id)` | Selects a connection; clears node selection. | No |
-| `addConnection({source, target, sides})` | Joins two **different components** in the view. Refuses containers, self-links and exact duplicates (same ends and sides). Returns the new id, or `null`. Selects it. | Yes |
+| `addConnection({source, target, sides})` | Joins two **different components** in the view. Refuses text boxes, self-links and exact duplicates (same ends and sides). Returns the new id, or `null`. Selects it. | Yes |
 | `updateConnection(id, patch)` | Edits fields; blank text becomes `undefined`. | Coalesced per field |
 | `reverseConnection(id)` | Swaps source/target and their sides. | Yes |
 | `deleteConnections(ids)` | Removes connections. No-op (and no step) if none exist. | Yes |
@@ -129,9 +129,14 @@ returns to that tab, because the restored diagram carries its own `activeSection
 | `setShowTechnology(show)` | Diagram-wide display toggle. | Yes |
 | `setActiveSectionNodes(nodes, {coalesceKey})` | Replaces the view's nodes (used by the canvas for drags, resizes, nudges, deletes). Drops connections to removed nodes. | Yes / coalesced |
 | `addContainer(position)` | Adds a 320×220 "New Container" and selects it. | Yes |
-| `addBlock(position, parentId?, colorKey?)` | Adds a 140×56 "New Block" (first legend colour unless given), inside a container if given, growing it to fit. | Yes |
+| `addBlock(position, parentId?, colorKey?, shape?)` | Adds a 140×56 "New Block" (first legend colour unless given), inside a container if given, growing it to fit. With `shape`: a flowchart shape at its usual size and name (`shapes.ts`), in the legend category named for it ("Decision", "Start / end"), else the one for steps, else the first. | Yes |
+| `addConnectedBlock(sourceId, side, shape?)` | draw.io's quick add: a new shape off `side` of a component (the same shape, or `shape`), lined up 60 px below/above or 80 px beside, stepping past siblings in the way, in the same container, connected from that side. From a decision the line is labelled "Yes", then "No"; a pill after a pill is "End". Selects it. | Yes (one step, shape and line) |
+| `addText(position, text?)` | Adds a 160×32 text box ("Text") and selects it. | Yes |
+| `updateTextStyle(id, patch)` | A text box's `fontSize`, `align`, `bold`; `undefined` goes back to the default. | Coalesced per field |
+| `setNodeGeometry(id, {x, y, width, height})` | Exact position and size from the X/Y/W/H fields, rounded to whole px, at least `MIN_NODE_SIZE`. No-op if unchanged; grows the container. | Coalesced per field |
+| `updateNodeShape(id, shape)` | A component's flowchart shape; `process` removes the field. | Yes |
 | `updateNodeLabel(id, label)` | Renames. **No-op if unchanged** (clicking into a label and away doesn't create a step). | Coalesced |
-| `updateNodeColor` / `updateNodesColor` | Sets the category. | Yes |
+| `updateNodeColor` / `updateNodesColor` | Sets the category (never on a text box). | Yes |
 | `updateNodeDetails(id, patch)` | Technology/owner/description/notes; blank becomes `undefined`. | Coalesced per field |
 | `updateContainerStyle(id, patch)` | Header position/alignment, outline (`restyleContainer` moves children clear of a moved header). | Coalesced |
 | `updateLegendEntry(key, patch)` | Renames/recolours a category. | Coalesced |

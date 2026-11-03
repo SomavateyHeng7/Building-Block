@@ -179,7 +179,9 @@ want to reverse.
   Mermaid flowcharts have no positions and would need an auto-layout step. Mermaid's `sequenceDiagram` is how most
   people already write sequences, and maps directly onto steps.
 - **Lossy on purpose, and says so:** nested containers are lifted (one level here), groups dissolved, free text and
-  loose arrows left out, `loop`/`alt` blocks flattened. Each import lists what it changed in its toast.
+  loose arrows left out, Mermaid's colour boxes (`rect`, `box`) dropped (their `loop`/`alt`/`opt` frames are kept,
+  since [sequence frames](#sequence-tabs-live-like-mermaid-with-frames-and-editable-without-code)). Each import
+  lists what it changed in its toast.
 - **Fill colours become "Imported #…" categories** rather than matching default categories by colour, which would
   give shapes a meaning nobody chose. A later import reuses them.
 - **Our own XML reader** (`xml.ts`), not DOMParser: imports then run the same in the browser and in unit tests.
@@ -349,3 +351,66 @@ want to reverse.
 ### Tests in `tests/`, mirroring `src/`
 
 - Keeps shipped code and tests apart; imports use `@/`.
+
+### Text boxes are a node type of their own
+
+- **Context:** there was no way to write a heading, caption or note on the canvas; people misused components.
+- **Decision:** `DiagramNode.type = "text"` with `TextNodeData` (text in `label`, font size, alignment, bold). Not
+  a component: no category, details, connections, container or internal design, and left out of the component list.
+- **Alternatives:** a component with a "text" variant (would have shown up as a component in the CSV, the document
+  and the checks, and could be connected); comments (attached to things, not placed on the canvas).
+- **Consequences:** every place that branches on node type had to decide what a text box means (exports, search,
+  describe, compare, validation). Keeping the text in `label` meant search and compare needed no special case.
+
+### Pixel-exact moves with snapping to other boxes, instead of a grid
+
+- **Context:** the 8 px grid and 8 px nudges made it impossible to line boxes up exactly or see how far apart they were.
+- **Decision:** no grid snap. Positions and sizes are whole pixels; drags snap to other boxes' edges and middles
+  (within 6 screen px) and show the guides, the gaps in px and the position; arrow keys move 1 px (Shift 10); the
+  details panel has X/Y/W/H fields; Alt + hover measures between two boxes. Alt while dragging turns snapping off.
+- **Alternatives:** keep the grid and add guides (two snapping systems fight each other); a 1 px grid with no guides
+  (exact, but nothing to line up against).
+- **Consequences:** older diagrams on the 8 px grid stay where they are. Box-to-box snapping is relative, so it
+  works at any zoom.
+
+### Flowcharts in the app's own look
+
+- **Context:** a draw.io look was built for flowcharts (outlined shapes, square boxes, black lines, a line grid, a
+  per-tab **Look** switch in the Diagram panel), then judged unwanted: the app should look like itself everywhere.
+- **Decision:** one look. The Flowchart template uses the app's palette (Mint, Sky, Butter, Rose); draw.io stays the
+  inspiration for editing (shapes and quick add), not for drawing. The look switch, `DiagramSection.look`, draw.io's
+  palette row and its outline colours were removed; a `look` in a file from that version is ignored.
+- **Consequences:** quick add needed a new trigger: it shows on tabs with flowchart shapes (`isFlowchart`).
+
+### Flowchart editing modelled on draw.io
+
+- **Context:** a draw.io-styled flowchart still had to be built box by box and line by line.
+- **Decision:** components have an optional `shape` from draw.io's Flowchart palette (process, decision, start/end,
+  data, document, database, subprocess), offered in a palette section and the details panel; on a tab with flowchart
+  shapes, a shape shows draw.io's blue quick-add arrows, which add a connected shape that way in one step. Shapes are data in
+  `shapes.ts` (an SVG outline each), so canvas, palette, picker and previews draw the same thing.
+- **Alternatives:** separate node types per shape (every branch on node type would multiply); quick add on every
+  tab (changes how L0 architecture is edited without being asked); a per-tab flowchart switch (one more setting,
+  when the shapes already say it's a flowchart).
+- **Consequences:** a shape is how a component is drawn, not what it is, so flowchart steps are still components:
+  they appear in the component list and the checks (which ask for owners).
+
+### A sequence diagram counts as something to lose
+
+- **Context:** reloading a new sequence diagram lost it with no warning. `hasContent` counted nodes, and sequence tabs
+  keep `nodes` empty, so a sequence-only diagram looked empty: no warning, no unsaved status, no recovery copy.
+- **Decision:** `hasContent` counts sequence participants and steps too. When someone leaves with unsaved changes,
+  the recovery copy (if on) is written that moment, otherwise a session flag (no diagram content) lets the start page
+  say what happened and offer recovery copies.
+- **Alternatives:** recovery copies on by default (keeps a diagram in the browser without asking, against principle 1).
+- **Consequences:** principle 3 (never lose work silently) holds for every kind of tab. Any future content stored
+  outside `nodes` must be counted in `hasContent` too (noted in the how-to).
+
+### One page width for the public pages
+
+- **Context:** the start and templates pages were 770–850 px wide and the landing page 1,150 px, leaving most of a
+  wide screen empty and edges that didn't line up between pages.
+- **Decision:** `max-w-7xl` (1,280 px) for the landing, start and templates pages, their headers and the footer;
+  grids that add columns as the screen widens; reading pages stay narrow.
+- **Alternatives:** full-width (lines and cards get too wide to scan); per-page widths (the old drift).
+- **Consequences:** template cards share a 16:10 preview frame so rows line up.

@@ -841,7 +841,6 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
   const setSelection = useDiagramStore((state) => state.setSelection);
   const updateContainerStyle = useDiagramStore((state) => state.updateContainerStyle);
   const setShowTechnology = useDiagramStore((state) => state.setShowTechnology);
-  const setSectionLook = useDiagramStore((state) => state.setSectionLook);
   const showTechnology = diagram.showTechnology !== false;
 
   const section = getActiveSection(diagram);
@@ -860,24 +859,6 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
       <div className={PANEL}>
         <PanelTitle action={headerAction}>{section.parent ? "Internal design" : "Diagram"}</PanelTitle>
         {section.parent && <ParentContext parent={section.parent} />}
-        <div className={FIELD_LABEL}>
-          Look
-          <Segmented
-            label="Look"
-            options={[
-              { value: "app", label: "Building Block" },
-              { value: "drawio", label: "draw.io" },
-            ]}
-            value={section.look ?? "app"}
-            onChange={(look) => setSectionLook(look === "drawio" ? "drawio" : undefined)}
-          />
-          <span className="text-[11px] font-normal text-zinc-400">
-            {section.look === "drawio"
-              ? "Outlined shapes, square boxes, thin black lines and a line grid, as draw.io draws them. The draw.io colours are at the end of every colour picker."
-              : "How this tab is drawn. draw.io's look suits flowcharts and diagrams shared with draw.io users."}
-            {section.parent ? " Set for the whole tab." : ""}
-          </span>
-        </div>
         <label className="flex cursor-pointer items-center justify-between gap-3 text-sm text-zinc-700 dark:text-zinc-200">
           <span>
             Show technology

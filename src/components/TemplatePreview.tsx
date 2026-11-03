@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { layoutSequence } from "@/lib/diagram/sequence";
-import { outlineFor, readableTextOn } from "@/lib/diagram/palette";
+import { readableTextOn } from "@/lib/diagram/palette";
 import { shapeInfo } from "@/lib/diagram/shapes";
 import type { ConnectionSide, Diagram, DiagramNode, SequenceDiagram } from "@/lib/diagram/types";
 
@@ -55,7 +55,6 @@ export default function TemplatePreview({ build, name }: { build: () => Diagram;
   }
 
   const colorOf = (key?: string) => diagram.legend.find((entry) => entry.key === key)?.color ?? "#ffffff";
-  const drawio = section.look === "drawio";
   const containers = layout.boxes.filter((box) => box.node.type === "container");
   const blocks = layout.boxes.filter((box) => box.node.type === "block");
   const texts = layout.boxes.filter((box) => box.node.type === "text");
@@ -97,9 +96,9 @@ export default function TemplatePreview({ build, name }: { build: () => Diagram;
               key={edge.id}
               d={`M${from.x} ${from.y} C${from.x + from.dx * bend} ${from.y + from.dy * bend} ${to.x + to.dx * bend} ${to.y + to.dy * bend} ${to.x} ${to.y}`}
               fill="none"
-              strokeWidth={drawio ? 2 : 3}
+              strokeWidth={3}
               strokeDasharray={edge.style === "dashed" ? "10 8" : undefined}
-              className={drawio ? "stroke-zinc-900 dark:stroke-zinc-200" : "stroke-zinc-500"}
+              className="stroke-zinc-500"
             />
           );
         })}
@@ -116,8 +115,8 @@ export default function TemplatePreview({ build, name }: { build: () => Diagram;
                   transform={`translate(${x} ${y}) scale(${width / 100} ${height / 100})`}
                   vectorEffect="non-scaling-stroke"
                   fill={color}
-                  stroke={drawio ? outlineFor(color) : "rgba(0,0,0,0.25)"}
-                  strokeWidth={drawio ? 2 : 1.5}
+                  stroke="rgba(0,0,0,0.25)"
+                  strokeWidth={1.5}
                 />
               ) : (
                 <rect
@@ -125,10 +124,10 @@ export default function TemplatePreview({ build, name }: { build: () => Diagram;
                   y={y}
                   width={width}
                   height={height}
-                  rx={shape === "terminal" ? height / 2 : drawio ? 0 : 6}
+                  rx={shape === "terminal" ? height / 2 : 6}
                   fill={color}
-                  stroke={drawio ? outlineFor(color) : "rgba(0,0,0,0.25)"}
-                  strokeWidth={drawio ? 2 : 1.5}
+                  stroke="rgba(0,0,0,0.25)"
+                  strokeWidth={1.5}
                 />
               )}
               <text

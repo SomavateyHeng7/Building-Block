@@ -78,9 +78,11 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 | `canvasFocus.ts` | `goTo`: open a view, select an item and ask the canvas to zoom to it |
 | `exportRendering.ts` | `useRenderEverything`: mounts off-screen nodes while an export pictures the canvas |
 | `edges/ConnectionEdge.tsx` | A connection line: right-angled, curved or straight, with the dot that bends it |
-| `Canvas.tsx` | React Flow canvas: changes → store, drops, connections, empty state |
-| `Sidebar.tsx` | Palette: drag or tap to add containers and components |
-| `PropertiesPanel.tsx` | Details for the selection (component, container, connection, several, diagram, internal design) |
+| `Canvas.tsx` | React Flow canvas: changes → store, drops, connections, snapping drags to other boxes, 1 px nudges, the draw.io grid, empty state |
+| `PixelGuides.tsx` | Alignment guides, px gaps and the position/size readout while dragging or resizing; Alt + hover measuring (`useGuides`) |
+| `flowchartView.ts` | `isFlowchart` / `useIsFlowchart`: whether a view has flowchart shapes (so its shapes show quick-add arrows) |
+| `Sidebar.tsx` | Palette: drag or tap to add containers, text boxes, components and flowchart shapes; `ShapeIcon` |
+| `PropertiesPanel.tsx` | Details for the selection (component, container, text box, connection, several, diagram, internal design): X/Y/W/H, shape, look |
 | `LegendPanel.tsx` | Legend categories: colour, name, usage, add, remove |
 | `ColorPicker.tsx` | Named palette popover with custom colours |
 | `ExportDialog.tsx` | Export choices and summary ([export](10-export.md#the-export-dialog--exportdialogtsx)) |
@@ -96,7 +98,8 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 | `SequencePanel.tsx` | The right panel on a sequence tab: details for a participant, message (with activation), note, frame or divider |
 | `sequenceSelection.ts` | What's selected on a sequence tab |
 | `ImportDialog.tsx` | Import from a file or pasted text; used by the start page and File menu |
-| `nodes/BlockNode.tsx` | A component on the canvas: colour, handles, rename, notes marker, L2 badge |
+| `nodes/BlockNode.tsx` | A component on the canvas: colour, flowchart shape, handles, rename, notes marker, L2 badge, quick-add arrows (flowchart tabs) |
+| `nodes/TextNode.tsx` | A text box: writing in place, font size, alignment, grows to fit its text |
 | `nodes/ContainerNode.tsx` | A container: header placement, outline, resize limits, Fit/Tidy toolbar |
 
 ## `src/lib/`
@@ -110,7 +113,9 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 | `diagram/factory.ts` | Ids, blank diagrams and tabs, default labels |
 | `diagram/defaultLegend.ts` | The default legend |
 | `diagram/palette.ts` | Named colours, colour names, next colour, parsing colour codes, readable text colour |
-| `diagram/layout.ts` | Nesting, insets, arrange, tidy, fit, nudge, re-parenting ([layout](08-layout-and-containers.md)) |
+| `diagram/shapes.ts` | The flowchart shapes: meaning, usual size, default name, SVG outline, label inset |
+| `diagram/guides.ts` | Pixel guides: snapping to other boxes, alignment lines, gaps to neighbours, distances between two boxes |
+| `diagram/layout.ts` | Nesting, insets, minimum sizes, arrange, tidy, fit, nudge, re-parenting ([layout](08-layout-and-containers.md)) |
 | `diagram/flowAdapter.ts` | Our nodes/edges ↔ React Flow's; undo keys; connection captions; line geometry (`connectionPath`); change marks |
 | `diagram/search.ts` | Finding components, containers, connections and sequence steps across the diagram; highlighting matches |
 | `diagram/export.ts` | Rendering pictures, PDF, SVG, CSV rows, export titles ([export](10-export.md)) |
@@ -118,12 +123,12 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 | `diagram/componentIcons.ts` | The built-in component icons (key, label, SVG path); keys are stored in files |
 | `diagram/compare.ts` | Comparing two tabs by name; change counts and the change-list CSV rows |
 | `diagram/legacy.ts` | Finds, downloads and removes diagrams left by earlier versions |
-| `diagram/sequence.ts` | Sequence diagrams: editing helpers (pure) and `layoutSequence` |
+| `diagram/sequence.ts` | Sequence diagrams: editing helpers (pure), frames (`frameOf`, `balanceSteps`, `wrapSteps`), `splitCaption`, and `layoutSequence` (frames and activation bars included) |
 | `diagram/importFile.ts` | Import entry point: picks draw.io or Mermaid, checks the result with `parseDiagram` |
 | `diagram/hints.ts` | "Check before you share": unconnected components, connections without a protocol, components without an owner |
 | `diagram/importDrawio.ts` | draw.io (.drawio/.xml, compressed or not) → architecture tabs |
-| `diagram/importMermaid.ts` | Mermaid `sequenceDiagram` → a sequence; `ImportError` |
-| `diagram/exportMermaid.ts` | A sequence → Mermaid code, and code applied back keeping colours, descriptions and links |
+| `diagram/importMermaid.ts` | Mermaid `sequenceDiagram` → a sequence (frames, activations); `tokenizeMermaidLine` for highlighting; `ImportError` |
+| `diagram/exportMermaid.ts` | A sequence → Mermaid code, and code applied back keeping colours, descriptions and links; `mermaidLineOf` / `mermaidIdAtLine` |
 | `diagram/xml.ts` | Small XML reader used by the draw.io import |
 | `zip.ts` | Minimal ZIP writer |
 | `toast.ts` | Toast store and API |
@@ -146,9 +151,9 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 | `event-driven.ts` | Event-driven microservices, with an internal design (L2) |
 | `serverless.ts` | Serverless API on managed services |
 | `data-platform.ts` | Data and analytics platform |
-| `flowchart.ts` | Process flowchart: pills, steps, decision diamonds and a title text box, placed by hand |
+| `flowchart.ts` | Process flowchart: pills, steps, decision diamonds, a database and a title text box, placed by hand |
 | `current-vs-target.ts` | Two tabs, current and target, for Compare tabs (hidden for now) |
-| `sequence-build.ts` | Builds a one-tab sequence diagram from participants and steps written as data |
+| `sequence-build.ts` | Builds a one-tab sequence diagram from Mermaid code (`sequenceFromMermaid`) or from participants and steps written as data |
 | `sequence.ts` | A checkout flow as a sequence tab |
 
 ## `src/types/`

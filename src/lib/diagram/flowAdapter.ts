@@ -8,7 +8,7 @@ import {
   type Position as Side,
 } from "@xyflow/react";
 import { CHANGE_COLORS, type ChangeMarks } from "./compare";
-import type { DiagramEdge, DiagramNode, DiagramNodeData, Position, SectionLook } from "./types";
+import type { DiagramEdge, DiagramNode, DiagramNodeData, Position } from "./types";
 
 export type FlowNode = Node<DiagramNodeData>;
 
@@ -16,8 +16,6 @@ export type FlowNode = Node<DiagramNodeData>;
 export interface ConnectionEdgeData extends Record<string, unknown> {
   shape: NonNullable<DiagramEdge["shape"]>;
   bend?: Position;
-  /** Right angles without rounded corners, as draw.io draws them. */
-  sharp?: boolean;
 }
 
 export type FlowEdge = Edge<ConnectionEdgeData, "connection">;
@@ -124,19 +122,13 @@ export function toFlowEdges(
   marks?: ChangeMarks | null,
   /** Node id → name, so a connection can be named by its ends. */
   names?: ReadonlyMap<string, string>,
-  look?: SectionLook,
 ): FlowEdge[] {
-  const drawio = look === "drawio";
   return edges.map((edge) => {
     const change = marks?.edges.get(edge.id);
-    // draw.io draws lines in plain black (light grey on a dark canvas), thinner than the app's own.
-    const ink = drawio ? (dark ? "#e4e4e7" : "#000000") : dark ? "#a1a1aa" : "#52525b";
-    const color = change ? CHANGE_COLORS[change] : ink;
+    const color = change ? CHANGE_COLORS[change] : dark ? "#a1a1aa" : "#52525b";
     const direction = edge.direction ?? "forward";
-    const width = edge.id === selectedId || change ? (drawio ? 2 : 2.5) : drawio ? 1 : 1.75;
-    // Markers are sized in line widths: keep the arrowhead about the same size on a thinner line.
-    const size = drawio ? 18 / width : 16;
-    const marker = { type: MarkerType.ArrowClosed, color, width: size, height: size };
+    const width = edge.id === selectedId || change ? 2.5 : 1.75;
+    const marker = { type: MarkerType.ArrowClosed, color, width: 16, height: 16 };
     const caption = connectionCaption(edge);
     return {
       id: edge.id,
@@ -146,20 +138,15 @@ export function toFlowEdges(
       targetHandle: edge.targetSide ?? null,
       type: "connection",
       ariaLabel: `Connection from ${names?.get(edge.source) ?? "a component"} to ${names?.get(edge.target) ?? "a component"}${caption ? `: ${caption}` : ""}`,
-      data: { shape: edge.shape ?? "step", ...(edge.bend ? { bend: edge.bend } : {}), ...(drawio ? { sharp: true } : {}) },
+      data: { shape: edge.shape ?? "step", ...(edge.bend ? { bend: edge.bend } : {}) },
       selected: edge.id === selectedId,
       interactionWidth: 24,
       label: caption || undefined,
-      labelBgPadding: drawio ? ([3, 1] as [number, number]) : ([6, 3] as [number, number]),
-      labelBgBorderRadius: drawio ? 0 : 4,
+      labelBgPadding: [6, 3] as [number, number],
+      labelBgBorderRadius: 4,
       // Explicit colours, not React Flow's CSS variables: image export renders outside the canvas, where those are undefined.
-      // draw.io's labels sit on a patch of the canvas colour, with no border.
-      labelStyle: drawio
-        ? { fontSize: 11, fontWeight: 400, fontFamily: "Helvetica, Arial, sans-serif", fill: dark ? "#e4e4e7" : "#000000" }
-        : { fontSize: 11, fontWeight: 500, fill: dark ? "#e4e4e7" : "#18181b" },
-      labelBgStyle: drawio
-        ? { fill: dark ? "#141414" : "#ffffff", fillOpacity: 1, stroke: change ? color : "none" }
-        : { fill: dark ? "#18181b" : "#ffffff", fillOpacity: 1, stroke: change ? color : dark ? "#3f3f46" : "#d4d4d8" },
+      labelStyle: { fontSize: 11, fontWeight: 500, fill: dark ? "#e4e4e7" : "#18181b" },
+      labelBgStyle: { fill: dark ? "#18181b" : "#ffffff", fillOpacity: 1, stroke: change ? color : dark ? "#3f3f46" : "#d4d4d8" },
       markerEnd: direction === "none" ? undefined : marker,
       markerStart: direction === "both" ? marker : undefined,
       style: {
@@ -185,8 +172,8 @@ export interface LineEnds {
  * drawn as React Flow draws it. A bend moves the middle: the right-angle line moves its middle segment there,
  * and the curved and straight lines pass through it.
  */
-export function connectionPath(ends: LineEnds, shape: ConnectionEdgeData["shape"], bend?: Position, sharp = false) {
-  const borderRadius = sharp ? 0 : 5;
+export function connectionPath(ends: LineEnds, shape: ConnectionEdgeData["shape"], bend?: Position) {
+  const borderRadius = 5;
   const draw = (): [string, number, number] => {
     if (shape === "curved") return getBezierPath(ends).slice(0, 3) as [string, number, number];
     if (shape === "straight") return getStraightPath(ends).slice(0, 3) as [string, number, number];

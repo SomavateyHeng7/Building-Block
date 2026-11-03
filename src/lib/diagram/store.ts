@@ -34,7 +34,6 @@ import type {
   NodeDetails,
   Position,
   ReviewComment,
-  SectionLook,
   SequenceDiagram,
   Size,
   TextNodeData,
@@ -363,8 +362,6 @@ interface DiagramState {
   /** Adds categories (e.g. from a preset) whose names the legend doesn't have yet, and returns how many were added. */
   addLegendEntries: (entries: { label: string; color: string }[]) => number;
   renameSection: (id: string, name: string) => void;
-  /** Draws the open tab (and its internal designs) in the app's look or draw.io's; undefined is the app's. */
-  setSectionLook: (look: SectionLook | undefined) => void;
   deleteSection: (id: string) => void;
   duplicateSection: (id: string) => void;
 }
@@ -1147,25 +1144,6 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       };
     }),
 
-  setSectionLook: (look) =>
-    set((state) => {
-      const sectionId = state.diagram.activeSectionId;
-      const section = state.diagram.sections.find((candidate) => candidate.id === sectionId);
-      if (!section || section.look === look || isSequenceSection(section)) return state;
-      return commit(
-        state,
-        touch({
-          ...state.diagram,
-          sections: state.diagram.sections.map((candidate) => {
-            if (candidate.id !== sectionId) return candidate;
-            const next = { ...candidate, look };
-            if (!look) delete next.look;
-            return next;
-          }),
-        }),
-      );
-    }),
-
   renameSection: (id, name) =>
     set((state) =>
       state.diagram.sections.find((section) => section.id === id)?.name === name
@@ -1390,8 +1368,6 @@ export function getActiveSection(diagram: Diagram): ActiveView {
     name: component.data.label,
     nodes: component.data.detail?.nodes ?? NO_NODES,
     edges: component.data.detail?.edges,
-    // An internal design is drawn in its tab's look.
-    ...(section.look ? { look: section.look } : {}),
     parent: { section, component },
   };
   detailViews.set(component, view);

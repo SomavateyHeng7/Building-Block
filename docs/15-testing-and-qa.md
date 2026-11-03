@@ -32,13 +32,13 @@ Library and jsdom are dev dependencies).
 | File | Tests | What it proves |
 | --- | --- | --- |
 | `tests/lib/diagram/validate.test.ts` | 24 | File parsing: rejects non-diagrams and newer versions; every repair rule; short colours; size caps |
-| `tests/lib/diagram/file.test.ts` | 17 | Dirty tracking (incl. tab switches and undo-to-saved); save via picker, reuse of the handle, Save As, cancel, failure; `fileBaseName` cases |
+| `tests/lib/diagram/file.test.ts` | 21 | Dirty tracking (incl. tab switches, undo-to-saved, and a never-saved sequence diagram counting as something to lose); save via picker, reuse of the handle, Save As, cancel, failure; `fileBaseName` cases |
 | `tests/lib/diagram/connections.test.ts` | 27 | Connections: creating, refusing, editing, deleting with components, copying; paste/duplicate growing containers; no-op renames; `historyKey`; `defaultLabel` |
 | `tests/lib/diagram/layout.test.ts` | 22 | Container content extents (computed once per nodes array); align/distribute/size (incl. containers carrying children and leaving containers), grow/fit, next slot, nudging, `dropIntoContainers` |
 | `tests/lib/diagram/detail.test.ts` | 15 | L2: drawing inside a component, back, navigation isn't an edit, undo, emptying, one level deep, copying, legend removal, stable view objects, file round-trip, nested-design repair, CSV "Part of", export titles |
 | `tests/lib/diagram/exportPlan.test.ts` | 8 | Views and file names; single file vs zip; PDF pages vs files; empty views skipped; name collisions; descriptions |
 | `tests/lib/diagram/export.test.ts` | 6 | CSV quoting and formula injection; BOM and CRLF; pixel ratio within iOS canvas limits |
-| `tests/lib/diagram/palette.test.ts` | 13 | WCAG contrast; every default legend colour has 4.5:1 text; palette has no duplicates; default legend colours are named; next colour; parsing typed colour codes |
+| `tests/lib/diagram/palette.test.ts` | 14 | WCAG contrast; every default legend colour has 4.5:1 text; palette has no duplicates; default legend colours are named; next colour; parsing typed colour codes; draw.io outlines for its fills, darkened outlines for others |
 | `tests/lib/zip.test.ts` | 3 | CRC-32 against the standard value; the zip passes `unzip -t` and Python's `zipfile` (UTF-8 names, contents); empty zip |
 | `tests/lib/consent.test.ts` | 4 | Needed until accepted; version mismatch asks again; withdraw; blocked storage lasts for the session |
 | `tests/lib/toast.test.ts` | 4 | Durations by kind; repeats replace; at most three; empty details |
@@ -47,13 +47,17 @@ Library and jsdom are dev dependencies).
 | `tests/lib/csp.test.ts` | 3 | The policy: nonce and `'strict-dynamic'` scripts; eval only in development; HTTPS upgrade; waitlist and analytics hosts, ignoring endpoints that aren't `https://` |
 | `tests/lib/levels.test.ts` | 2 | Roadmap statuses and heading wording |
 | `tests/lib/diagram/compare.test.ts` | 13 | Compare tabs: matching by name across ids, added/removed/changed fields, container moves, ignoring layout, connection matching (incl. two-way), internal designs, change-list rows |
-| `tests/templates/templates.test.ts` | 20 | Every template opens without repairs, mints fresh ids, connects real components, fits its containers; the richer templates have connections, an L2 design and two tabs |
+| `tests/templates/templates.test.ts` | 30 | Every template opens without repairs, mints fresh ids, connects real components, fits its containers; the richer templates have connections, an L2 design and two tabs |
 | `tests/lib/diagram/search.test.ts` | 9 | Names first, then details; several words in any order; accents ignored; a changed diagram is searched afresh; highlighting; sequence participants, messages and notes |
 | `tests/lib/diagram/sequence.test.ts` | 11 | Editing and laying out sequences; sequence tabs (undo, duplicate, save, picture); picking a component for a participant, tab-safe |
 | `tests/lib/diagram/flowAdapter.test.ts` | 6 | Line paths and bends; change marks; unchanged nodes keep their objects (undo history shares them) |
 | `tests/lib/diagram/grouping.test.ts` | 11 | Grouping into a container and ungrouping, as one undo step; deleting a container asks about its components |
-| `tests/lib/diagram/exportMermaid.test.ts` | 5 | Sequence → Mermaid (aliases, arrows, protocol, escapes, autonumber) and back to the same sequence; applying keeps colours, descriptions and links; errors |
-| `tests/lib/diagram/import.test.ts` | 13 | XML reading (incl. very deep nesting); draw.io shapes, swimlanes, arrows and compressed pages; parents that loop or nest deep; Mermaid sequences; character codes past Unicode; refusals with reasons |
+| `tests/lib/diagram/exportMermaid.test.ts` | 7 | Sequence → Mermaid (aliases, arrows, protocol, escapes, autonumber, indented frames, activation marks) and back to the same sequence; which line each item is on; applying keeps colours, descriptions and links; errors |
+| `tests/lib/diagram/import.test.ts` | 14 | XML reading (incl. very deep nesting); draw.io shapes, swimlanes, arrows and compressed pages; parents that loop or nest deep; Mermaid sequences with frames and activations; character codes past Unicode; refusals with reasons |
+| `tests/lib/diagram/sequenceFrames.test.ts` | 13 | Frames: wrapping steps, finding a frame from any marker, removing it whole, pairing markers up, moving within bounds, nested layout; activation bars and arrow ends; Mermaid round trip with nested frames, unclosed frames, colour boxes, activate lines, saved files; the code tokenizer; caption splitting |
+| `tests/lib/diagram/textBox.test.ts` | 5 | Text boxes: adding, line breaks and style, a saved file, no connections, not in the component list; exact position and size, minimum size, container growth |
+| `tests/lib/diagram/guides.test.ts` | 9 | Pixel guides: snapping edges and middles within a threshold, guide lines, gaps to the nearest facing boxes, distances between and inside boxes, bounding boxes |
+| `tests/templates/flowchart.test.ts` | 9 | The Flowchart template (pills, decisions with Yes/No, a title, Mermaid shapes, a saved file); shapes on blocks; the app's palette, quick add only on tabs with flowchart shapes, an old `look` ignored; dropping flowchart shapes in their categories; quick add (placement, stepping past boxes, one undo, Yes/No, "End") |
 | `tests/lib/diagram/legend.test.ts` | 3 | Reordering entries; removing one moves its items to another, inside internal designs too |
 | `tests/lib/diagram/recovery.test.ts` | 6 | Recovery copy: off by default, read back like a file, cleared, full or blocked storage reported |
 
@@ -126,7 +130,9 @@ a real device or a deployment setting, which is why they're here:
 - [ ] Open a file, drop a file on the start page; a broken file shows a warning with repairs.
 - [ ] Unsaved work → browser Back → New blank diagram → asked to save.
 - [ ] Never-saved diagram → File → Open → Save as… → choose a place → "Saved — Open…" → choose a file.
-- [ ] Reload with unsaved changes → the browser's leave warning.
+- [ ] Reload with unsaved changes → the browser's leave warning; for an architecture diagram **and a sequence diagram**.
+- [ ] Leave anyway with recovery copies off → the start page says the diagram couldn't be brought back and offers to
+      turn them on; with them on → reload → **Unsaved changes** offers to recover it.
 
 **Editing**
 - [ ] Drag components into, out of, and between containers; several at once; one Ctrl+Z undoes it.
@@ -139,6 +145,19 @@ a real device or a deployment setting, which is why they're here:
 - [ ] L2: Design its internals, draw, connect, Back, Esc; L2 badge opens it; reopen the saved file inside it.
 - [ ] Legend: colour picker by mouse and keyboard; "used by" dots; custom code; remove an entry in use asks first.
 - [ ] Collapse both side panels; reload: still collapsed.
+- [ ] Drag a component near another: pink guides and an orange gap in px; it snaps; hold Alt to move freely. Arrow
+      keys move 1 px (Shift 10) with the box focused or not. X/Y/W/H fields move and size it exactly.
+- [ ] Select one box, hold Alt and point at another: the distances show.
+- [ ] Drag a Text box in, double-click, write two lines: the box grows; Ctrl/⌘+Enter finishes.
+- [ ] Flowchart template: hover a shape, click a blue arrow: a connected shape appears; drag Data/Database shapes
+      from the palette. An L0 template shows no arrows.
+
+**Sequence tabs**
+- [ ] Type in the code: the sheet follows; a bad line goes red and stays after clicking away; the sheet keeps the
+      last good drawing.
+- [ ] Toolbar: add a participant, message (named in place), note, a Frame around a message; double-click to rename.
+- [ ] Click a line of code: that item is selected on the sheet; select on the sheet: its line is highlighted.
+- [ ] Details panel: change a frame's kind, add an "else" part, tick activation; Delete a frame keeps its steps.
 
 **Export**
 - [ ] PNG of one view; "One file" with several formats → a `.zip` opens in Finder/Explorer.

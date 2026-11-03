@@ -203,12 +203,7 @@ button, a, summary, [role="button"], [role="tab"], [role="menuitem"], label {
   }
 }
 
-/* draw.io's look on an architecture tab (SectionLook): its Helvetica text throughout the boxes. */
-.bb-look-drawio .react-flow__node {
-  font-family: Helvetica, Arial, sans-serif;
-}
-
-/* draw.io's quick-add arrows: shown while a shape is hovered or selected. */
+/* Quick-add arrows on flowchart tabs (as in draw.io): shown while a shape is hovered or selected. */
 .bb-quick-add {
   opacity: 0;
   pointer-events: none;

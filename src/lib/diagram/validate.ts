@@ -379,7 +379,6 @@ function parseSection(raw: unknown, index: number, legendKeys: Set<string>, fixe
   return {
     id: text(section.id) || createId("section"),
     name,
-    ...(section.look === "drawio" ? { look: "drawio" as const } : {}),
     nodes,
     ...(edges.length ? { edges } : {}),
   };

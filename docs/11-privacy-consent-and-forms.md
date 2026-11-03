@@ -26,6 +26,10 @@ stored or sent, update the notice and bump `PRIVACY_VERSION`** (below).
 | `bb:author` | `CommentsSection` | The name last typed on a review comment, so it isn't retyped. Only a convenience: comments themselves are saved in the diagram file |
 | `bb:exportTheme` | *(earlier versions)* | Still read once as the default export style; never written |
 | `bb:consent` | `src/lib/consent.ts` | `{ version, acceptedAt }` |
+| `bb:sequence-code-width` | `SequenceCode` | The Mermaid code panel's width in px |
+| `bb:recovery:enabled` | `src/lib/diagram/recovery.ts` | `"true"` while recovery copies are on (off unless the person turns them on) |
+| `bb:recovery:copy` | `recovery.ts` | Only while recovery copies are on: the open diagram's unsaved changes, until they're saved or discarded. Turning recovery off deletes it |
+| `bb:lost-unsaved` (**`sessionStorage`**, this tab only) | `EditorApp` / `recovery.ts` | `"1"` after leaving a diagram with unsaved changes that nothing kept, so the start page can say so once. Nothing of the diagram |
 | `bb:diagram:*`, `bb:templates`, `bb:index`, `bb:backups` | *(earlier versions)* | Old diagrams; only read and, on request, removed (see [legacy](06-files-saving-and-unsaved-changes.md#leftovers-from-earlier-versions)) |
 
 Every read and write is wrapped in `try/catch`: storage can be blocked (private browsing, policies), and the app

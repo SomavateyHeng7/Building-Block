@@ -11,6 +11,22 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-03",
+    title: "Flowcharts like draw.io, sequence diagrams like Mermaid, and pixel-exact layout",
+    changes: [
+      "New Flowchart template: a process with steps, Yes/No decisions and exception paths.",
+      "Add draw.io's flowchart shapes from the left panel: process, decision, start/end, data, document, database and subprocess. Change any component's shape in its details.",
+      "On a flowchart, hover a shape and click one of its blue arrows to add a connected shape in that direction, as in draw.io.",
+      "Write on the canvas with text boxes: drag one in or press T, then double-click to type.",
+      "Line things up to the pixel: boxes snap to each other's edges and middles while you drag, with guides and the gaps shown in px. Arrow keys move 1 px (Shift 10), the details panel has exact X, Y, width and height, and holding Alt while pointing at another box measures the distance.",
+      "Sequence diagrams now have loop, alt, opt, par, critical and break frames and activation bars, read from and written to Mermaid.",
+      "The Mermaid code updates the sequence as you type, with colours and the lines it can't read marked in red. Click a line to select that step.",
+      "Build a sequence without code: a toolbar adds participants, messages, notes and frames, you can double-click anything to rename it, and the details panel is back.",
+      "A new sequence diagram now warns you before a reload loses it. If you leave anyway, the start page tells you and offers to keep recovery copies.",
+      "The start, templates and home pages use more of a wide screen, and every template card shows a real preview.",
+    ],
+  },
+  {
     date: "2026-10-30",
     title: "Review comments, version history and diagram code",
     changes: [
