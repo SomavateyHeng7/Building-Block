@@ -201,7 +201,8 @@ export default function EditorApp() {
         const section = getActiveSection(store.diagram);
         const nudge = NUDGE[event.key];
         if (nudge && hasSelection) {
-          const step = event.shiftKey ? 32 : 8;
+          // One pixel at a time; Shift for 10.
+          const step = event.shiftKey ? 10 : 1;
           const nodes = nudgeNodes(section.nodes, store.selectedNodeIds, nudge[0] * step, nudge[1] * step);
           store.setActiveSectionNodes(nodes, { coalesceKey: `nudge:${store.selectedNodeIds.join(",")}` });
         } else if (event.key === "Escape") {
@@ -211,7 +212,17 @@ export default function EditorApp() {
           store.setSelectedEdge(null);
         }
         else if (event.key === "?") setHelpOpen((open) => !open);
-        else if (event.key.toLowerCase() === "c" && !event.shiftKey) {
+        else if (event.key.toLowerCase() === "t" && !event.shiftKey) {
+          const count = section.nodes.length;
+          store.addText({ x: 80 + (count % 5) * 48, y: 80 + Math.floor(count / 5) * 48 });
+        } else if (event.key === "Enter" && store.selectedNodeIds.length === 1) {
+          // Enter on a selected text box starts writing in it, like double-clicking.
+          const node = section.nodes.find((candidate) => candidate.id === store.selectedNodeIds[0]);
+          if (node?.type !== "text") return;
+          document
+            .querySelector(`.react-flow__node[data-id="${CSS.escape(node.id)}"] .bb-text-node`)
+            ?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+        } else if (event.key.toLowerCase() === "c" && !event.shiftKey) {
           const count = section.nodes.length;
           store.addContainer({ x: 80 + (count % 5) * 48, y: 80 + Math.floor(count / 5) * 48 });
         } else if (event.key.toLowerCase() === "b" && !event.shiftKey) {
@@ -352,7 +363,8 @@ export default function EditorApp() {
           )}
           <div className={`relative min-w-0 flex-1 ${readOnly ? "bb-readonly" : ""}`}>
             {sequenceTab ? <SequenceCanvas /> : <Canvas />}
-            <div className="absolute left-3 top-3 z-10 flex gap-2 lg:hidden">
+            {/* On a sequence tab these sit below its toolbar. */}
+            <div className={`absolute left-3 z-10 flex gap-2 lg:hidden ${sequenceTab && !readOnly ? "top-14" : "top-3"}`}>
               {sequenceTab && (
                 // The code panel, which reads in View too.
                 <button
@@ -390,9 +402,9 @@ export default function EditorApp() {
                 </>
               )}
             </div>
-            {/* Sequence tabs have no details panel: the code is where they're edited. */}
-            {!sequenceTab && (
-              <div className="absolute right-3 top-3 z-10 flex gap-2 lg:hidden">
+            {/* A sequence tab is edited in its code, on the sheet or in the details panel; View has no panel there. */}
+            {!(sequenceTab && readOnly) && (
+              <div className={`absolute right-3 z-10 flex gap-2 lg:hidden ${sequenceTab ? "top-14" : "top-3"}`}>
                 {readOnly ? (
                   <button type="button" aria-expanded={legendOpen} className={CANVAS_BUTTON} onClick={() => setLegendOpen((open) => !open)}>
                     <Icon name="layers" />
@@ -414,7 +426,7 @@ export default function EditorApp() {
             )}
             {readOnly && <ViewSheet legendOpen={legendOpen} onCloseLegend={() => setLegendOpen(false)} />}
           </div>
-          {!sequenceTab && (
+          {!(sequenceTab && readOnly) && (
             <aside
               className={`${drawer === "properties" ? "flex" : "hidden"} absolute inset-y-0 right-0 z-30 w-80 max-w-[85%] flex-col overflow-y-auto border-l border-zinc-200 bg-white pr-safe shadow-xl lg:static lg:z-auto ${hidden.properties ? "lg:hidden" : "lg:flex"} lg:w-72 lg:shrink-0 lg:shadow-none dark:border-zinc-800 dark:bg-zinc-950`}
             >
@@ -424,7 +436,7 @@ export default function EditorApp() {
               <LegendPanel />
             </aside>
           )}
-          {!sequenceTab && hidden.properties && (
+          {!(sequenceTab && readOnly) && hidden.properties && (
             <div className={`${RAIL} border-l border-zinc-200 dark:border-zinc-800`}>
               <PanelToggle side="right" expanded={false} label="details and legend" onClick={() => togglePanel("properties")} />
             </div>

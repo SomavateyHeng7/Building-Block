@@ -269,6 +269,7 @@ export function componentRows(diagram: Diagram): string[][] {
   for (const section of diagram.sections) {
     for (const view of viewsOf(section)) {
       for (const node of view.nodes) {
+        if (node.type === "text") continue;
         const parent = view.nodes.find((candidate) => candidate.id === node.parentId);
         rows.push([
           section.name,

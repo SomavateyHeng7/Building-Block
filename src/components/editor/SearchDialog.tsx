@@ -25,6 +25,7 @@ function Highlight({ text, words }: { text: string; words: string[] }) {
 const KIND_LABEL: Record<SearchResult["kind"], string> = {
   container: "Container",
   component: "Component",
+  text: "Text",
   connection: "Connection",
   participant: "Participant",
   message: "Message",

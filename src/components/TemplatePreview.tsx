@@ -3,9 +3,23 @@
 import { useState } from "react";
 import { layoutSequence } from "@/lib/diagram/sequence";
 import { readableTextOn } from "@/lib/diagram/palette";
-import type { Diagram, DiagramNode, SequenceDiagram } from "@/lib/diagram/types";
+import type { ConnectionSide, Diagram, DiagramNode, SequenceDiagram } from "@/lib/diagram/types";
 
 const PADDING = 24;
+
+/** A font size (up to `max`) at which `text` fits in `width`; about 0.56 em per character. */
+function fitFont(text: string, width: number, max: number) {
+  return Math.min(max, width / (Math.max(1, text.length) * 0.56));
+}
+
+/** The middle of a box's side, and which way a line leaves it. */
+function anchor(box: { x: number; y: number }, node: DiagramNode, side: ConnectionSide) {
+  const { width, height } = node.size;
+  if (side === "top") return { x: box.x + width / 2, y: box.y, dx: 0, dy: -1 };
+  if (side === "bottom") return { x: box.x + width / 2, y: box.y + height, dx: 0, dy: 1 };
+  if (side === "left") return { x: box.x, y: box.y + height / 2, dx: -1, dy: 0 };
+  return { x: box.x + width, y: box.y + height / 2, dx: 1, dy: 0 };
+}
 
 /** A static, scaled-down picture of a template's first section, drawn from the same data the editor loads. */
 export default function TemplatePreview({ build, name }: { build: () => Diagram; name: string }) {
@@ -42,6 +56,7 @@ export default function TemplatePreview({ build, name }: { build: () => Diagram;
   const colorOf = (key?: string) => diagram.legend.find((entry) => entry.key === key)?.color ?? "#ffffff";
   const containers = layout.boxes.filter((box) => box.node.type === "container");
   const blocks = layout.boxes.filter((box) => box.node.type === "block");
+  const texts = layout.boxes.filter((box) => box.node.type === "text");
 
   return (
     <svg
@@ -72,17 +87,13 @@ export default function TemplatePreview({ build, name }: { build: () => Diagram;
           const source = layout.byId.get(edge.source);
           const target = layout.byId.get(edge.target);
           if (!source || !target) return null;
-          const from = layout.absolute(source);
-          const to = layout.absolute(target);
-          const x1 = from.x + source.size.width;
-          const y1 = from.y + source.size.height / 2;
-          const x2 = to.x;
-          const y2 = to.y + target.size.height / 2;
-          const bend = Math.max(40, Math.abs(x2 - x1) / 2);
+          const from = anchor(layout.absolute(source), source, edge.sourceSide ?? "right");
+          const to = anchor(layout.absolute(target), target, edge.targetSide ?? "left");
+          const bend = Math.max(40, Math.abs(from.dx ? to.x - from.x : to.y - from.y) / 2);
           return (
             <path
               key={edge.id}
-              d={`M${x1} ${y1} C${x1 + bend} ${y1} ${x2 - bend} ${y2} ${x2} ${y2}`}
+              d={`M${from.x} ${from.y} C${from.x + from.dx * bend} ${from.y + from.dy * bend} ${to.x + to.dx * bend} ${to.y + to.dy * bend} ${to.x} ${to.y}`}
               fill="none"
               strokeWidth={3}
               strokeDasharray={edge.style === "dashed" ? "10 8" : undefined}
@@ -93,24 +104,35 @@ export default function TemplatePreview({ build, name }: { build: () => Diagram;
 
         {blocks.map(({ node, x, y }) => {
           const color = colorOf(node.data.kind === "block" ? node.data.colorKey : undefined);
+          const shape = node.data.kind === "block" ? node.data.shape : undefined;
+          const { width, height } = node.size;
           return (
             <g key={node.id}>
-              <rect
-                x={x}
-                y={y}
-                width={node.size.width}
-                height={node.size.height}
-                rx={6}
-                fill={color}
-                stroke="rgba(0,0,0,0.25)"
-                strokeWidth={1.5}
-              />
+              {shape === "decision" ? (
+                <polygon
+                  points={`${x + width / 2},${y} ${x + width},${y + height / 2} ${x + width / 2},${y + height} ${x},${y + height / 2}`}
+                  fill={color}
+                  stroke="rgba(0,0,0,0.25)"
+                  strokeWidth={1.5}
+                />
+              ) : (
+                <rect
+                  x={x}
+                  y={y}
+                  width={width}
+                  height={height}
+                  rx={shape === "terminal" ? height / 2 : 6}
+                  fill={color}
+                  stroke="rgba(0,0,0,0.25)"
+                  strokeWidth={1.5}
+                />
+              )}
               <text
                 x={x + node.size.width / 2}
                 y={y + node.size.height / 2}
                 textAnchor="middle"
                 dominantBaseline="central"
-                fontSize={17}
+                fontSize={fitFont(node.data.label, shape === "decision" ? width * 0.7 : width - 16, 17)}
                 fontWeight={500}
                 fill={readableTextOn(color)}
               >
@@ -119,6 +141,19 @@ export default function TemplatePreview({ build, name }: { build: () => Diagram;
             </g>
           );
         })}
+        {texts.map(({ node, x, y }) => (
+          <text
+            key={node.id}
+            x={x}
+            y={y + node.size.height / 2}
+            dominantBaseline="central"
+            fontSize={fitFont(node.data.label.split("\n")[0], node.size.width, node.data.kind === "text" ? (node.data.fontSize ?? 14) * 1.2 : 17)}
+            fontWeight={node.data.kind === "text" && node.data.bold ? 600 : 400}
+            className="fill-zinc-700 dark:fill-zinc-300"
+          >
+            {node.data.label.split("\n")[0]}
+          </text>
+        ))}
       </g>
     </svg>
   );
@@ -154,7 +189,20 @@ function SequencePreview({ diagram, sequence, name }: { diagram: Diagram; sequen
           </text>
         </g>
       ))}
+      {layout.frames.map((frame) => (
+        <rect
+          key={frame.block.id}
+          x={frame.left}
+          y={frame.top}
+          width={frame.right - frame.left}
+          height={frame.bottom - frame.top}
+          fill="none"
+          strokeWidth={1.5}
+          className="stroke-zinc-400"
+        />
+      ))}
       {layout.rows.map((row) => {
+        if (row.step.type === "block" || row.step.type === "else" || row.step.type === "end") return null;
         if (row.step.type === "note") {
           const x = xOf(row.step.over[0]);
           return <rect key={row.step.id} x={x - 70} y={row.y} width={140} height={row.height - 20} rx={4} className="fill-amber-100 stroke-amber-300 dark:fill-amber-950 dark:stroke-amber-800" />;

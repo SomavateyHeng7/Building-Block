@@ -1,5 +1,6 @@
 import { createBlankDiagram, createBlankSection } from "@/lib/diagram/factory";
 import { newMessage, newNote, newParticipant } from "@/lib/diagram/sequence";
+import { readSequenceCode } from "@/lib/diagram/exportMermaid";
 import type { Diagram, SequenceMessageKind, SequenceStep } from "@/lib/diagram/types";
 
 /** Who takes part, by name: [label, legend category, or "actor" for a person]. */
@@ -28,6 +29,24 @@ export function buildSequenceDiagram(name: string, tab: string, participantSpecs
   return {
     ...diagram,
     sections: [{ ...section, sequence: { participants, steps } }],
+    activeSectionId: section.id,
+  };
+}
+
+/**
+ * A diagram with one sequence tab written as Mermaid code, the way people write sequences; `colors` gives
+ * participants (by the name shown) a legend category. Fresh ids on every call, as the code is read each time.
+ */
+export function sequenceFromMermaid(name: string, tab: string, code: string, colors: Record<string, string> = {}): Diagram {
+  const diagram = createBlankDiagram(name);
+  const section = createBlankSection(tab, "sequence");
+  const { sequence, autonumber } = readSequenceCode(code);
+  const participants = sequence.participants.map((participant) =>
+    colors[participant.label] ? { ...participant, colorKey: colors[participant.label] } : participant,
+  );
+  return {
+    ...diagram,
+    sections: [{ ...section, sequence: { ...sequence, participants, ...(autonumber ? {} : { numbered: false }) } }],
     activeSectionId: section.id,
   };
 }

@@ -46,7 +46,9 @@ function link(address: string | undefined): string {
   return href ? `[${cell(href)}](${target(href)})` : cell(address);
 }
 
-function componentTable(diagram: Diagram, nodes: DiagramNode[]): string[] {
+function componentTable(diagram: Diagram, allNodes: DiagramNode[]): string[] {
+  // Text boxes are annotations, not components.
+  const nodes = allNodes.filter((node) => node.type !== "text");
   if (!nodes.length) return [];
   const categories = new Map(diagram.legend.map((entry) => [entry.key, entry.label]));
   const name = (id: string | undefined) => nodes.find((node) => node.id === id)?.data.label ?? "";

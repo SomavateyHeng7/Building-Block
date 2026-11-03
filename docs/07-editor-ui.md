@@ -43,7 +43,9 @@ Responsibilities, top to bottom:
 | Ctrl/⌘+F | Find (`SearchDialog`); works in view mode too | EditorApp |
 | B | Add a component (inside the selected container, or the selected component's container) | EditorApp |
 | C | Add a container | EditorApp |
-| Arrow keys / Shift+arrows | Nudge selection 8 px / 32 px (`nudgeNodes`) | EditorApp |
+| Arrow keys / Shift+arrows | Nudge selection 1 px / 10 px (`nudgeNodes`); on a focused box Canvas's `onKeyDownCapture` does it instead of React Flow's 5 px move | EditorApp, Canvas |
+| T | Add a text box (Enter on a selected one starts writing) | EditorApp |
+| Alt + hover | With one box selected, measure the px distances to the hovered box (`PixelGuides`) | PixelGuides |
 | Delete / Backspace | Delete selected nodes or connection; a container holding components asks first (`requestDelete`) | React Flow (`deleteKeyCode`) |
 | Esc | Close a drawer (not while typing in a field or in a dialog); clear the selection; with nothing selected, leave an internal design | EditorApp |
 | Ctrl/⌘+A | Select everything in the view | EditorApp |
@@ -155,7 +157,7 @@ and every change React Flow reports is turned into a store action.
 | `onBeforeDelete` | When nodes are deleted, React Flow also reports their connections as deleted. The store already removes those, so they're filtered out here to keep it **one** undo step. Goes through `requestDelete` (`deletePrompt.ts`): when a container that holds components is among the nodes, `DeleteContainerDialog` asks **Keep components** (the default) or **Delete everything** first. Nodes and selected connections are deleted in one undo step (`deleteNodes` with `edgeIds`). A box selection or Select all picks up a container's components with it, so deleting them silently was easy to do by accident. |
 | `onPaneClick` | Clears the selection. |
 | `onDragOver` / `onDrop` | Palette drag-and-drop: drops a container centred on the cursor, or a component into the top-most container under the cursor (`findContainerAtPoint`), kept clear of its header. |
-| `snapToGrid`, `snapGrid={[8, 8]}` | Tidy positions; matches the 8 px nudge step. |
+| No grid snap | Drags move to whole pixels and snap to other boxes' edges and middles within 6 screen px (`snapDrag` + `guides.ts`), drawing pink alignment guides, orange px gaps and an x/y readout; Alt moves freely. Resizes show W × H. |
 | `minZoom 0.2`, `maxZoom 2`, `fitView` | Sensible zoom range; open fitted to content. |
 | `selectionMode={Partial}` | Box selection includes nodes it only partly covers (easier on dense diagrams). |
 | `colorMode` | Follows the app theme once mounted (avoids a hydration flash). |
@@ -183,17 +185,32 @@ drawn in Mermaid's own look (its default theme, or its dark theme): lavender par
 an actor) across the top and repeated at the bottom, solid lifelines, then one row per step; numbers sit in a dot
 where each arrow starts, notes are yellow. A participant with a legend colour is filled with it.
 
-- **Adding a message:** press on a lifeline and drag to another (or back onto the same one for a call to itself);
-  a dashed preview follows the pointer. It goes in between the rows around where you pressed, is selected, and the
-  Mermaid code gets the cursor so it can be named there.
-- **Selecting:** click a participant, message or note (selection is `sequenceSelection.ts`, separate from the
-  canvas selection). Double-click puts the cursor in the Mermaid code. ←/→ move a selected participant, ↑/↓ a
-  selected step; Delete removes it (a participant with its messages); Esc clears.
+- **Frames** (`loop`, `alt`/`else`, `opt`, `par`/`and`, `critical`/`option`, `break`) are boxes round their steps
+  with Mermaid's name tab and the condition in brackets; each further part starts at a dashed line. A frame spans
+  the participants its steps touch; nested frames sit inside. Tabs and conditions are drawn over arrows and bars.
+- **Activation bars** (Mermaid's `+`/`-`) are narrow bars on a lifeline; a bar inside a bar sits half a bar to the
+  right, and arrows start and end at a bar's edge. A bar never ended runs to the bottom.
+- **Toolbar** above the sheet: **Participant**, **Actor** (after the selected one), **Message** (from the selected
+  participant, or on from the selected message, to the next participant), **Note**, **Frame** (a menu with what each
+  kind is for: wraps the selected message or note, or adds an empty frame after the selection), **Number**, and zoom
+  (50–200%; the zoom is on wrappers, so exports still picture the sheet at 1:1). Whatever is added is selected and its
+  name field opens on the sheet.
+- **Adding a message by dragging:** press on a lifeline and drag to another (or back onto the same one for a call to
+  itself); a dashed preview follows the pointer. It goes in between the rows around where you pressed (inside a frame
+  if you let go inside one) and opens its label for typing.
+- **Editing in place:** double-click (or F2 on) a participant, message, note, frame tab or divider to write its name,
+  caption ("Place order (REST)" sets the protocol too), text or condition in a field over it. Enter keeps it
+  (Ctrl/⌘+Enter in a note), Esc doesn't. A participant linked to a component is renamed on the component.
+- **Selecting:** click a participant, message, note, frame tab or divider (selection is `sequenceSelection.ts`,
+  separate from the canvas selection); its line in the code is highlighted. ←/→ move a selected participant, ↑/↓ a
+  selected step (a frame's start can't pass its end); Delete removes it (a participant with its messages; a frame
+  with its dividers and end, keeping what was inside); Esc clears.
 - **Colours are SVG attributes**, chosen from the theme, not Tailwind classes: the picture export copies
   `.bb-sequence-sheet`, and classes on SVG elements don't survive the copy.
-- The left panel is the Mermaid code (below) instead of the palette, and there's no details panel or legend on the
-  right: everything about a step is edited in the code. Box shortcuts (B, C, paste, duplicate) do nothing on a
-  sequence tab.
+- The left panel is the Mermaid code (below) instead of the palette. The right panel is the details panel
+  (`SequencePanel.tsx`: a participant, message with its activation marks, note, frame or divider) and the legend, as
+  on architecture tabs, for people who'd rather not write Mermaid; View hides it. Box shortcuts (B, C, paste,
+  duplicate) do nothing on a sequence tab.
 - "Sequence" beside "Add tab" adds one; sequence tabs have a small icon and aren't offered in Compare tabs.
 - The sheet is an SVG with `role="group"` (not `img`: it holds controls), and a note's lines are `tspan`s of one
   `text`, so it's read, and named, as one sentence.
@@ -205,19 +222,29 @@ On a sequence tab the left panel (where the palette is on architecture tabs) is 
 on the focused edge too; double-click resets; the width is remembered in `localStorage["bb:sequence-code-width"]`); on narrow screens **Code** opens it as a drawer,
 in view mode too. *Write Mermaid code* on an empty tab shows it and puts the cursor in it.
 
-- **Follows the sheet** until you type in it; then the sheet waits for **Apply** (or Ctrl/⌘+Enter), which replaces
-  the sequence as one undo step. *Undo edits* goes back to the sheet's code. Edits are kept per tab.
+- **Live, like Mermaid's editor:** 300 ms after typing pauses the sheet redraws from the code (Ctrl/⌘+Enter does it at
+  once); a burst of typing is one undo step (coalesce key `code:<tab>`). Code that can't be read (not a sequence
+  diagram, over the line limit) leaves the sheet as it was, says why, and offers *Back to what the sheet shows*.
+  Leaving the field puts the code back to following the sheet, except that **lines it couldn't read stay** (red,
+  wavy, their number in red) until fixed; if the sheet changes meanwhile, the code follows it and those lines are
+  kept at the end, so typing later can't undo the sheet's changes. Tab indents two spaces.
+- **Highlighted** as Mermaid's editor does (`tokenizeMermaidLine` in `importMermaid.ts`, the same patterns the reader
+  uses): keywords, participant names, arrows with their `+`/`-`, the protocol, comments, and unreadable lines. The
+  colours are a `pre` under a see-through field. The cursor's line selects what's written there on the sheet
+  (`mermaidIdAtLine`), and the sheet's selection highlights its line.
 - **What the code says** (`exportMermaid.ts`): `actor`/`participant` with an `as` alias when the name isn't a
   Mermaid id; `->>` call, `-)` async, `-->>` reply; the protocol in brackets after the text ("Place order (REST)");
-  `Note over A,B:` with `<br>` for line breaks; `autonumber` when messages are numbered; `;` and `#` written as
-  `#59;`/`#35;`. Reading it back gives the same sequence (tested).
+  `Note over A,B:` with `<br>` for line breaks; frames indented with their `else`/`and`/`option` and `end`; `+`/`-`
+  after the arrow for activations (a message with both writes a `deactivate` line after it); `autonumber` when
+  messages are numbered; `;` and `#` written as `#59;`/`#35;`. Reading it back gives the same sequence (tested).
+  Reading also takes `activate X`/`deactivate X` lines (as marks on the message before), closes a frame with no
+  `end`, and leaves out `rect`/`box` colour boxes, keeping what's inside.
 - **What Mermaid can't say is kept:** a participant whose name is unchanged keeps its id, colour, description and
   link to a component (`applySequenceCode`). A renamed one is a new participant, so a linked one loses its link.
-- Code that isn't a sequence diagram shows why, under the code, and changes nothing; flattened blocks or skipped
-  lines are listed in a toast after Apply.
+- What was skipped or fixed (unreadable lines, an unclosed frame, undeclared names) is listed under the code.
 - **Names:** writing a participant's display name ("Web Shop" for `participant WebShop as Web Shop`) means that
   participant, not a new one. In code that declares its participants, one that's only mentioned (usually a typo) is
-  still added, as Mermaid does, and named in the toast.
+  still added, as Mermaid does, and named under the code.
 - **Line numbers** in a gutter beside the code. Adding a participant or message on the sheet, or double-clicking
   one, puts the cursor at the end of its line (`mermaidLineOf`), so a new message can be named straight away.
 - **Mermaid cheat sheet** under the code: the lines a sequence needs, open at first on a tab with no steps yet.

@@ -34,14 +34,18 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
   const entryColor = entry?.color;
   const color = entryColor ?? "#ffffff";
   const icon = componentIcon(data.icon);
+  const shape = data.shape ?? "process";
+  const outline = selected ? "#2563eb" : "rgba(0,0,0,0.25)";
 
   return (
     <div
-      className="relative flex h-full w-full items-center justify-center rounded border text-center text-xs font-medium"
+      className={`relative flex h-full w-full items-center justify-center text-center text-xs font-medium ${
+        shape === "decision" ? "px-[22%]" : `border ${shape === "terminal" ? "rounded-full px-3" : "rounded"}`
+      }`}
       title={data.description ?? (entryColor ? undefined : "No legend category assigned")}
       style={{
-        backgroundColor: color,
-        borderColor: selected ? "#2563eb" : "rgba(0,0,0,0.25)",
+        backgroundColor: shape === "decision" ? undefined : color,
+        borderColor: outline,
         borderStyle: entryColor ? "solid" : "dashed",
         color: readableTextOn(color),
       }}
@@ -51,6 +55,19 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
         setEditing(true);
       }}
     >
+      {/* A diamond is drawn behind the label; its corners are the connection dots' sides. */}
+      {shape === "decision" && (
+        <svg aria-hidden className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <polygon
+            points="50,0 100,50 50,100 0,50"
+            fill={color}
+            stroke={outline}
+            strokeWidth={selected ? 2 : 1}
+            strokeDasharray={entryColor ? undefined : "4 3"}
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+      )}
       <NodeResizer minWidth={80} minHeight={32} isVisible={selected && !readOnly} />
       {/* Every side starts and ends connections (the canvas uses loose connection mode). */}
       {SIDES.map((side) => (
@@ -79,7 +96,7 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
           }}
         />
       ) : (
-        <span className="flex min-w-0 items-center gap-1.5 px-1">
+        <span className="relative flex min-w-0 items-center gap-1.5 px-1">
           {icon && <ComponentIcon path={icon.path} label={icon.label} />}
           <span className="flex min-w-0 flex-col leading-tight">
             <span>{data.label}</span>

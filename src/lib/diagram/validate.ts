@@ -6,7 +6,7 @@ import { parseBranding } from "./branding";
 import { MAX_CHECKPOINTS, snapshotOf, type Checkpoint } from "./checkpoints";
 import { MAX_COMMENTS, commentTargets } from "./comments";
 import { safeWebAddress } from "./webAddress";
-import { syncLinkedParticipants } from "./sequence";
+import { balanceSteps, syncLinkedParticipants } from "./sequence";
 import type {
   ConnectionSide,
   ContainerStyle,
@@ -20,6 +20,7 @@ import type {
   SequenceDiagram,
   SequenceParticipant,
   SequenceStep,
+  TextNodeData,
 } from "./types";
 
 /** A file that can't be turned into a diagram at all; the message is shown to the user. */
@@ -34,7 +35,13 @@ export interface ParsedDiagram {
 const DEFAULT_SIZE = {
   container: { width: 320, height: 220 },
   block: { width: 160, height: 56 },
+  text: { width: 160, height: 32 },
 };
+const TEXT_ALIGNS = ["left", "center", "right"] as const;
+const SEQUENCE_BLOCK_KINDS = ["loop", "alt", "opt", "par", "critical", "break"] as const;
+const BLOCK_SHAPES = ["terminal", "decision"] as const;
+const MIN_FONT_SIZE = 8;
+const MAX_FONT_SIZE = 96;
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const SHORT_HEX_COLOR = /^#[0-9a-f]{3}$/i;
 /** Bigger than any real diagram; larger values would stall rendering and export. */
@@ -132,7 +139,7 @@ function parseNode(
 ): { node: DiagramNode; repaired: boolean; unknownIcon: boolean } | null {
   if (!isObject(raw)) return null;
   const id = text(raw.id);
-  const type = oneOf(raw.type, ["container", "block"] as const);
+  const type = oneOf(raw.type, ["container", "block", "text"] as const);
   if (!id || !type) return null;
 
   const data = isObject(raw.data) ? raw.data : {};
@@ -154,7 +161,10 @@ function parseNode(
   const colorKey = text(data.colorKey);
   const icon = type === "block" ? oneOf(data.icon, COMPONENT_ICON_KEYS) : undefined;
   const unknownIcon = type === "block" && data.icon !== undefined && !icon;
-  const label = nameText(data.label) ?? (type === "container" ? "Untitled Container" : "Untitled");
+  const label =
+    type === "text"
+      ? (text(data.label) ?? "Text")
+      : (nameText(data.label) ?? (type === "container" ? "Untitled Container" : "Untitled"));
   const repaired =
     typeof data.label !== "string" ||
     x === undefined ||
@@ -175,7 +185,9 @@ function parseNode(
     parentId: text(raw.parentId),
     zIndex: finite(raw.zIndex),
     data:
-      type === "container"
+      type === "text"
+        ? parseTextData(data, label)
+        : type === "container"
         ? {
             kind: "container",
             label,
@@ -190,9 +202,23 @@ function parseNode(
             containerId: null,
             ...(colorKey && legendKeys.has(colorKey) ? { colorKey } : {}),
             ...(icon ? { icon } : {}),
+            ...(oneOf(data.shape, BLOCK_SHAPES) ? { shape: oneOf(data.shape, BLOCK_SHAPES) } : {}),
           },
   };
   return { node, repaired, unknownIcon };
+}
+
+/** A text box keeps its text as written (line breaks too) and only a font size, alignment and weight. */
+function parseTextData(data: Record<string, unknown>, label: string): TextNodeData {
+  const fontSize = finite(data.fontSize);
+  const align = oneOf(data.align, TEXT_ALIGNS);
+  return {
+    kind: "text",
+    label,
+    ...(fontSize !== undefined ? { fontSize: Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(fontSize))) } : {}),
+    ...(align && align !== "left" ? { align } : {}),
+    ...(data.bold === true ? { bold: true } : {}),
+  };
 }
 
 const SIDES = ["top", "right", "bottom", "left"] as const satisfies readonly ConnectionSide[];
@@ -204,7 +230,8 @@ function parseEdges(raw: unknown, nodes: DiagramNode[], name: string, fixes: str
     fixes.push(`"${name}": skipped connections that couldn't be read.`);
     return [];
   }
-  const nodeIds = new Set(nodes.map((node) => node.id));
+  // Text boxes are notes on the canvas, not things that talk to each other.
+  const nodeIds = new Set(nodes.filter((node) => node.type !== "text").map((node) => node.id));
   const ids = new Set<string>();
   const edges: DiagramEdge[] = [];
   let dropped = 0;
@@ -299,7 +326,25 @@ function parseSequence(raw: unknown, name: string, legendKeys: Set<string>, fixe
         ...(label ? { label } : {}),
         ...(protocol ? { protocol } : {}),
         ...(kind && kind !== "call" ? { kind } : {}),
+        ...(item.activate === true ? { activate: true } : {}),
+        ...(item.deactivate === true ? { deactivate: true } : {}),
       });
+    } else if (item.type === "block") {
+      const kind = oneOf(item.kind, SEQUENCE_BLOCK_KINDS);
+      if (!kind) {
+        droppedSteps += 1;
+        continue;
+      }
+      const label = nameText(item.label)?.trim();
+      stepIds.add(id);
+      steps.push({ id, type: "block", kind, ...(label ? { label } : {}) });
+    } else if (item.type === "else") {
+      const label = nameText(item.label)?.trim();
+      stepIds.add(id);
+      steps.push({ id, type: "else", ...(label ? { label } : {}) });
+    } else if (item.type === "end") {
+      stepIds.add(id);
+      steps.push({ id, type: "end" });
     } else if (item.type === "note") {
       const over = (Array.isArray(item.over) ? item.over : []).map((value) => text(value)).filter((value): value is string => !!value && ids.has(value)).slice(0, 2);
       if (!over.length) {
@@ -313,7 +358,9 @@ function parseSequence(raw: unknown, name: string, legendKeys: Set<string>, fixe
     }
   }
   if (droppedSteps) fixes.push(`"${name}": skipped ${plural(droppedSteps, "step")} that couldn't be read or named a missing participant.`);
-  return { participants, steps, ...(sequence.numbered === false ? { numbered: false } : {}) };
+  const balanced = balanceSteps(steps);
+  if (balanced !== steps) fixes.push(`"${name}": paired up the starts and ends of loop/alt/opt frames.`);
+  return { participants, steps: balanced, ...(sequence.numbered === false ? { numbered: false } : {}) };
 }
 
 function parseSection(raw: unknown, index: number, legendKeys: Set<string>, fixes: string[]): DiagramSection {

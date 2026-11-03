@@ -2,17 +2,21 @@
 
 import { safeWebAddress } from "@/lib/diagram/webAddress";
 import CommentsSection from "./CommentsSection";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { getActiveSection, useDiagramStore, type ActiveView } from "@/lib/diagram/store";
 import { suggestConnectionSides, type ArrangeOp } from "@/lib/diagram/layout";
 import { connectionCaption } from "@/lib/diagram/flowAdapter";
 import type {
   BlockColorKey,
+  BlockShape,
   ConnectionDirection,
   ConnectionLineStyle,
   ConnectionShape,
   ContainerNodeData,
   DiagramEdge,
+  DiagramNode,
+  TextAlign,
+  TextNodeData,
   ContainerStyle,
   HeaderAlign,
   HeaderPosition,
@@ -27,6 +31,7 @@ import { ComponentIcon, NOTE_KINDS, NOTES_FIELD_ID, type NoteKind } from "./node
 import ColorPicker from "./ColorPicker";
 import { requestDelete, ungroup } from "./deletePrompt";
 import SequencePanel from "./SequencePanel";
+import { DEFAULT_FONT_SIZE } from "./nodes/TextNode";
 
 const DETAIL_FIELDS: {
   key: keyof NodeDetails;
@@ -137,6 +142,147 @@ function Segmented<T extends string>({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * A whole-pixel number field. Typing changes the value as soon as it's a number; arrow keys step by 1
+ * (Shift: 10). What's typed is kept while the field has focus, so "-" or a cleared field doesn't jump back.
+ */
+function PixelField({ label, value, onChange, title }: { label: string; value: number; onChange: (value: number) => void; title?: string }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <label className="flex min-w-0 items-center gap-1 rounded-md border border-zinc-300 bg-white pl-2 text-xs font-medium text-zinc-500 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900" title={title}>
+      {label}
+      <input
+        type="number"
+        inputMode="numeric"
+        step={1}
+        className="w-full min-w-0 bg-transparent py-1.5 pr-1 font-mono text-sm font-normal text-zinc-900 outline-none dark:text-zinc-100"
+        value={draft ?? String(Math.round(value))}
+        onFocus={(event) => setDraft(event.currentTarget.value)}
+        onBlur={() => setDraft(null)}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          const parsed = Number(event.target.value);
+          if (event.target.value.trim() && Number.isFinite(parsed)) onChange(parsed);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+          if ((event.key === "ArrowUp" || event.key === "ArrowDown") && event.shiftKey) {
+            event.preventDefault();
+            const next = Math.round(value) + (event.key === "ArrowUp" ? 10 : -10);
+            setDraft(String(next));
+            onChange(next);
+          }
+        }}
+      />
+      <span className="pr-2 text-[10px] text-zinc-400">px</span>
+    </label>
+  );
+}
+
+/** Exact position and size, to the pixel. A component in a container is placed relative to the container. */
+function GeometryFields({ node, parent }: { node: DiagramNode; parent?: DiagramNode }) {
+  const setNodeGeometry = useDiagramStore((state) => state.setNodeGeometry);
+  return (
+    <div className={FIELD_LABEL}>
+      <span>
+        Position &amp; size
+        {parent && <span className="font-normal text-zinc-400"> · relative to {parent.data.label}</span>}
+      </span>
+      <div className="grid grid-cols-2 gap-1.5">
+        <PixelField label="X" title="Distance from the left" value={node.position.x} onChange={(x) => setNodeGeometry(node.id, { x })} />
+        <PixelField label="Y" title="Distance from the top" value={node.position.y} onChange={(y) => setNodeGeometry(node.id, { y })} />
+        <PixelField label="W" title="Width" value={node.size.width} onChange={(width) => setNodeGeometry(node.id, { width })} />
+        <PixelField label="H" title="Height" value={node.size.height} onChange={(height) => setNodeGeometry(node.id, { height })} />
+      </div>
+      <span className="text-[11px] font-normal text-zinc-400">
+        Arrow keys move 1 px (Shift: 10). Hold Alt and point at another box to measure the gap.
+      </span>
+    </div>
+  );
+}
+
+const BLOCK_SHAPE_OPTIONS: { value: BlockShape; label: string; icon: string }[] = [
+  { value: "process", label: "Box", icon: "M4 6h16v12H4z" },
+  { value: "terminal", label: "Start / end", icon: "M8 6h8a6 6 0 0 1 0 12H8A6 6 0 0 1 8 6z" },
+  { value: "decision", label: "Decision", icon: "M12 3l9 9-9 9-9-9z" },
+];
+
+const TEXT_ALIGN_OPTIONS: { value: TextAlign; label: string; icon: string }[] = [
+  { value: "left", label: "Left", icon: "M4 6h16M4 12h10M4 18h13" },
+  { value: "center", label: "Centre", icon: "M4 6h16M7 12h10M5.5 18h13" },
+  { value: "right", label: "Right", icon: "M4 6h16M10 12h10M7 18h13" },
+];
+const FONT_SIZES = [10, 12, 14, 16, 20, 24, 32, 48];
+
+/** A text box: what it says and how it looks. */
+function TextPanel({ node, data, action }: { node: DiagramNode; data: TextNodeData; action?: ReactNode }) {
+  const updateNodeLabel = useDiagramStore((state) => state.updateNodeLabel);
+  const updateTextStyle = useDiagramStore((state) => state.updateTextStyle);
+  const fontSize = data.fontSize ?? DEFAULT_FONT_SIZE;
+  return (
+    <div className={PANEL}>
+      <PanelTitle action={action}>Text box</PanelTitle>
+      <label className={FIELD_LABEL}>
+        Text
+        <textarea
+          rows={4}
+          className={`${FIELD} field-sizing-content max-h-80 min-h-20 resize-y`}
+          value={data.label}
+          onChange={(event) => updateNodeLabel(node.id, event.target.value)}
+        />
+      </label>
+      <div className={FIELD_LABEL}>
+        Size
+        <div className="flex items-center gap-1.5">
+          <select
+            aria-label="Font size"
+            className={`${FIELD} flex-1`}
+            value={FONT_SIZES.includes(fontSize) ? fontSize : ""}
+            onChange={(event) => updateTextStyle(node.id, { fontSize: Number(event.target.value) === DEFAULT_FONT_SIZE ? undefined : Number(event.target.value) })}
+          >
+            {!FONT_SIZES.includes(fontSize) && <option value="">{fontSize} px</option>}
+            {FONT_SIZES.map((size) => (
+              <option key={size} value={size}>
+                {size} px{size === DEFAULT_FONT_SIZE ? " (default)" : ""}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            aria-pressed={!!data.bold}
+            title="Bold"
+            onClick={() => updateTextStyle(node.id, { bold: data.bold ? undefined : true })}
+            className={`rounded-md border px-3 py-1.5 text-sm font-bold ${
+              data.bold
+                ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                : "border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+            }`}
+          >
+            B
+          </button>
+        </div>
+      </div>
+      <div className={FIELD_LABEL}>
+        Align
+        <Segmented
+          label="Align"
+          options={TEXT_ALIGN_OPTIONS}
+          value={data.align ?? "left"}
+          onChange={(align) => updateTextStyle(node.id, { align: align === "left" ? undefined : align })}
+        />
+      </div>
+      <GeometryFields node={node} />
+      <CommentsSection targetId={node.id} />
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => requestDelete([node.id])} className={DELETE_BUTTON}>
+          <Icon name="trash" className="h-3.5 w-3.5" />
+          Delete text box
+        </button>
+      </div>
     </div>
   );
 }
@@ -692,6 +838,7 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
   const groupNodes = useDiagramStore((state) => state.groupNodes);
   const updateNodeDetails = useDiagramStore((state) => state.updateNodeDetails);
   const updateNodeIcon = useDiagramStore((state) => state.updateNodeIcon);
+  const updateNodeShape = useDiagramStore((state) => state.updateNodeShape);
   const fitContainer = useDiagramStore((state) => state.fitContainer);
   const tidyContainer = useDiagramStore((state) => state.tidyContainer);
   const fitAllContainers = useDiagramStore((state) => state.fitAllContainers);
@@ -753,6 +900,8 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
     );
   }
 
+  if (node.data.kind === "text") return <TextPanel node={node} data={node.data} action={headerAction} />;
+
   const childCount = section.nodes.filter((candidate) => candidate.parentId === node.id).length;
 
   const parentContainer = node.parentId
@@ -791,6 +940,8 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
         />
       </label>
 
+      <GeometryFields node={node} parent={parentContainer} />
+
       {showColor && (
         <div className={FIELD_LABEL}>
           Color
@@ -799,6 +950,19 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
             activeKey={node.data.colorKey}
             onPick={(key) => updateNodeColor(node.id, key)}
           />
+        </div>
+      )}
+
+      {node.data.kind === "block" && (
+        <div className={FIELD_LABEL}>
+          Shape
+          <Segmented
+            label="Shape"
+            options={BLOCK_SHAPE_OPTIONS}
+            value={node.data.shape ?? "process"}
+            onChange={(shape) => updateNodeShape(node.id, shape)}
+          />
+          <span className="text-[11px] font-normal text-zinc-400">Pill for a flowchart&apos;s start or end, diamond for a decision.</span>
         </div>
       )}
 

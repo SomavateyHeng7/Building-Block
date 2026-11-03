@@ -1,6 +1,6 @@
 import { MAX_MERMAID_LINE } from "./limits";
-import { addParticipant, addStep, emptySequence, newMessage, newNote, newParticipant } from "./sequence";
-import type { SequenceDiagram, SequenceMessageKind } from "./types";
+import { addParticipant, addStep, balanceSteps, splitCaption, emptySequence, newBlock, newElse, newEnd, newMessage, newNote, newParticipant } from "./sequence";
+import type { SequenceBlockKind, SequenceDiagram, SequenceMessage, SequenceMessageKind } from "./types";
 import { MAX_CODE_POINT } from "./xml";
 
 /** Text that isn't something this importer can read; the message is shown to the user. */
@@ -41,21 +41,87 @@ function cleanNote(text: string): string {
     .trim();
 }
 
-/** "Place order (REST)" → label and protocol, the way messages are written in the code view. */
-function splitProtocol(text: string): { label?: string; protocol?: string } {
-  const match = /^(.*?)\s*\(([^()]+)\)$/.exec(text);
-  if (!match) return text ? { label: text } : {};
-  return { ...(match[1] ? { label: match[1] } : {}), protocol: match[2].trim() };
-}
-
 // `A->>B: text`, with any of Mermaid's arrows, and optional +/- activation marks.
 const MESSAGE = /^(.+?)\s*(<<-->>|<<->>|-->>|->>|-->|->|--x|-x|--\)|-\))\s*([+-]?)\s*([^:]+?)\s*:\s*(.*)$/;
 const DECLARATION = /^(participant|actor)\s+(.+?)(?:\s+as\s+(.+))?$/i;
 const NOTE = /^note\s+(left of|right of|over)\s+([^:]+?)\s*:\s*(.*)$/i;
-/** Blocks this importer flattens: their messages are kept, in order, without the box around them. */
-const BLOCK_START = /^(loop|alt|else|opt|par|and|critical|option|break|rect)\b/i;
+/** Frames kept as frames: `loop Every minute` … `end`. */
+const BLOCK_START = /^(loop|alt|opt|par|critical|break)\b\s*(.*)$/i;
+/** The next part of the open frame. */
+const BLOCK_DIVIDER = /^(else|and|option)\b\s*(.*)$/i;
+/** Boxes that only colour things (`rect`, `box`): what's inside is kept, without the box. */
+const DECORATION = /^(rect|box)\b/i;
+const ACTIVATION = /^(activate|deactivate)\s+(.+)$/i;
 /** Lines that only affect how Mermaid draws, with nothing to keep. */
-const IGNORED = /^(autonumber|activate|deactivate|box|end|create|destroy|links?|properties|details)\b/i;
+const IGNORED = /^(autonumber|create|destroy|links?|properties|details)\b/i;
+
+/** A piece of a code line and what it is, for highlighting. */
+export interface CodeToken {
+  text: string;
+  kind: "keyword" | "name" | "arrow" | "text" | "protocol" | "comment" | "plain" | "unknown";
+}
+
+/**
+ * Splits one line of sequence code into tokens, with the same patterns the reader uses, so what's highlighted
+ * as unreadable is exactly what the reader skips. Joining the tokens' text gives the line back.
+ */
+export function tokenizeMermaidLine(line: string): CodeToken[] {
+  const comment = line.indexOf("%%");
+  const code = comment === -1 ? line : line.slice(0, comment);
+  const tail: CodeToken[] = comment === -1 ? [] : [{ text: line.slice(comment), kind: "comment" }];
+  const lead = /^\s*/.exec(code)![0];
+  const body = code.slice(lead.length);
+  const trailing = /\s*$/.exec(body)![0];
+  const content = body.slice(0, body.length - trailing.length);
+  const wrap = (tokens: CodeToken[]): CodeToken[] => [
+    ...(lead ? [{ text: lead, kind: "plain" as const }] : []),
+    ...tokens,
+    ...(trailing ? [{ text: trailing, kind: "plain" as const }] : []),
+    ...tail,
+  ];
+  if (!content) return wrap([]);
+
+  const message = /^(.+?)(\s*)(<<-->>|<<->>|-->>|->>|-->|->|--x|-x|--\)|-\))(\s*[+-]?\s*)([^:]+?)(\s*:\s*)(.*)$/.exec(content);
+  if (message) {
+    const [, from, gap, arrow, mark, to, colon, text] = message;
+    const protocol = /^(.*?)(\s*\([^()]+\))$/.exec(text);
+    return wrap([
+      { text: from, kind: "name" },
+      ...(gap ? [{ text: gap, kind: "plain" as const }] : []),
+      { text: arrow + mark, kind: "arrow" },
+      { text: to, kind: "name" },
+      { text: colon, kind: "plain" },
+      ...(protocol ? [{ text: protocol[1], kind: "text" as const }, { text: protocol[2], kind: "protocol" as const }] : [{ text, kind: "text" as const }]),
+    ]);
+  }
+  const declared = /^(participant|actor)(\s+)(.+?)(?:(\s+as\s+)(.+))?$/i.exec(content);
+  if (declared) {
+    return wrap([
+      { text: declared[1], kind: "keyword" },
+      { text: declared[2], kind: "plain" },
+      { text: declared[3], kind: "name" },
+      ...(declared[4] ? [{ text: declared[4], kind: "keyword" as const }, { text: declared[5], kind: "text" as const }] : []),
+    ]);
+  }
+  const note = /^(note\s+(?:left of|right of|over))(\s+)([^:]+?)(\s*:\s*)(.*)$/i.exec(content);
+  if (note) {
+    return wrap([
+      { text: note[1], kind: "keyword" },
+      { text: note[2], kind: "plain" },
+      { text: note[3], kind: "name" },
+      { text: note[4], kind: "plain" },
+      { text: note[5], kind: "text" },
+    ]);
+  }
+  const keyword = /^(sequenceDiagram|autonumber|title|loop|alt|else|opt|par|and|critical|option|break|end|rect|box|activate|deactivate|create|destroy|links?|properties|details)\b(.*)$/i.exec(content);
+  if (keyword) {
+    const rest = keyword[2];
+    const isName = /^(activate|deactivate)$/i.test(keyword[1]);
+    return wrap([{ text: keyword[1], kind: "keyword" }, ...(rest ? [{ text: rest, kind: isName ? ("name" as const) : ("text" as const) }] : [])]);
+  }
+  if (content === "---" || /^(config|theme)\b/i.test(content)) return wrap([{ text: content, kind: "comment" }]);
+  return wrap([{ text: content, kind: "unknown" }]);
+}
 
 function arrowKind(arrow: string): SequenceMessageKind {
   if (arrow.endsWith(")")) return "async";
@@ -69,9 +135,9 @@ function unquote(text: string): string {
 }
 
 /**
- * Reads a Mermaid `sequenceDiagram`: participants and actors (with `as` aliases), messages with any arrow,
- * and notes. `loop`/`alt`/`opt`/`par` and similar blocks are flattened, keeping their messages in order;
- * styling lines are skipped. Throws ImportError when the text isn't a sequence diagram.
+ * Reads a Mermaid `sequenceDiagram`: participants and actors (with `as` aliases), messages with any arrow and
+ * their activation marks (`+`/`-`, or `activate`/`deactivate` lines), notes, and `loop`/`alt`/`opt`/`par`/
+ * `critical`/`break` frames with their `else`/`and`/`option` parts. Colour boxes and styling lines are skipped. Throws ImportError when the text isn't a sequence diagram.
  *
  * With `protocols`, a message ending in brackets ("Place order (REST)") gives its protocol, as the code view
  * writes it; imports from elsewhere keep the brackets in the label. With `warnUndeclared` (the code view too), a
@@ -108,8 +174,11 @@ export function parseMermaidSequence(
   const undeclared: string[] = [];
   let title: string | undefined;
   let autonumber = false;
-  let blocks = 0;
+  let decorations = 0;
   let skipped = 0;
+  /** What each open `… end` is: a frame kept on the sheet, or a box that's dropped. */
+  const opened: ("frame" | "decoration")[] = [];
+  const lastMessage = () => sequence.steps.findLast((step): step is SequenceMessage => step.type === "message");
 
   /** The id of a participant by the name used in the text, adding it the first time it's mentioned. */
   function participant(name: string, shape?: "actor", label?: string, declaring = false): string {
@@ -146,18 +215,50 @@ export function parseMermaidSequence(
     }
     const message = MESSAGE.exec(line);
     if (message) {
-      const [, from, arrow, , to, label] = message;
+      const [, from, arrow, mark, to, label] = message;
       const text = cleanLabel(label);
       // Participants are added first: addStep must see them.
       const step = newMessage(participant(from), participant(to), {
-        ...(protocols ? splitProtocol(text) : text ? { label: text } : {}),
+        ...(protocols ? splitCaption(text) : text ? { label: text } : {}),
         ...(arrowKind(arrow) !== "call" ? { kind: arrowKind(arrow) } : {}),
+        ...(mark === "+" ? { activate: true } : mark === "-" ? { deactivate: true } : {}),
       });
       sequence = addStep(sequence, step);
       continue;
     }
-    if (BLOCK_START.test(line)) {
-      if (!/^(else|and|option)\b/i.test(line)) blocks += 1;
+    const block = BLOCK_START.exec(line);
+    if (block) {
+      opened.push("frame");
+      sequence = addStep(sequence, newBlock(block[1].toLowerCase() as SequenceBlockKind, cleanLabel(block[2]) || undefined));
+      continue;
+    }
+    const divider = BLOCK_DIVIDER.exec(line);
+    if (divider) {
+      if (opened.at(-1) === "frame") sequence = addStep(sequence, newElse(cleanLabel(divider[2]) || undefined));
+      else skipped += 1;
+      continue;
+    }
+    if (DECORATION.test(line)) {
+      opened.push("decoration");
+      decorations += 1;
+      continue;
+    }
+    if (/^end$/i.test(line)) {
+      if (opened.pop() === "frame") sequence = addStep(sequence, newEnd());
+      continue;
+    }
+    // `activate X` / `deactivate X` lines become the marks on the message just before, where they fit.
+    const activation = ACTIVATION.exec(line);
+    if (activation) {
+      const id = byName.get(unquote(activation[2])) ?? byLabel.get(unquote(activation[2]));
+      const previous = lastMessage();
+      const on = activation[1].toLowerCase() === "activate";
+      if (id && previous && (on ? previous.to === id : previous.from === id)) {
+        sequence = {
+          ...sequence,
+          steps: sequence.steps.map((step) => (step === previous ? { ...previous, [on ? "activate" : "deactivate"]: true } : step)),
+        };
+      } else skipped += 1;
       continue;
     }
     if (/^autonumber\b/i.test(line)) {
@@ -170,8 +271,13 @@ export function parseMermaidSequence(
 
   if (!sequence.participants.length) throw new ImportError("That sequence diagram has no participants or messages to import.");
   const fixes: string[] = [];
-  if (blocks) {
-    fixes.push(`Flattened ${blocks} loop/alt/opt/par block${blocks === 1 ? "" : "s"}: their messages are kept in order, without the box around them.`);
+  const balanced = balanceSteps(sequence.steps);
+  if (balanced !== sequence.steps) {
+    fixes.push("Closed a loop/alt/opt block that had no \"end\".");
+    sequence = { ...sequence, steps: balanced };
+  }
+  if (decorations) {
+    fixes.push(`Left out ${decorations} coloured box${decorations === 1 ? "" : "es"} (rect/box): what was inside is kept.`);
   }
   if (skipped) fixes.push(`Skipped ${skipped} line${skipped === 1 ? "" : "s"} that couldn't be read.`);
   if (warnUndeclared && declaredAny && undeclared.length) {

@@ -195,6 +195,24 @@ want to reverse.
   name. **Protocol** has no Mermaid syntax, so it's written in brackets after the message, as the sheet shows it;
   only the code view reads brackets back as a protocol (imports from elsewhere keep them in the text).
 
+### Sequence tabs: live like Mermaid, with frames, and editable without code
+
+- **Context:** the sheet looked like Mermaid but didn't work like it. Code waited for Apply, `loop`/`alt`/`opt`/`par`
+  blocks were flattened on the way in and activations dropped, and without code there was no way to add a second
+  participant, rename anything, or see a step's details: the right panel had been taken away in favour of the code.
+- **Decision:** the code is **live** (the sheet redraws as you type, a burst is one undo step) and highlighted with the
+  reader's own patterns. **Frames are kept** as `block`/`else`/`end` markers in the step list, the way Mermaid writes
+  them, rather than as nested steps: order, moving, undo and the code stay one flat list, and `balanceSteps` repairs
+  markers that don't pair up. **Activations** are `activate`/`deactivate` flags on messages (Mermaid's `+`/`-`).
+  The **details panel is back** on the right, beside a toolbar and editing in place on the sheet, so the code is one
+  way to edit a sequence, not the only one. This replaces the earlier choice of the code as the only editor.
+- **Alternatives:** nested steps for frames (cleaner tree, but every helper, the move keys and the code mapping would
+  need to walk it); keeping Apply (safer against half-typed lines, but unlike Mermaid; half-typed lines are just
+  skipped and shown in red, and unreadable text is never thrown away).
+- **Consequences:** a half-typed name can briefly add a participant that goes again when the line is finished, and a
+  participant renamed in the code still loses its colour and link (matching is by name). Colour boxes (`rect`, `box`)
+  aren't kept.
+
 ### "The active section" means the active view
 
 - Making `getActiveSection` return an internal design when one is open made every existing action work at L2

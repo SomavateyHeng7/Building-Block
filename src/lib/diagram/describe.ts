@@ -37,7 +37,7 @@ function canvas(diagram: Diagram): { nodes: DiagramNode[]; edges: DiagramEdge[] 
 /** "Orders, component in Back office. Category: New. Technology: Java. 2 connections. 1 open comment." */
 export function describeNode(diagram: Diagram, node: DiagramNode, nodes: DiagramNode[], edges: DiagramEdge[]): string {
   const parts = [node.data.label || "Untitled"];
-  const kind = node.type === "container" ? "container" : "component";
+  const kind = node.type === "container" ? "container" : node.type === "text" ? "text box" : "component";
   const parent = nodes.find((candidate) => candidate.id === node.parentId);
   parts[0] += `, ${kind}${parent ? ` in ${parent.data.label}` : ""}`;
   const category = node.data.colorKey ? diagram.legend.find((entry) => entry.key === node.data.colorKey)?.label : undefined;
@@ -72,7 +72,7 @@ export function describeView(diagram: Diagram): string {
   if (!current) return "";
   if (isSequenceSection(current)) {
     const sequence = current.sequence;
-    return `${current.name}, a sequence. ${plural(sequence?.participants.length ?? 0, "participant")}, ${plural(sequence?.steps.length ?? 0, "step")}.`;
+    return `${current.name}, a sequence. ${plural(sequence?.participants.length ?? 0, "participant")}, ${plural(sequence?.steps.filter((step) => step.type === "message" || step.type === "note").length ?? 0, "step")}.`;
   }
   const { nodes, edges } = canvas(diagram);
   const where = diagram.activeDetailId ? `Internal design of ${nodes.length ? (current.nodes.find((node) => node.id === diagram.activeDetailId)?.data.label ?? "") : ""}` : current.name;

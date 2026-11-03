@@ -2,6 +2,7 @@ import { blankTemplate } from "./blank";
 import { currentVsTargetTemplate } from "./current-vs-target";
 import { dataPlatformTemplate } from "./data-platform";
 import { eventDrivenTemplate } from "./event-driven";
+import { flowchartTemplate } from "./flowchart";
 import { l0ArchitectureTemplate } from "./l0-architecture";
 import { sequenceTemplate } from "./sequence";
 import { serverlessTemplate } from "./serverless";
@@ -16,6 +17,7 @@ export const allTemplates: TemplateDefinition[] = [
   eventDrivenTemplate,
   serverlessTemplate,
   dataPlatformTemplate,
+  flowchartTemplate,
   { ...currentVsTargetTemplate, hidden: true },
   sequenceTemplate,
 ];

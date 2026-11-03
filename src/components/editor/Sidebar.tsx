@@ -19,6 +19,7 @@ const GRIP = "h-4 w-4 shrink-0 text-zinc-300 opacity-0 transition-opacity group-
 
 export type PaletteDragPayload =
   | { kind: "container" }
+  | { kind: "text" }
   | { kind: "block"; colorKey: string };
 
 function startDrag(event: React.DragEvent, payload: PaletteDragPayload) {
@@ -38,6 +39,7 @@ export default function Sidebar({ className = "", onAdded, onCollapse }: Sidebar
   const legend = useDiagramStore((state) => state.diagram.legend);
   const addContainer = useDiagramStore((state) => state.addContainer);
   const addBlock = useDiagramStore((state) => state.addBlock);
+  const addText = useDiagramStore((state) => state.addText);
   const { screenToFlowPosition } = useReactFlow();
 
   /** Touch screens can't drag from here, so tapping adds at the middle of what's on screen. */
@@ -52,6 +54,12 @@ export default function Sidebar({ className = "", onAdded, onCollapse }: Sidebar
   function tapAddContainer() {
     const center = canvasCenter();
     addContainer({ x: center.x - 160, y: center.y - 32 });
+    onAdded?.();
+  }
+
+  function tapAddText() {
+    const center = canvasCenter();
+    addText({ x: Math.round(center.x - 80), y: Math.round(center.y - 16) });
     onAdded?.();
   }
 
@@ -105,6 +113,20 @@ export default function Sidebar({ className = "", onAdded, onCollapse }: Sidebar
 
       <section>
         <h2 className={HEADING}>
+          Text
+          <kbd className={KBD} title="Keyboard shortcut">T</kbd>
+        </h2>
+        <div {...itemProps(tapAddText, { kind: "text" })} className={ITEM}>
+          <span aria-hidden className="flex h-5 w-7 shrink-0 items-center justify-center rounded border border-dashed border-zinc-300 font-serif text-sm font-semibold text-zinc-600 dark:border-zinc-600 dark:text-zinc-300">
+            T
+          </span>
+          <span className="flex-1 truncate">Text box</span>
+          <Icon name="grip" className={GRIP} />
+        </div>
+      </section>
+
+      <section>
+        <h2 className={HEADING}>
           Components
           <kbd className={KBD} title="Keyboard shortcut">B</kbd>
         </h2>
@@ -129,7 +151,7 @@ export default function Sidebar({ className = "", onAdded, onCollapse }: Sidebar
       </section>
 
       <p className="mt-auto rounded-lg bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
-        Drag onto the canvas or click to add. Drop a component on a container, or select the container first, to put it inside.
+        Drag onto the canvas or click to add. Drop a component on a container, or select the container first, to put it inside. Double-click a text box to write in it.
       </p>
     </aside>
   );

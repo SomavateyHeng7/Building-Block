@@ -3,14 +3,29 @@
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
 import { create } from "zustand";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
-import { applySequenceCode, mermaidLineOf, readSequenceCode, toMermaidSequence } from "@/lib/diagram/exportMermaid";
-import { ImportError } from "@/lib/diagram/importMermaid";
+import { applySequenceCode, mermaidIdAtLine, mermaidLineOf, readSequenceCode, toMermaidSequence } from "@/lib/diagram/exportMermaid";
+import { ImportError, tokenizeMermaidLine, type CodeToken } from "@/lib/diagram/importMermaid";
 import { downloadBlob, fileBaseName } from "@/lib/diagram/file";
 import { checkSequenceCodeLines, limitNotice } from "@/lib/plans";
 import { toast } from "@/lib/toast";
 import { Icon } from "./Icon";
 import PanelToggle from "./PanelToggle";
 import { useReadOnly } from "./viewMode";
+import { selectSequenceItem, useSequenceSelection } from "./sequenceSelection";
+
+/** How long typing pauses before the sheet follows, like Mermaid's live editor. */
+const LIVE_DELAY = 300;
+
+const TOKEN_CLASS: Record<CodeToken["kind"], string> = {
+  keyword: "font-semibold text-violet-700 dark:text-violet-400",
+  name: "text-teal-700 dark:text-teal-400",
+  arrow: "font-semibold text-blue-700 dark:text-blue-400",
+  text: "text-zinc-800 dark:text-zinc-200",
+  protocol: "text-amber-700 dark:text-amber-400",
+  comment: "italic text-zinc-400 dark:text-zinc-500",
+  plain: "",
+  unknown: "text-red-700 underline decoration-red-500 decoration-wavy underline-offset-4 dark:text-red-400",
+};
 
 export const SEQUENCE_CODE_FIELD_ID = "bb-sequence-code";
 
@@ -36,8 +51,13 @@ const SYNTAX: [string, string][] = [
   ["Shop-->>User: Order number", "A reply (dashed)"],
   ["Shop-)Mailer: Send email", "Async, no wait"],
   ["Shop->>Shop: Check stock", "A call to itself"],
+  ["Shop->>+Api: Get orders", "+ starts Api's activation bar"],
+  ["Api-->>-Shop: Orders", "- ends it"],
   ["Note over Shop: Retries twice", "A note"],
   ["Shop->>Api: Get orders (REST)", "Protocol in brackets"],
+  ["loop Every minute … end", "Repeated steps"],
+  ["alt Paid … else Failed … end", "Alternatives"],
+  ["opt / par … and / critical / break", "Optional, parallel, must-succeed, stop"],
 ];
 
 /** The panel's width on wide screens, dragged by its right edge and remembered in this browser. */
@@ -95,6 +115,15 @@ export default function SequenceCode({ className = "", onCollapse }: { className
   if (cheatSheet[view.id] === undefined) setCheatSheet((current) => ({ ...current, [view.id]: cheatOpen }));
   const resize = useRef<{ startX: number; startWidth: number } | null>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
+  const highlightRef = useRef<HTMLPreElement>(null);
+  const liveTimer = useRef<number | undefined>(undefined);
+  /** What the last applied code said needed fixing or looked like a typo, shown under the code. */
+  const [warnings, setWarnings] = useState<{ tab: string; items: string[] } | null>(null);
+  const selectedId = useSequenceSelection((state) => state.id);
+  const [focused, setFocused] = useState(false);
+  /** Per tab, the sheet's code when the draft was last drawn: if the sheet changes after that, the draft is stale. */
+  const [bases, setBases] = useState<Record<string, string>>({});
+  useEffect(() => () => window.clearTimeout(liveTimer.current), []);
 
   function resizeTo(next: number) {
     const clamped = clampWidth(next);
@@ -122,6 +151,19 @@ export default function SequenceCode({ className = "", onCollapse }: { className
   const limitCheck = checkSequenceCodeLines(code);
   const limitNote = limitNotice(limitCheck);
   const shownError = error?.tab === view.id ? error.message : null;
+  const shownWarnings = warnings?.tab === view.id ? warnings.items : [];
+  // The line of what's selected on the sheet, while the code says what the sheet shows.
+  const selectedLine = selectedId && code === generated ? mermaidLineOf(sequence, selectedId) : undefined;
+  const tokens = useMemo(() => code.split("\n").map(tokenizeMermaidLine), [code]);
+
+  // The sheet changed while unreadable lines were waiting to be fixed: follow the sheet, and keep those lines at
+  // the end so nothing typed is lost (and so drawing the code later can't undo what was done on the sheet).
+  const base = bases[view.id];
+  if (draft !== undefined && !focused && base !== undefined && base !== generated) {
+    const unreadable = code.split("\n").filter((line) => tokenizeMermaidLine(line).some((token) => token.kind === "unknown"));
+    setDraft(unreadable.length ? `${generated}${unreadable.join("\n")}\n` : undefined);
+    setBases((current) => ({ ...current, [view.id]: generated }));
+  }
 
   // Asked to show the code: once the panel is on screen, focus it at the line asked for (or keep the cursor).
   const sequenceRef = useRef(sequence);
@@ -160,23 +202,34 @@ export default function SequenceCode({ className = "", onCollapse }: { className
     });
   }
 
-  function apply() {
-    if (!dirty || readOnly) return;
+  /**
+   * Draws what the code says on the sheet. Typing a burst is one undo step (one coalesce key per tab); code that
+   * can't be read leaves the sheet as it was and says why. Returns whether it applied.
+   */
+  function apply(text = code): boolean {
+    window.clearTimeout(liveTimer.current);
+    if (readOnly) return false;
+    if (text === generated) {
+      setError(null);
+      return true;
+    }
     // The plan's line limit; it only refuses once limits are enforced (see LIMITS_ENFORCED).
-    const limit = checkSequenceCodeLines(code);
+    const limit = checkSequenceCodeLines(text);
     if (limit.blocked) {
       setError({ tab: view.id, message: `The Free plan allows ${limit.limit} lines of code in a sequence tab; this has ${limit.used}.` });
-      return;
+      return false;
     }
     try {
-      const parsed = readSequenceCode(code);
-      updateSequence((current) => applySequenceCode(current, parsed));
-      setDraft(undefined);
+      const parsed = readSequenceCode(text);
+      updateSequence((current) => applySequenceCode(current, parsed), `code:${view.id}`);
+      setBases((current) => ({ ...current, [view.id]: toMermaidSequence(applySequenceCode(sequence, parsed)) }));
       setError(null);
-      if (parsed.fixes.length) toast.info("Applied the code, with changes", { description: parsed.fixes.join(" ") });
+      setWarnings({ tab: view.id, items: parsed.fixes });
+      return true;
     } catch (caught) {
       if (!(caught instanceof ImportError)) throw caught;
       setError({ tab: view.id, message: caught.message });
+      return false;
     }
   }
 
@@ -185,6 +238,29 @@ export default function SequenceCode({ className = "", onCollapse }: { className
       event.preventDefault();
       apply();
     }
+    // Tab indents (two spaces, as the code is written) instead of leaving the field; Esc then Tab still leaves.
+    if (event.key === "Tab" && !event.shiftKey && !readOnly) {
+      event.preventDefault();
+      const field = event.currentTarget;
+      const { selectionStart, selectionEnd } = field;
+      const next = `${field.value.slice(0, selectionStart)}  ${field.value.slice(selectionEnd)}`;
+      setDraft(next);
+      scheduleApply(next);
+      requestAnimationFrame(() => field.setSelectionRange(selectionStart + 2, selectionStart + 2));
+    }
+  }
+
+  function scheduleApply(text: string) {
+    window.clearTimeout(liveTimer.current);
+    liveTimer.current = window.setTimeout(() => apply(text), LIVE_DELAY);
+  }
+
+  /** The cursor's line picks out what's written there on the sheet. */
+  function selectFromCursor(field: HTMLTextAreaElement) {
+    if (field.value !== generated) return;
+    const line = field.value.slice(0, field.selectionStart).split("\n").length - 1;
+    const id = mermaidIdAtLine(sequence, line);
+    if (id && id !== useSequenceSelection.getState().id) selectSequenceItem(id);
   }
 
   async function copy() {
@@ -264,9 +340,30 @@ export default function SequenceCode({ className = "", onCollapse }: { className
           className="shrink-0 select-none overflow-hidden border-r border-zinc-100 bg-zinc-50 py-3 pb-8 pl-3 pr-2 text-right font-mono text-[13px] leading-relaxed tabular-nums text-zinc-400 dark:border-zinc-900 dark:bg-zinc-900/40 dark:text-zinc-600"
         >
           {Array.from({ length: lineCount }, (_, index) => (
-            <div key={index}>{index + 1}</div>
+            <div key={index} className={tokens[index]?.some((token) => token.kind === "unknown") ? "font-semibold text-red-500" : undefined}>
+              {index + 1}
+            </div>
           ))}
         </div>
+        {/* The code coloured as Mermaid's editor does, under a field whose own text is see-through. */}
+        <div className="relative min-h-0 min-w-0 flex-1">
+        <pre
+          ref={highlightRef}
+          aria-hidden
+          className="pointer-events-none absolute inset-0 m-0 overflow-hidden whitespace-pre py-3 pl-2 pr-3 font-mono text-[13px] leading-relaxed text-zinc-800 dark:text-zinc-200"
+        >
+          {tokens.map((line, index) => (
+            <div key={index} className={index === selectedLine ? "-ml-2 bg-blue-100 pl-2 dark:bg-blue-950/60" : undefined}>
+              {line.length ? line.map((token, at) => (
+                <span key={at} className={TOKEN_CLASS[token.kind]}>
+                  {token.text}
+                </span>
+              )) : "\u200b"}
+            </div>
+          ))}
+          {/* Room to scroll the last line clear of the bottom, as the field has. */}
+          <div className="h-8" />
+        </pre>
         <textarea
           id={fieldId}
           value={code}
@@ -280,14 +377,31 @@ export default function SequenceCode({ className = "", onCollapse }: { className
           aria-describedby={`${fieldId}-help`}
           onChange={(event) => {
             setDraft(event.target.value);
-            setError(null);
+            scheduleApply(event.target.value);
           }}
           onKeyDown={handleKeyDown}
+          onSelect={(event) => selectFromCursor(event.currentTarget)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => {
+            setFocused(false);
+            // Leaving the code: what's readable is drawn now. The code then follows the sheet again, unless it has
+            // lines that couldn't be read: those stay (in red) to be fixed, rather than vanishing.
+            const unreadable = tokens.some((line) => line.some((token) => token.kind === "unknown"));
+            if ((!dirty || apply()) && !unreadable) {
+              setDraft(undefined);
+              setWarnings(null);
+            }
+          }}
           onScroll={(event) => {
             if (gutterRef.current) gutterRef.current.scrollTop = event.currentTarget.scrollTop;
+            if (highlightRef.current) {
+              highlightRef.current.scrollTop = event.currentTarget.scrollTop;
+              highlightRef.current.scrollLeft = event.currentTarget.scrollLeft;
+            }
           }}
-          className="min-h-0 min-w-0 flex-1 resize-none overflow-auto whitespace-pre bg-transparent py-3 pl-2 pr-3 font-mono text-[13px] leading-relaxed text-zinc-800 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/40 dark:text-zinc-200"
+          className="absolute inset-0 h-full w-full resize-none overflow-auto whitespace-pre bg-transparent py-3 pb-8 pl-2 pr-3 font-mono text-[13px] leading-relaxed text-transparent caret-zinc-900 outline-none selection:bg-blue-200/60 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/40 dark:caret-zinc-100 dark:selection:bg-blue-800/50"
         />
+        </div>
       </div>
       {/* Open by itself on a tab that had nothing in it when opened, where it's needed most; then it's up to you. */}
       <details
@@ -318,8 +432,15 @@ export default function SequenceCode({ className = "", onCollapse }: { className
       <div id={`${fieldId}-help`} className="flex flex-col gap-2 border-t border-zinc-200 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
         {shownError && (
           <p role="alert" className="text-red-700 dark:text-red-400">
-            {shownError}
+            {shownError} The sheet shows the last code that worked.
           </p>
+        )}
+        {!shownError && shownWarnings.length > 0 && (
+          <ul className="list-disc pl-4 text-amber-700 dark:text-amber-400" aria-live="polite">
+            {shownWarnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
         )}
         {limitNote && (
           <p className={limitCheck.over ? "text-amber-700 dark:text-amber-400" : undefined} aria-live="polite">
@@ -330,19 +451,15 @@ export default function SequenceCode({ className = "", onCollapse }: { className
           <p>Switch to Edit to change the code.</p>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className="inline-flex min-h-0 items-center gap-1.5 rounded-md bg-zinc-900 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-              disabled={!dirty}
-              onClick={apply}
-            >
-              <Icon name="check" className="h-3.5 w-3.5" />
-              Apply
-            </button>
-            <button type="button" className={BUTTON} disabled={!dirty} onClick={() => (setDraft(undefined), setError(null))}>
-              Undo edits
-            </button>
-            <span>{dirty ? "Ctrl/⌘+Enter applies. The sheet won't change until you do." : "Follows the sheet as you edit it."}</span>
+            <span className="inline-flex items-center gap-1.5">
+              <span aria-hidden className={`h-2 w-2 rounded-full ${shownError ? "bg-red-500" : "bg-emerald-500"}`} />
+              {shownError ? "Not drawn yet: fix the line in red" : "Live: the sheet follows as you type, and the code follows the sheet."}
+            </span>
+            {shownError && (
+              <button type="button" className={BUTTON} onClick={() => (setDraft(undefined), setError(null), setWarnings(null))}>
+                Back to what the sheet shows
+              </button>
+            )}
           </div>
         )}
       </div>

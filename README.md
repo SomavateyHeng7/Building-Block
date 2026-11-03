@@ -39,7 +39,7 @@ device, like draw.io's device storage. The app holds the diagram in memory only 
   changed (on the newer tab) and removed (on the older one); exports taken while it's shown include the marks and
   a legend for them
 - Built-in templates (L0 architecture, three-tier web application, event-driven microservices with an internal
-  design, current vs target state); to reuse your own layout and legend, save it as a file and use **Start from a
+  design, flowchart, current vs target state); to reuse your own layout and legend, save it as a file and use **Start from a
   file** on the templates page, which opens a copy and leaves the file alone
 - Export dialog: pick any mix of PNG, SVG, PDF, component list (CSV), connection list (CSV) and the diagram
   file (JSON), and which tabs and internal designs to picture. Download it all as **one file** (a `.zip`,

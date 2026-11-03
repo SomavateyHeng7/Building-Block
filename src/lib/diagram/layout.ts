@@ -5,6 +5,12 @@ export const CONTAINER_PADDING = 16;
 export const CONTAINER_HEADER = 40;
 export const LAYOUT_GAP = 12;
 export const CONTAINER_MIN: Size = { width: 200, height: 120 };
+/** The smallest each kind of box can be resized to (a container also fits around what's in it). */
+export const MIN_NODE_SIZE: Record<DiagramNode["type"], Size> = {
+  container: CONTAINER_MIN,
+  block: { width: 80, height: 32 },
+  text: { width: 24, height: 16 },
+};
 
 export interface Insets {
   top: number;

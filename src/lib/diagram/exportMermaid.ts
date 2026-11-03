@@ -1,6 +1,6 @@
 import { parseMermaidSequence, type MermaidImport } from "./importMermaid";
-import { messageCaption } from "./sequence";
-import type { SequenceDiagram, SequenceParticipant } from "./types";
+import { BLOCK_DIVIDER, balanceSteps, messageCaption } from "./sequence";
+import type { SequenceBlockKind, SequenceDiagram, SequenceParticipant } from "./types";
 
 /**
  * A sequence as Mermaid `sequenceDiagram` code, for the code view, copying and `.mmd` downloads. Reading it back
@@ -17,6 +17,12 @@ export function mermaidLineOf(sequence: SequenceDiagram, id: string): number | u
   return mermaidLines(sequence).lineOf.get(id);
 }
 
+/** The participant or step written on a line of `toMermaidSequence`'s code (from 0), if any. */
+export function mermaidIdAtLine(sequence: SequenceDiagram, line: number): string | undefined {
+  for (const [id, at] of mermaidLines(sequence).lineOf) if (at === line) return id;
+  return undefined;
+}
+
 function mermaidLines(sequence: SequenceDiagram, title?: string): { lines: string[]; lineOf: Map<string, number> } {
   const ids = mermaidIds(sequence.participants);
   const lineOf = new Map<string, number>();
@@ -29,21 +35,47 @@ function mermaidLines(sequence: SequenceDiagram, title?: string): { lines: strin
     lineOf.set(participant.id, lines.length);
     lines.push(id === participant.label ? `  ${keyword} ${id}` : `  ${keyword} ${id} as ${escapeText(participant.label)}`);
   }
-  for (const step of sequence.steps) {
+  // Frames indent what's inside them, as Mermaid is usually written.
+  const steps = balanceSteps(sequence.steps);
+  const frameKinds: SequenceBlockKind[] = [];
+  for (const step of steps) {
+    const indent = "  ".repeat(frameKinds.length + 1);
+    if (step.type === "block") {
+      lineOf.set(step.id, lines.length);
+      lines.push(`${indent}${step.kind}${step.label ? ` ${escapeText(step.label)}` : ""}`);
+      frameKinds.push(step.kind);
+      continue;
+    }
+    if (step.type === "else") {
+      const word = BLOCK_DIVIDER[frameKinds.at(-1) ?? "alt"] ?? "else";
+      lineOf.set(step.id, lines.length);
+      lines.push(`${"  ".repeat(frameKinds.length)}${word}${step.label ? ` ${escapeText(step.label)}` : ""}`);
+      continue;
+    }
+    if (step.type === "end") {
+      frameKinds.pop();
+      lineOf.set(step.id, lines.length);
+      lines.push(`${"  ".repeat(frameKinds.length + 1)}end`);
+      continue;
+    }
     if (step.type === "note") {
       const over = step.over.map((id) => ids.get(id)).filter(Boolean).join(",");
       if (!over) continue;
       lineOf.set(step.id, lines.length);
-      lines.push(`  Note over ${over}: ${escapeText(step.text).replace(/\n/g, "<br>")}`);
+      lines.push(`${indent}Note over ${over}: ${escapeText(step.text).replace(/\n/g, "<br>")}`);
       continue;
     }
     const from = ids.get(step.from);
     const to = ids.get(step.to);
     if (!from || !to) continue;
     const arrow = step.kind === "async" ? "-)" : step.kind === "reply" ? "-->>" : "->>";
+    // Mermaid's activation marks: + starts the receiver's bar, - ends the sender's.
+    const mark = step.activate ? "+" : step.deactivate ? "-" : "";
     const caption = escapeText(messageCaption(step));
     lineOf.set(step.id, lines.length);
-    lines.push(`  ${from}${arrow}${to}:${caption ? ` ${caption}` : ""}`);
+    lines.push(`${indent}${from}${arrow}${mark}${to}:${caption ? ` ${caption}` : ""}`);
+    // Both at once has no one-line form: the end of the sender's bar goes on a line of its own.
+    if (step.activate && step.deactivate) lines.push(`${indent}deactivate ${from}`);
   }
   return { lines, lineOf };
 }
@@ -92,7 +124,11 @@ export function applySequenceCode(current: SequenceDiagram, parsed: MermaidImpor
   });
   const id = (value: string) => idMap.get(value) ?? value;
   const steps = parsed.sequence.steps.map((step) =>
-    step.type === "note" ? { ...step, over: step.over.map(id) } : { ...step, from: id(step.from), to: id(step.to) },
+    step.type === "note"
+      ? { ...step, over: step.over.map(id) }
+      : step.type === "message"
+        ? { ...step, from: id(step.from), to: id(step.to) }
+        : step,
   );
   const next: SequenceDiagram = { ...current, participants, steps };
   if (parsed.autonumber) delete next.numbered;

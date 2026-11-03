@@ -85,7 +85,11 @@ no special case; files from before sequence tabs have no `kind` and open unchang
   "steps": [
     { "id": "message_c3", "type": "message", "from": "participant_a1", "to": "participant_b2", "label": "Place order", "protocol": "REST" },
     { "id": "message_d4", "type": "message", "from": "participant_b2", "to": "participant_a1", "label": "Order number", "kind": "reply" },
-    { "id": "note_e5", "type": "note", "over": ["participant_b2"], "text": "Retries twice" }
+    { "id": "note_e5", "type": "note", "over": ["participant_b2"], "text": "Retries twice" },
+    { "id": "block_f6", "type": "block", "kind": "alt", "label": "Paid" },
+    { "id": "message_g7", "type": "message", "from": "participant_a1", "to": "participant_b2", "label": "Track", "activate": true },
+    { "id": "else_h8", "type": "else", "label": "Not paid" },
+    { "id": "end_i9", "type": "end" }
   ],
   "numbered": false
 }
@@ -94,7 +98,7 @@ no special case; files from before sequence tabs have no `kind` and open unchang
 | Field | Meaning | Default |
 | --- | --- | --- |
 | `participants` | Left to right. `shape` is `participant` (a box) or `actor` (a person); `colorKey` uses the same legend as components. | `participant` |
-| `steps` | Top to bottom. A **message** goes `from` → `to` (the same id for a call to itself), with `label` (what's sent), `protocol` and `kind`: `call` (solid line, filled arrow), `async` (open arrow) or `reply` (dashed). A **note** sits `over` one participant, or spans the first and last of two. | `call` |
+| `steps` | Top to bottom. A **message** goes `from` → `to` (the same id for a call to itself), with `label` (what's sent), `protocol` and `kind`: `call` (solid line, filled arrow), `async` (open arrow) or `reply` (dashed). A **note** sits `over` one participant, or spans the first and last of two. A message's `activate` starts a bar on the receiver and `deactivate` ends the sender's (Mermaid's `+`/`-`). **Frames** are markers in the same list, as Mermaid writes them: `block` (with `kind` `loop`, `alt`, `opt`, `par`, `critical` or `break`, and an optional `label`), `else` for each further part, and `end`. Loading pairs markers up (`balanceSteps`): a stray `else`/`end` is dropped and an open frame is closed at the bottom. | `call` |
 | `numbered` | Number the messages 1, 2, 3… | `true` |
 
 **No positions are stored:** `layoutSequence` (`sequence.ts`) works the picture out from the order, so a sequence

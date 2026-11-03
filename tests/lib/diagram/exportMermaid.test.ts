@@ -13,7 +13,11 @@ function shape(sequence: SequenceDiagram) {
     steps: sequence.steps.map((step) =>
       step.type === "note"
         ? ["note", step.over.map(name), step.text]
-        : ["message", name(step.from), name(step.to), step.label, step.protocol, step.kind ?? "call"],
+        : step.type === "message"
+          ? ["message", name(step.from), name(step.to), step.label, step.protocol, step.kind ?? "call", !!step.activate, !!step.deactivate]
+          : step.type === "block"
+            ? [step.type, step.kind, step.label]
+            : [step.type, step.type === "else" ? step.label : undefined],
     ),
   };
 }
@@ -105,7 +109,12 @@ describe("Mermaid code for a sequence", () => {
     const sequence = sequenceTemplate.build().sections[0].sequence!;
     const lines = toMermaidSequence(sequence).split("\n");
     expect(lines[mermaidLineOf(sequence, sequence.participants[1].id)!]).toBe("  participant WebShop as Web Shop");
-    expect(lines[mermaidLineOf(sequence, sequence.steps[0].id)!]).toBe("  Customer->>WebShop: Place order");
+    expect(lines[mermaidLineOf(sequence, sequence.steps[0].id)!]).toBe("  Customer->>+WebShop: Place order");
+    // Inside a frame, a step is indented under it.
+    const alt = sequence.steps.find((step) => step.type === "block")!;
+    expect(lines[mermaidLineOf(sequence, alt.id)!]).toBe("  alt Payment approved");
+    const inside = sequence.steps[sequence.steps.indexOf(alt) + 1];
+    expect(lines[mermaidLineOf(sequence, inside.id)!]).toBe("    PaymentGateway-->>-OrdersService: Payment authorised");
     expect(mermaidLineOf(sequence, "missing")).toBeUndefined();
   });
 

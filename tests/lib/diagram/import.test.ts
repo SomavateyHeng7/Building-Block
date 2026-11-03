@@ -151,7 +151,7 @@ sequenceDiagram
   this line is nonsense
 `;
 
-  it("reads participants, aliases, every kind of message and notes, flattening blocks", () => {
+  it("reads participants, aliases, every kind of message, notes, frames and activations", () => {
     const { sequence, title, fixes } = parseMermaidSequence(SOURCE);
     expect(title).toBe("Checkout");
     expect(sequence.participants.map((participant) => [participant.label, participant.shape ?? "participant"])).toEqual([
@@ -174,10 +174,24 @@ sequenceDiagram
       expect.objectContaining({ over: [w, o], text: "Retries twice" }),
       expect.objectContaining({ over: [c], text: "Waits" }),
     ]);
-    expect(fixes).toEqual([
-      "Flattened 2 loop/alt/opt/par blocks: their messages are kept in order, without the box around them.",
-      "Skipped 1 line that couldn't be read.",
+    expect(sequence.steps.map((step) => (step.type === "block" ? `${step.kind}:${step.label}` : step.type === "else" ? `else:${step.label}` : step.type))).toEqual([
+      "message",
+      "message",
+      "loop:Every item",
+      "message",
+      "end",
+      "alt:paid",
+      "message",
+      "else:failed",
+      "message",
+      "end",
+      "note",
+      "note",
+      "message",
     ]);
+    expect(messages[1].activate).toBe(true);
+    expect(messages[5].deactivate).toBe(true);
+    expect(fixes).toEqual(["Skipped 1 line that couldn't be read."]);
   });
 
   it("finds the diagram inside a Markdown fence, and refuses flowcharts with a pointer to draw.io", () => {

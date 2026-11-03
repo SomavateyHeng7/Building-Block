@@ -11,6 +11,7 @@ import {
   fitContainerToContents,
   groupIntoContainer,
   growContainerToFit,
+  MIN_NODE_SIZE,
   restyleContainer,
   tidyContainer,
   type ArrangeOp,
@@ -18,6 +19,8 @@ import {
 import type { ComponentIconKey } from "./componentIcons";
 import type {
   BlockColorKey,
+  BlockNodeData,
+  BlockShape,
   Branding,
   ComponentDetail,
   ConnectionSide,
@@ -31,6 +34,8 @@ import type {
   Position,
   ReviewComment,
   SequenceDiagram,
+  Size,
+  TextNodeData,
 } from "./types";
 
 function touch(diagram: Diagram): Diagram {
@@ -301,12 +306,23 @@ interface DiagramState {
   setActiveSectionNodes: (nodes: DiagramNode[], options?: NodesChangeOptions) => void;
   addContainer: (position: Position) => void;
   addBlock: (position: Position, parentId?: string | null, colorKey?: BlockColorKey) => void;
+  /** Adds a free text box (a heading, caption or note) and selects it. */
+  addText: (position: Position, text?: string) => void;
+  /** Sets a text box's look; undefined values go back to the defaults. */
+  updateTextStyle: (id: string, patch: Pick<TextNodeData, "fontSize" | "align" | "bold">) => void;
+  /**
+   * Moves or resizes one node to exact pixel values (position is relative to its container, if in one). A
+   * component's container grows to keep it inside.
+   */
+  setNodeGeometry: (id: string, patch: Partial<Position & Size>) => void;
   updateNodeLabel: (id: string, label: string) => void;
   updateNodeColor: (id: string, colorKey: BlockColorKey) => void;
   updateNodesColor: (ids: string[], colorKey: BlockColorKey) => void;
   updateNodeDetails: (id: string, patch: NodeDetails) => void;
   /** Sets or (with undefined) removes a component's icon. */
   updateNodeIcon: (id: string, icon: ComponentIconKey | undefined) => void;
+  /** Draws a component as a box, a start/end pill or a decision diamond. */
+  updateNodeShape: (id: string, shape: BlockShape) => void;
   updateContainerStyle: (id: string, patch: ContainerStyle) => void;
   updateLegendEntry: (key: BlockColorKey, patch: Partial<LegendEntry>) => void;
   addLegendEntry: () => BlockColorKey;
@@ -377,7 +393,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
   addConnection: ({ source, target, sourceSide, targetSide }) => {
     const { diagram } = useDiagramStore.getState();
     const section = getActiveSection(diagram);
-    const known = (id: string) => section.nodes.some((node) => node.id === id);
+    const known = (id: string) => section.nodes.some((node) => node.id === id && node.type !== "text");
     if (source === target || !known(source) || !known(target)) return null;
     const exists = (section.edges ?? []).some(
       (edge) =>
@@ -419,7 +435,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
   // A moved end attaches to the side it was dropped on, and any bend is dropped since it was placed for the old route.
   reconnectConnection: (id, { source, target, sourceSide, targetSide }) => {
     const section = getActiveSection(useDiagramStore.getState().diagram);
-    const known = (nodeId: string) => section.nodes.some((node) => node.id === nodeId);
+    const known = (nodeId: string) => section.nodes.some((node) => node.id === nodeId && node.type !== "text");
     if (source === target || !known(source) || !known(target)) return false;
     if (!(section.edges ?? []).some((edge) => edge.id === id)) return false;
     set((state) =>
@@ -830,6 +846,67 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       };
     }),
 
+  addText: (position, text = "Text") =>
+    set((state) => {
+      if (onSequenceTab(state.diagram)) return state;
+      const id = createId("text");
+      return {
+        ...commit(
+          state,
+          mapActiveSection(state.diagram, (nodes) => [
+            ...nodes,
+            { id, type: "text", position, size: { width: 160, height: 32 }, data: { kind: "text", label: text } },
+          ]),
+        ),
+        selectedNodeIds: [id],
+      };
+    }),
+
+  updateTextStyle: (id, patch) =>
+    set((state) =>
+      commit(
+        state,
+        mapActiveSection(state.diagram, (nodes) =>
+          nodes.map((node) => {
+            if (node.id !== id || node.data.kind !== "text") return node;
+            const data = { ...node.data, ...patch };
+            for (const key of Object.keys(patch) as (keyof typeof patch)[]) if (patch[key] === undefined) delete data[key];
+            return { ...node, data };
+          }),
+        ),
+        `text-style:${id}:${Object.keys(patch).sort().join(",")}`,
+      ),
+    ),
+
+  setNodeGeometry: (id, patch) =>
+    set((state) => {
+      const current = getActiveSection(state.diagram).nodes.find((node) => node.id === id);
+      if (!current) return state;
+      const round = (value: number | undefined, fallback: number, min = -Infinity) =>
+        value === undefined || !Number.isFinite(value) ? fallback : Math.max(min, Math.round(value));
+      const position = { x: round(patch.x, current.position.x), y: round(patch.y, current.position.y) };
+      const size = {
+        width: round(patch.width, current.size.width, MIN_NODE_SIZE[current.type].width),
+        height: round(patch.height, current.size.height, MIN_NODE_SIZE[current.type].height),
+      };
+      if (
+        position.x === current.position.x &&
+        position.y === current.position.y &&
+        size.width === current.size.width &&
+        size.height === current.size.height
+      ) {
+        return state;
+      }
+      return commit(
+        state,
+        mapActiveSection(state.diagram, (nodes) => {
+          const next = nodes.map((node) => (node.id === id ? { ...node, position, size } : node));
+          return current.parentId ? growContainerToFit(next, current.parentId) : next;
+        }),
+        `geometry:${id}:${Object.keys(patch).sort().join(",")}`,
+      );
+    }),
+
   updateNodeLabel: (id, label) =>
     set((state) =>
       getActiveSection(state.diagram).nodes.find((node) => node.id === id)?.data.label === label
@@ -848,7 +925,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       commit(
         state,
         mapActiveSection(state.diagram, (nodes) =>
-          nodes.map((node) => (node.id === id ? { ...node, data: { ...node.data, colorKey } } : node)),
+          nodes.map((node) => (node.id === id && node.data.kind !== "text" ? { ...node, data: { ...node.data, colorKey } } : node)),
         ),
       ),
     ),
@@ -858,7 +935,9 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       commit(
         state,
         mapActiveSection(state.diagram, (nodes) =>
-          nodes.map((node) => (ids.includes(node.id) ? { ...node, data: { ...node.data, colorKey } } : node)),
+          nodes.map((node) =>
+            ids.includes(node.id) && node.data.kind !== "text" ? { ...node, data: { ...node.data, colorKey } } : node,
+          ),
         ),
       ),
     ),
@@ -877,6 +956,21 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
         `details:${id}:${Object.keys(patch).join(",")}`,
       );
     }),
+
+  updateNodeShape: (id, shape) =>
+    set((state) =>
+      commit(
+        state,
+        mapActiveSection(state.diagram, (nodes) =>
+          nodes.map((node) => {
+            if (node.id !== id || node.data.kind !== "block" || (node.data.shape ?? "process") === shape) return node;
+            const data: BlockNodeData = { ...node.data, shape };
+            if (shape === "process") delete data.shape;
+            return { ...node, data };
+          }),
+        ),
+      ),
+    ),
 
   updateNodeIcon: (id, icon) =>
     set((state) => {

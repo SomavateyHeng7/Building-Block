@@ -91,9 +91,9 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 | `detailsPanel.ts` | `showDetails`: asks EditorApp to show the details panel (drawer or collapsed) and focus a field in it |
 | `PanelToggle.tsx` | Collapse/expand button for side panels |
 | `Icon.tsx` | Editor icon set |
-| `SequenceCanvas.tsx` | A sequence tab: SVG drawing, drag between lifelines to add a message (`.bb-sequence-sheet` is what exports picture) |
-| `SequenceCode.tsx` | The left panel on a sequence tab: its Mermaid code, follows the sheet, Apply, Copy, `.mmd` download |
-| `SequencePanel.tsx` | Details for a sequence participant, message or note (not shown since sequence tabs dropped the right panel) |
+| `SequenceCanvas.tsx` | A sequence tab: toolbar, SVG drawing with frames and activation bars, editing in place, zoom, drag between lifelines to add a message (`.bb-sequence-sheet` is what exports picture) |
+| `SequenceCode.tsx` | The left panel on a sequence tab: its Mermaid code, live both ways, highlighted, Copy, `.mmd` download |
+| `SequencePanel.tsx` | The right panel on a sequence tab: details for a participant, message (with activation), note, frame or divider |
 | `sequenceSelection.ts` | What's selected on a sequence tab |
 | `ImportDialog.tsx` | Import from a file or pasted text; used by the start page and File menu |
 | `nodes/BlockNode.tsx` | A component on the canvas: colour, handles, rename, notes marker, L2 badge |
@@ -146,6 +146,7 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 | `event-driven.ts` | Event-driven microservices, with an internal design (L2) |
 | `serverless.ts` | Serverless API on managed services |
 | `data-platform.ts` | Data and analytics platform |
+| `flowchart.ts` | Process flowchart: pills, steps, decision diamonds and a title text box, placed by hand |
 | `current-vs-target.ts` | Two tabs, current and target, for Compare tabs (hidden for now) |
 | `sequence-build.ts` | Builds a one-tab sequence diagram from participants and steps written as data |
 | `sequence.ts` | A checkout flow as a sequence tab |

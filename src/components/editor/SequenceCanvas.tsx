@@ -1,23 +1,33 @@
 "use client";
 
-import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { useTheme } from "next-themes";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { readableTextOn } from "@/lib/diagram/palette";
 import {
+  ACTIVATION_WIDTH,
+  FRAME_TAB,
   SEQUENCE_LAYOUT as L,
   addParticipant,
   addStep,
   columnAt,
+  estimateTextWidth,
   layoutSequence,
   messageCaption,
   messageNumbers,
+  newBlock,
   newMessage,
+  newNote,
   newParticipant,
+  splitCaption,
   stepIndexAt,
+  updateParticipant,
+  updateStep,
+  wrapSteps,
+  type SequenceFrame,
   type SequenceLayout,
 } from "@/lib/diagram/sequence";
-import type { SequenceDiagram, SequenceMessage, SequenceNote, SequenceParticipant } from "@/lib/diagram/types";
+import type { SequenceBlockKind, SequenceDiagram, SequenceMessage, SequenceNote, SequenceParticipant } from "@/lib/diagram/types";
 import { useSequenceCode } from "./SequenceCode";
 import { Icon } from "./Icon";
 import { selectSequenceItem, useSequenceSelection } from "./sequenceSelection";
@@ -50,6 +60,11 @@ const INK = {
     noteText: "#333333",
     numberFill: "#333333",
     numberText: "#ffffff",
+    frameStroke: "#9370db",
+    frameTab: "#ececff",
+    frameText: "#000000",
+    activationFill: "#f4f4f4",
+    activationStroke: "#666666",
   },
   dark: {
     sheet: "#1e1e1e",
@@ -64,8 +79,72 @@ const INK = {
     noteText: "#333333",
     numberFill: "#d3d3d3",
     numberText: "#1e1e1e",
+    frameStroke: "#81b1db",
+    frameTab: "#1f2020",
+    frameText: "#e0e0e0",
+    activationFill: "#2b2b2b",
+    activationStroke: "#a0a0a0",
   },
 };
+
+/** Mermaid's frames, with what each is for (shown as the button's tooltip). */
+export const FRAME_KINDS: { kind: SequenceBlockKind; label: string; hint: string }[] = [
+  { kind: "loop", label: "Loop", hint: "Repeated: e.g. every minute, for each item" },
+  { kind: "alt", label: "Alt", hint: "Alternatives: if … else …" },
+  { kind: "opt", label: "Opt", hint: "Optional: only happens if …" },
+  { kind: "par", label: "Par", hint: "In parallel: … and …" },
+  { kind: "critical", label: "Critical", hint: "Must succeed together, with what happens if not" },
+  { kind: "break", label: "Break", hint: "Stops the flow: e.g. when a check fails" },
+];
+
+const ZOOMS = [0.5, 0.67, 0.8, 1, 1.25, 1.5, 2];
+
+/** Text being written on the sheet, in a field over what it edits (sheet pixels, before zoom). */
+interface Editing {
+  id: string;
+  value: string;
+  x: number;
+  y: number;
+  width: number;
+  multiline?: boolean;
+  placeholder?: string;
+}
+
+/** Where the field for editing an item's text goes, and what it starts with. */
+function editingFor(sequence: SequenceDiagram, layout: SequenceLayout, id: string): Editing | null {
+  const column = layout.columns.find((candidate) => candidate.participant.id === id);
+  if (column) {
+    if (column.participant.component) return null;
+    return { id, value: column.participant.label, x: column.x - Math.max(column.width, 140) / 2, y: L.margin + 8, width: Math.max(column.width, 140) };
+  }
+  const row = layout.rows.find((candidate) => candidate.step.id === id);
+  if (!row) return null;
+  const step = row.step;
+  if (step.type === "message") {
+    const from = row.fromX ?? 0;
+    const to = row.toX ?? 0;
+    const width = Math.max(180, Math.abs(to - from) - 16);
+    const center = from === to || step.from === step.to ? from + L.selfLoop + 6 + width / 2 : (from + to) / 2;
+    return { id, value: messageCaption(step), x: center - width / 2, y: (step.from === step.to ? row.y : row.y - 30), width, placeholder: "What's sent (protocol)" };
+  }
+  if (step.type === "note") {
+    const xs = step.over.flatMap((over) => layout.columns.find((candidate) => candidate.participant.id === over)?.x ?? []);
+    const left = xs.length > 1 ? Math.min(...xs) - 60 : (xs[0] ?? 0) - L.noteWidth / 2;
+    const right = xs.length > 1 ? Math.max(...xs) + 60 : (xs[0] ?? 0) + L.noteWidth / 2;
+    return { id, value: step.text, x: left, y: row.y, width: right - left, multiline: true };
+  }
+  if (step.type === "block" || step.type === "else") {
+    const frame =
+      step.type === "block"
+        ? layout.frames.find((candidate) => candidate.block.id === id)
+        : layout.frames.find((candidate) => candidate.dividers.some((divider) => divider.id === id));
+    if (!frame) return null;
+    const x = step.type === "block" ? frame.left + estimateTextWidth(frame.block.kind) + FRAME_TAB.padding * 2 + 4 : frame.left + 8;
+    return { id, value: step.label ?? "", x, y: (step.type === "block" ? frame.top : row.y) - 2, width: Math.max(160, frame.right - x - 8), placeholder: "Condition, e.g. Payment approved" };
+  }
+  void sequence;
+  return null;
+}
 type Ink = (typeof INK)["light"];
 
 /** A message being drawn: dragged from one lifeline towards another. */
@@ -94,20 +173,69 @@ export default function SequenceCanvas() {
   const numbers = useMemo(() => (sequence.numbered === false ? null : messageNumbers(sequence)), [sequence]);
   const svgRef = useRef<SVGSVGElement>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [editing, setEditing] = useState<Editing | null>(null);
+  // Something new was added and asked to be named: open its field once it's laid out.
+  const [nameNext, setNameNext] = useState<string | null>(null);
+  // Settled while rendering (React's "adjust state when props change"): the new item is in this render's layout.
+  if (nameNext && !readOnly) {
+    const next = editingFor(sequence, layout, nameNext);
+    setNameNext(null);
+    if (next) setEditing(next);
+  }
+
+  /** Opens the field for writing an item's name, label or text on the sheet. */
+  function startEditing(id: string) {
+    if (readOnly) return;
+    selectSequenceItem(id);
+    const next = editingFor(sequence, layout, id);
+    if (next) setEditing(next);
+    else useSequenceCode.getState().reveal(id);
+  }
+
+  function commitEditing(value: string) {
+    const current = editing;
+    setEditing(null);
+    if (!current) return;
+    const participant = sequence.participants.find((candidate) => candidate.id === current.id);
+    if (participant) {
+      if (value.trim() && value !== participant.label) updateSequence((seq) => updateParticipant(seq, current.id, { label: value.trim() }));
+      return;
+    }
+    const step = sequence.steps.find((candidate) => candidate.id === current.id);
+    if (!step) return;
+    if (step.type === "message") {
+      const { label, protocol } = splitCaption(value);
+      updateSequence((seq) => updateStep(seq, step.id, { label: label ?? "", protocol: protocol ?? "" }));
+    } else if (step.type === "note") {
+      if (value.trim()) updateSequence((seq) => updateStep(seq, step.id, { text: value }));
+    } else if (step.type === "block" || step.type === "else") {
+      updateSequence((seq) => ({
+        ...seq,
+        steps: seq.steps.map((candidate) => {
+          if (candidate.id !== step.id || (candidate.type !== "block" && candidate.type !== "else")) return candidate;
+          const { label: _old, ...rest } = candidate;
+          void _old;
+          return value.trim() ? { ...rest, label: value.trim() } : rest;
+        }),
+      }));
+    }
+  }
 
   const colorOf = (participant: SequenceParticipant) => legend.find((entry) => entry.key === participant.colorKey)?.color;
   const columnOf = (id: string) => layout.columns.find((column) => column.participant.id === id);
 
+  /** Pointer position in sheet pixels (the sheet may be zoomed). */
   function local(event: ReactPointerEvent) {
     const rect = svgRef.current!.getBoundingClientRect();
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    return { x: (event.clientX - rect.left) / zoom, y: (event.clientY - rect.top) / zoom };
   }
 
   function addFirst(shape: SequenceParticipant["shape"]) {
     const participant = newParticipant(shape === "actor" ? "User" : "New participant", shape);
     updateSequence((current) => addParticipant(current, participant));
     selectSequenceItem(participant.id);
-    useSequenceCode.getState().reveal(participant.id);
+    setNameNext(participant.id);
   }
 
   function finishDraft(event: ReactPointerEvent) {
@@ -124,7 +252,7 @@ export default function SequenceCanvas() {
     const message = newMessage(draft.from, target.participant.id);
     updateSequence((current) => addStep(current, message, stepIndexAt(layout, draft.y)));
     selectSequenceItem(message.id);
-    useSequenceCode.getState().reveal(message.id);
+    setNameNext(message.id);
   }
 
   if (!sequence.participants.length) {
@@ -174,20 +302,24 @@ export default function SequenceCanvas() {
   }
 
   return (
+    <div className="flex h-full w-full flex-col bg-white dark:bg-[#1e1e1e]">
+      {!readOnly && <SequenceToolbar sequence={sequence} zoom={zoom} onZoom={setZoom} onAdded={setNameNext} />}
+      {readOnly && <ZoomControls zoom={zoom} onZoom={setZoom} className="absolute right-3 top-3 z-10" />}
     <div
-      className="h-full w-full overflow-auto bg-white dark:bg-[#1e1e1e]"
+      className="min-h-0 flex-1 overflow-auto"
       onClick={(event) => {
         if (event.target === event.currentTarget) selectSequenceItem(null);
       }}
     >
-      {/* The sheet is what exports picture, so spacing sits on this wrapper, not on it. */}
-      <div className="m-4 w-max">
+      {/* The sheet is what exports picture, so spacing and zoom sit on these wrappers, not on it. */}
+      <div className="m-4 w-max" style={{ width: layout.width * zoom, height: layout.height * zoom }}>
+        <div className="relative origin-top-left" style={{ transform: zoom === 1 ? undefined : `scale(${zoom})`, width: layout.width }}>
         <div className="bb-sequence-sheet" style={{ width: layout.width, height: layout.height, background: ink.sheet }}>
           <svg
             ref={svgRef}
             // A group, not an image: it holds the participants, messages and notes people click and tab to.
             role="group"
-            aria-label={`Sequence diagram: ${sequence.participants.length} participants, ${sequence.steps.length} steps`}
+            aria-label={`Sequence diagram: ${sequence.participants.length} participants, ${sequence.steps.filter((step) => step.type === "message" || step.type === "note").length} steps, ${layout.frames.length} frames`}
             width={layout.width}
             height={layout.height}
             className="block select-none"
@@ -238,21 +370,56 @@ export default function SequenceCanvas() {
                 </rect>
               ))}
 
+            {layout.frames.map((frame) => (
+              <FrameBox key={frame.block.id} frame={frame} ink={ink} selected={selected} onEdit={startEditing} layer="box" />
+            ))}
+
+            {layout.activations.map((bar, index) => (
+              <rect
+                key={`${bar.participantId}-${index}`}
+                x={bar.x}
+                y={bar.top}
+                width={ACTIVATION_WIDTH}
+                height={Math.max(4, bar.bottom - bar.top)}
+                fill={ink.activationFill}
+                stroke={ink.activationStroke}
+                strokeWidth={1}
+                pointerEvents="none"
+              />
+            ))}
+
             {layout.rows.map((row) =>
               row.step.type === "message" ? (
                 <MessageArrow
                   key={row.step.id}
                   message={row.step}
                   y={row.y}
-                  layout={layout}
+                  fromX={row.fromX}
+                  toX={row.toX}
                   number={numbers?.get(row.step.id)}
                   selected={selected === row.step.id}
+                  hidden={editing?.id === row.step.id}
                   ink={ink}
+                  onEdit={startEditing}
                 />
-              ) : (
-                <NoteBox key={row.step.id} note={row.step} y={row.y} lines={row.lines ?? []} layout={layout} selected={selected === row.step.id} ink={ink} />
-              ),
+              ) : row.step.type === "note" ? (
+                <NoteBox
+                  key={row.step.id}
+                  note={row.step}
+                  y={row.y}
+                  lines={row.lines ?? []}
+                  layout={layout}
+                  selected={selected === row.step.id}
+                  ink={ink}
+                  onEdit={startEditing}
+                />
+              ) : null,
             )}
+
+            {/* Frame tabs and conditions go over the bars and arrows, so they're never covered. */}
+            {layout.frames.map((frame) => (
+              <FrameBox key={frame.block.id} frame={frame} ink={ink} selected={selected} onEdit={startEditing} layer="labels" editing={editing?.id ?? null} />
+            ))}
 
             {[L.margin, layout.lifelineBottom].map((top, index) =>
               layout.columns.map((column) => (
@@ -266,15 +433,282 @@ export default function SequenceCanvas() {
                   selected={selected === column.participant.id}
                   mirror={index === 1}
                   ink={ink}
+                  onEdit={startEditing}
                 />
               )),
             )}
 
             {draft && <DraftLine draft={draft} layout={layout} column={columnOf(draft.from)?.x ?? draft.startX} />}
           </svg>
-      </div>
+        </div>
+        {editing && <InlineEditor editing={editing} onCommit={commitEditing} onCancel={() => setEditing(null)} />}
+        </div>
       </div>
     </div>
+    </div>
+  );
+}
+
+/** A field over the sheet for writing a name or label in place. Enter (Ctrl/⌘+Enter in a note) keeps it; Esc doesn't. */
+function InlineEditor({ editing, onCommit, onCancel }: { editing: Editing; onCommit: (value: string) => void; onCancel: () => void }) {
+  const done = useRef(false);
+  const common = {
+    autoFocus: true,
+    defaultValue: editing.value,
+    placeholder: editing.placeholder,
+    "aria-label": "Edit text",
+    className:
+      "absolute z-20 rounded border-2 border-blue-500 bg-white px-1.5 py-0.5 text-center text-[13px] text-zinc-900 shadow-lg outline-none dark:bg-zinc-900 dark:text-zinc-100",
+    style: { left: editing.x, top: editing.y, width: editing.width },
+    onFocus: (event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => event.currentTarget.select(),
+    onBlur: (event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      if (!done.current) onCommit(event.currentTarget.value);
+      done.current = true;
+    },
+    onKeyDown: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      // The sheet's own keys (arrows move, Delete removes) stay out of what's being written.
+      event.stopPropagation();
+      if (event.key === "Escape") {
+        done.current = true;
+        onCancel();
+      } else if (event.key === "Enter" && (!editing.multiline || event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        event.currentTarget.blur();
+      }
+    },
+  };
+  return editing.multiline ? <textarea rows={3} {...common} /> : <input {...common} />;
+}
+
+const TOOL =
+  "inline-flex min-h-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-zinc-200 dark:hover:bg-zinc-800";
+
+function ZoomControls({ zoom, onZoom, className = "" }: { zoom: number; onZoom: (zoom: number) => void; className?: string }) {
+  const at = ZOOMS.indexOf(zoom);
+  return (
+    <div className={`flex items-center rounded-md border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 ${className}`}>
+      <button type="button" className={TOOL} aria-label="Zoom out" disabled={at <= 0} onClick={() => onZoom(ZOOMS[at - 1])}>
+        −
+      </button>
+      <button type="button" className={`${TOOL} w-12 justify-center tabular-nums`} title="Back to 100%" onClick={() => onZoom(1)}>
+        {Math.round(zoom * 100)}%
+      </button>
+      <button type="button" className={TOOL} aria-label="Zoom in" disabled={at >= ZOOMS.length - 1} onClick={() => onZoom(ZOOMS[at + 1])}>
+        +
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Adds things where you'd expect: after what's selected (or at the end), from the selected participant. A new
+ * message or note opens its label for typing straight away (`onAdded`).
+ */
+function SequenceToolbar({ sequence, zoom, onZoom, onAdded }: { sequence: SequenceDiagram; zoom: number; onZoom: (zoom: number) => void; onAdded: (id: string) => void }) {
+  const updateSequence = useDiagramStore((state) => state.updateSequence);
+  const selected = useSequenceSelection((state) => state.id);
+  const [framesOpen, setFramesOpen] = useState(false);
+  const { participants, steps } = sequence;
+  const stepAt = steps.findIndex((step) => step.id === selected);
+  const selectedStep = stepAt === -1 ? undefined : steps[stepAt];
+  const selectedParticipant = participants.find((participant) => participant.id === selected);
+  const insertAt = stepAt === -1 ? steps.length : stepAt + 1;
+
+  function add(shape: SequenceParticipant["shape"]) {
+    const participant = newParticipant(shape === "actor" ? "User" : `Participant ${participants.length + 1}`, shape);
+    const index = selectedParticipant ? participants.indexOf(selectedParticipant) + 1 : participants.length;
+    updateSequence((current) => addParticipant(current, participant, index));
+    selectSequenceItem(participant.id);
+    onAdded(participant.id);
+  }
+
+  /** From the selected participant, or the sender of the selected message, to the next one along. */
+  function addMessage() {
+    const fromId =
+      selectedParticipant?.id ??
+      (selectedStep?.type === "message" ? selectedStep.to : selectedStep?.type === "note" ? selectedStep.over[0] : undefined) ??
+      participants[0].id;
+    const fromIndex = participants.findIndex((participant) => participant.id === fromId);
+    const to = participants[fromIndex + 1] ?? participants[fromIndex - 1] ?? participants[fromIndex];
+    const message = newMessage(fromId, to.id);
+    updateSequence((current) => addStep(current, message, insertAt));
+    selectSequenceItem(message.id);
+    onAdded(message.id);
+  }
+
+  function addNote() {
+    const over =
+      selectedParticipant?.id ?? (selectedStep?.type === "message" ? selectedStep.to : undefined) ?? participants[0].id;
+    const note = newNote([over], "Note");
+    updateSequence((current) => addStep(current, note, insertAt));
+    selectSequenceItem(note.id);
+    onAdded(note.id);
+  }
+
+  /** Wraps the selected message or note in a frame, or adds an empty one after the selection. */
+  function addFrame(kind: SequenceBlockKind) {
+    setFramesOpen(false);
+    const block = newBlock(kind);
+    const wrap = selectedStep && (selectedStep.type === "message" || selectedStep.type === "note");
+    updateSequence((current) => (wrap ? wrapSteps(current, block, stepAt, stepAt) : wrapSteps(current, block, insertAt)));
+    selectSequenceItem(block.id);
+    onAdded(block.id);
+  }
+
+  const wrapping = selectedStep?.type === "message" || selectedStep?.type === "note";
+  return (
+    <div role="toolbar" aria-label="Add to the sequence" className="flex flex-wrap items-center gap-0.5 border-b border-zinc-200 bg-white px-2 py-1 dark:border-zinc-800 dark:bg-zinc-950">
+      <button type="button" className={TOOL} onClick={() => add("participant")} title="Add a participant (after the selected one)">
+        <Icon name="plus" className="h-3.5 w-3.5" /> Participant
+      </button>
+      <button type="button" className={TOOL} onClick={() => add("actor")} title="Add a person">
+        <Icon name="user" className="h-3.5 w-3.5" /> Actor
+      </button>
+      <span aria-hidden className="mx-1 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
+      <button type="button" className={TOOL} onClick={addMessage} title="Add a message after the selection, or drag between lifelines">
+        <Icon name="swap" className="h-3.5 w-3.5" /> Message
+      </button>
+      <button type="button" className={TOOL} onClick={addNote} title="Add a note after the selection">
+        <Icon name="pencil" className="h-3.5 w-3.5" /> Note
+      </button>
+      <div className="relative">
+        <button
+          type="button"
+          className={TOOL}
+          aria-haspopup="menu"
+          aria-expanded={framesOpen}
+          onClick={() => setFramesOpen((open) => !open)}
+          title={wrapping ? "Put the selected step in a frame (loop, alt…)" : "Add a frame (loop, alt…) after the selection"}
+        >
+          <Icon name="layers" className="h-3.5 w-3.5" /> Frame
+          <Icon name="chevronDown" className="h-3 w-3" />
+        </button>
+        {framesOpen && (
+          <div
+            role="menu"
+            className="absolute left-0 top-full z-30 mt-1 w-64 rounded-lg border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+            onKeyDown={(event) => event.key === "Escape" && setFramesOpen(false)}
+          >
+            <p className="px-2 py-1 text-[11px] text-zinc-500">{wrapping ? "Put the selected step in:" : "Add after the selection:"}</p>
+            {FRAME_KINDS.map((frame) => (
+              <button
+                key={frame.kind}
+                type="button"
+                role="menuitem"
+                className="flex w-full flex-col items-start rounded px-2 py-1 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                onClick={() => addFrame(frame.kind)}
+              >
+                <span className="font-mono text-xs font-semibold text-zinc-900 dark:text-zinc-100">{frame.kind}</span>
+                <span className="text-[11px] text-zinc-500">{frame.hint}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <span aria-hidden className="mx-1 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
+      <label className={`${TOOL} cursor-pointer`} title="Mermaid's autonumber">
+        <input
+          type="checkbox"
+          className="h-3.5 w-3.5 accent-zinc-900 dark:accent-zinc-100"
+          checked={sequence.numbered !== false}
+          onChange={(event) =>
+            updateSequence((current) => {
+              const next = { ...current };
+              if (event.target.checked) delete next.numbered;
+              else next.numbered = false;
+              return next;
+            })
+          }
+        />
+        Number
+      </label>
+      <span className="ml-auto hidden text-[11px] text-zinc-400 2xl:inline">Double-click to rename · drag between lifelines for a message</span>
+      <ZoomControls zoom={zoom} onZoom={onZoom} className="ml-auto 2xl:ml-2" />
+    </div>
+  );
+}
+
+/**
+ * A Mermaid frame: a box round its steps with a tab saying what it is ("loop"), its condition in brackets, and a
+ * dashed line before each further part ("[else …]").
+ */
+function FrameBox({
+  frame,
+  ink,
+  selected,
+  onEdit,
+  layer,
+  editing = null,
+}: {
+  frame: SequenceFrame;
+  ink: Ink;
+  selected: string | null;
+  onEdit: (id: string) => void;
+  /** The box and dividers go under the steps; the tab and conditions over them. */
+  layer: "box" | "labels";
+  editing?: string | null;
+}) {
+  const isSelected = selected === frame.block.id;
+  const stroke = isSelected ? SELECTED : ink.frameStroke;
+  const tabWidth = estimateTextWidth(frame.block.kind) + FRAME_TAB.padding * 2;
+  const { left, right, top, bottom } = frame;
+  const select = (id: string) => () => selectSequenceItem(id);
+  const label = (text: string | undefined, x: number, y: number, id: string): ReactNode =>
+    editing === id ? null : (
+    <text
+      x={x}
+      y={y}
+      fontSize={13}
+      fontWeight={600}
+      fill={isSelected ? SELECTED : ink.frameText}
+      dominantBaseline="central"
+      className="cursor-text"
+      onClick={select(id)}
+      onDoubleClick={() => onEdit(id)}
+    >
+      {text ? `[${text}]` : "[ ]"}
+    </text>
+  );
+  if (layer === "box") {
+    return (
+      <g data-step={frame.block.id}>
+        <rect x={left} y={top} width={right - left} height={bottom - top} fill="none" stroke={stroke} strokeWidth={isSelected ? 2 : 1.5} pointerEvents="none" />
+        {frame.dividers.map((divider) => (
+          <g key={divider.id} data-step={divider.id}>
+            <line x1={left} x2={right} y1={divider.y} y2={divider.y} stroke={selected === divider.id ? SELECTED : ink.frameStroke} strokeWidth={1.5} strokeDasharray="6 4" />
+            {/* A wide strip, so the dashed line is easy to click. */}
+            <rect x={left} y={divider.y - 4} width={right - left} height={8} fill="transparent" className="cursor-pointer" onClick={select(divider.id)} onDoubleClick={() => onEdit(divider.id)} />
+          </g>
+        ))}
+      </g>
+    );
+  }
+  return (
+    <g>
+      <g
+        role="button"
+        tabIndex={0}
+        aria-label={`${frame.block.kind} frame${frame.block.label ? `: ${frame.block.label}` : ""}`}
+        className="cursor-pointer outline-none"
+        onClick={select(frame.block.id)}
+        onDoubleClick={() => onEdit(frame.block.id)}
+        onKeyDown={(event) => event.key === "Enter" && selectSequenceItem(frame.block.id)}
+      >
+        <path
+          d={`M${left} ${top}H${left + tabWidth}V${top + FRAME_TAB.height - 6}L${left + tabWidth - 6} ${top + FRAME_TAB.height}H${left}Z`}
+          fill={ink.frameTab}
+          stroke={stroke}
+          strokeWidth={1}
+        />
+        <text x={left + tabWidth / 2} y={top + FRAME_TAB.height / 2} textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={700} fill={ink.frameText}>
+          {frame.block.kind}
+        </text>
+      </g>
+      {label(frame.block.label, left + tabWidth + 8, top + FRAME_TAB.height / 2, frame.block.id)}
+      {frame.dividers.map((divider) => (
+        <g key={divider.id}>{label(divider.label, left + 8, divider.y + 12, divider.id)}</g>
+      ))}
+    </g>
   );
 }
 
@@ -288,6 +722,7 @@ function ParticipantHead({
   selected,
   mirror,
   ink,
+  onEdit,
 }: {
   participant: SequenceParticipant;
   x: number;
@@ -297,6 +732,7 @@ function ParticipantHead({
   selected: boolean;
   mirror: boolean;
   ink: Ink;
+  onEdit: (id: string) => void;
 }) {
   const select = () => selectSequenceItem(participant.id);
   const common = {
@@ -310,12 +746,10 @@ function ParticipantHead({
         }),
     className: "cursor-pointer outline-none",
     onClick: select,
-    onDoubleClick: () => {
-      select();
-      useSequenceCode.getState().reveal(participant.id);
-    },
+    onDoubleClick: () => onEdit(participant.id),
     onKeyDown: (event: React.KeyboardEvent) => {
       if (event.key === "Enter") select();
+      if (event.key === "F2") onEdit(participant.id);
     },
   } as const;
 
@@ -373,25 +807,34 @@ function arrowHead(x: number, y: number, direction: 1 | -1, filled: boolean, str
 function MessageArrow({
   message,
   y,
-  layout,
+  fromX,
+  toX,
   number,
   selected,
+  hidden,
   ink,
+  onEdit,
 }: {
   message: SequenceMessage;
   y: number;
-  layout: SequenceLayout;
+  /** Where the arrow starts and ends (at an activation bar's edge when there is one). */
+  fromX?: number;
+  toX?: number;
   number?: number;
   selected: boolean;
+  /** Its caption is being edited in place. */
+  hidden: boolean;
   ink: Ink;
+  onEdit: (id: string) => void;
 }) {
-  const from = layout.columns.find((column) => column.participant.id === message.from);
-  const to = layout.columns.find((column) => column.participant.id === message.to);
-  if (!from || !to) return null;
+  if (fromX === undefined || toX === undefined) return null;
+  const from = { x: fromX };
+  const to = { x: toX };
+  const self = message.from === message.to;
   const stroke = selected ? SELECTED : ink.line;
   const dash = message.kind === "reply" ? "3 3" : undefined;
   const filled = (message.kind ?? "call") === "call";
-  const label = messageCaption(message);
+  const label = hidden ? "" : messageCaption(message) || (selected ? "Double-click to name" : "");
   const caption = [number !== undefined ? `${number}.` : "", label].filter(Boolean).join(" ");
   // Mermaid's autonumber: the number in a dot where the arrow starts, not in the caption.
   const badge =
@@ -410,23 +853,22 @@ function MessageArrow({
     "aria-label": `Message ${caption || "without a label"}`,
     className: "cursor-pointer outline-none",
     onClick: select,
-    onDoubleClick: () => {
-      select();
-      useSequenceCode.getState().reveal(message.id);
-    },
+    onDoubleClick: () => onEdit(message.id),
     onKeyDown: (event: React.KeyboardEvent) => {
       if (event.key === "Enter") select();
+      if (event.key === "F2") onEdit(message.id);
     },
   } as const;
 
-  if (from === to) {
+  if (self) {
     const x = from.x;
-    const right = x + L.selfLoop;
+    const end = to.x;
+    const right = Math.max(x, end) + L.selfLoop;
     return (
       <g {...handlers} data-step={message.id}>
         <rect x={x} y={y - 18} width={L.selfLoop + 12} height={44} fill="transparent" />
-        <path d={`M${x} ${y}H${right}V${y + 24}H${x + ARROW}`} fill="none" stroke={stroke} strokeWidth={1.5} strokeDasharray={dash} />
-        {arrowHead(x, y + 24, -1, filled, stroke)}
+        <path d={`M${x} ${y}H${right}V${y + 24}H${end + ARROW}`} fill="none" stroke={stroke} strokeWidth={1.5} strokeDasharray={dash} />
+        {arrowHead(end, y + 24, -1, filled, stroke)}
         <text x={right + 6} y={y + 12} dominantBaseline="central" fontSize={13} fill={selected ? SELECTED : ink.text}>
           {label}
         </text>
@@ -441,7 +883,7 @@ function MessageArrow({
       <rect x={Math.min(from.x, to.x)} y={y - 22} width={Math.abs(to.x - from.x)} height={30} fill="transparent" />
       <line x1={from.x} x2={to.x - ARROW * direction} y1={y} y2={y} stroke={stroke} strokeWidth={1.5} strokeDasharray={dash} />
       {arrowHead(to.x, y, direction, filled, stroke)}
-      <text x={(from.x + to.x) / 2} y={y - 7} textAnchor="middle" fontSize={13} fill={selected ? SELECTED : ink.text}>
+      <text x={(from.x + to.x) / 2} y={y - 7} textAnchor="middle" fontSize={13} fill={selected ? SELECTED : ink.text} fontStyle={messageCaption(message) ? undefined : "italic"}>
         {label}
       </text>
       {badge}
@@ -456,6 +898,7 @@ function NoteBox({
   layout,
   selected,
   ink,
+  onEdit,
 }: {
   note: SequenceNote;
   y: number;
@@ -463,6 +906,7 @@ function NoteBox({
   layout: SequenceLayout;
   selected: boolean;
   ink: Ink;
+  onEdit: (id: string) => void;
 }) {
   const xs = note.over.flatMap((id) => layout.columns.find((column) => column.participant.id === id)?.x ?? []);
   if (!xs.length) return null;
@@ -477,10 +921,7 @@ function NoteBox({
       data-step={note.id}
       className="cursor-pointer outline-none"
       onClick={() => selectSequenceItem(note.id)}
-      onDoubleClick={() => {
-        selectSequenceItem(note.id);
-        useSequenceCode.getState().reveal(note.id);
-      }}
+      onDoubleClick={() => onEdit(note.id)}
       onKeyDown={(event) => event.key === "Enter" && selectSequenceItem(note.id)}
     >
       <rect

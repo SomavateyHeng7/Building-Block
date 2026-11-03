@@ -56,7 +56,10 @@ export function toFlowNodes(nodes: DiagramNode[], selectedIds: ReadonlySet<strin
       selected,
       className,
       // The name a screen reader gives the box when focus lands on it (the live region says the rest).
-      ariaLabel: `${node.data.label || "Untitled"}, ${node.type === "container" ? "container" : "component"}`,
+      ariaLabel:
+        node.type === "text"
+          ? `Text: ${node.data.label.slice(0, 80) || "empty"}`
+          : `${node.data.label || "Untitled"}, ${node.type === "container" ? "container" : "component"}`,
       data: node.data,
     };
     flowNodeCache.set(node, { selected, className, flow });
@@ -88,7 +91,7 @@ export function fromFlowNodes(flowNodes: FlowNode[], previous: readonly DiagramN
     }
     return {
       id: node.id,
-      type: node.type as "container" | "block",
+      type: node.type as DiagramNode["type"],
       position: node.position,
       size: { width, height },
       parentId: node.parentId,

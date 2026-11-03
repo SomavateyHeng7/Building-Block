@@ -9,7 +9,7 @@ import type { Diagram, DiagramEdge, DiagramNode, SequenceDiagram } from "./types
  */
 
 export interface SearchResult {
-  kind: "container" | "component" | "connection" | "participant" | "message" | "note";
+  kind: "container" | "component" | "text" | "connection" | "participant" | "message" | "note";
   id: string;
   sectionId: string;
   /** Set when the result is inside this component's internal design. */
@@ -92,7 +92,7 @@ function buildIndex(diagram: Diagram): Entry[] {
   function visit(nodes: DiagramNode[], edges: DiagramEdge[], sectionId: string, where: string, detailId?: string) {
     for (const node of nodes) {
       const icon = node.data.kind === "block" ? componentIcon(node.data.icon)?.label : undefined;
-      const result: SearchResult = { kind: node.type === "container" ? "container" : "component", id: node.id, sectionId, detailId, label: node.data.label, where };
+      const result: SearchResult = { kind: node.type === "container" ? "container" : node.type === "text" ? "text" : "component", id: node.id, sectionId, detailId, label: node.data.label, where };
       entries.push({
         result,
         name: normalize(node.data.label),
@@ -145,6 +145,7 @@ function buildIndex(diagram: Diagram): Entry[] {
         });
         continue;
       }
+      if (step.type !== "message") continue;
       const label = `${nameOf(step.from)} → ${nameOf(step.to)}`;
       entries.push({
         result: { kind: "message", id: step.id, sectionId, label, where },
