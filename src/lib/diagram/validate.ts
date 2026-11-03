@@ -39,7 +39,7 @@ const DEFAULT_SIZE = {
 };
 const TEXT_ALIGNS = ["left", "center", "right"] as const;
 const SEQUENCE_BLOCK_KINDS = ["loop", "alt", "opt", "par", "critical", "break"] as const;
-const BLOCK_SHAPES = ["terminal", "decision"] as const;
+const BLOCK_SHAPES = ["terminal", "decision", "data", "document", "database", "subprocess"] as const;
 const MIN_FONT_SIZE = 8;
 const MAX_FONT_SIZE = 96;
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
@@ -376,7 +376,13 @@ function parseSection(raw: unknown, index: number, legendKeys: Set<string>, fixe
     };
   }
   const { nodes, edges } = parseView(section.nodes, section.edges, name, legendKeys, fixes, 0);
-  return { id: text(section.id) || createId("section"), name, nodes, ...(edges.length ? { edges } : {}) };
+  return {
+    id: text(section.id) || createId("section"),
+    name,
+    ...(section.look === "drawio" ? { look: "drawio" as const } : {}),
+    nodes,
+    ...(edges.length ? { edges } : {}),
+  };
 }
 
 /**

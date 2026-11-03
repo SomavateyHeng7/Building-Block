@@ -4,13 +4,15 @@ import { memo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
 import { componentIcon } from "@/lib/diagram/componentIcons";
+import { shapeInfo } from "@/lib/diagram/shapes";
 import { defaultLabel } from "@/lib/diagram/factory";
-import { readableTextOn } from "@/lib/diagram/palette";
+import { outlineFor, readableTextOn } from "@/lib/diagram/palette";
 import { useDiagramStore } from "@/lib/diagram/store";
 import type { BlockNodeData } from "@/lib/diagram/types";
 import { showDetails } from "../detailsPanel";
 import { CommentMarker } from "./CommentMarker";
 import { useReadOnly } from "../viewMode";
+import { useDrawioLook } from "../look";
 
 export type BlockFlowNode = Node<BlockNodeData, "block">;
 
@@ -35,19 +37,27 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
   const color = entryColor ?? "#ffffff";
   const icon = componentIcon(data.icon);
   const shape = data.shape ?? "process";
-  const outline = selected ? "#2563eb" : "rgba(0,0,0,0.25)";
+  // draw.io outlines each shape in a darker shade of its own fill, with square corners on a box.
+  const drawio = useDrawioLook();
+  const edge = drawio ? outlineFor(color) : "rgba(0,0,0,0.25)";
+  const outline = selected && !drawio ? "#2563eb" : edge;
+  const corners = shape === "terminal" ? "rounded-full px-3" : drawio ? "rounded-none" : "rounded";
+  const info = shapeInfo(shape);
+  // Shapes other than a box or pill are an SVG outline behind the label, inset so the text stays inside.
+  const drawn = !!info.path;
 
   return (
     <div
-      className={`relative flex h-full w-full items-center justify-center text-center text-xs font-medium ${
-        shape === "decision" ? "px-[22%]" : `border ${shape === "terminal" ? "rounded-full px-3" : "rounded"}`
-      }`}
+      className={`relative flex h-full w-full items-center justify-center text-center text-xs ${drawio ? "font-normal" : "font-medium"} ${
+        drawn ? "" : `border ${corners}`
+      } ${drawio && selected ? "outline outline-1 outline-offset-2 outline-dashed outline-[#2563eb]" : ""}`}
       title={data.description ?? (entryColor ? undefined : "No legend category assigned")}
       style={{
-        backgroundColor: shape === "decision" ? undefined : color,
+        backgroundColor: drawn ? undefined : color,
+        paddingInline: drawn ? `${info.inset}%` : undefined,
         borderColor: outline,
         borderStyle: entryColor ? "solid" : "dashed",
-        color: readableTextOn(color),
+        color: drawio && readableTextOn(color) !== "#f9fafb" ? "#000000" : readableTextOn(color),
       }}
       onDoubleClick={() => {
         if (readOnly) return;
@@ -55,19 +65,21 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
         setEditing(true);
       }}
     >
-      {/* A diamond is drawn behind the label; its corners are the connection dots' sides. */}
-      {shape === "decision" && (
+      {/* The shape's outline behind the label (a diamond's corners are where its connection dots are). */}
+      {info.path && (
         <svg aria-hidden className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
-          <polygon
-            points="50,0 100,50 50,100 0,50"
+          <path
+            d={info.path}
             fill={color}
-            stroke={outline}
-            strokeWidth={selected ? 2 : 1}
+            stroke={selected && drawio ? "#2563eb" : outline}
+            strokeWidth={selected ? (drawio ? 1.5 : 2) : 1}
             strokeDasharray={entryColor ? undefined : "4 3"}
             vectorEffect="non-scaling-stroke"
           />
+          {info.detail && <path d={info.detail} fill="none" stroke={outline} strokeWidth={1} vectorEffect="non-scaling-stroke" />}
         </svg>
       )}
+      {drawio && !readOnly && <QuickAdd id={id} />}
       <NodeResizer minWidth={80} minHeight={32} isVisible={selected && !readOnly} />
       {/* Every side starts and ends connections (the canvas uses loose connection mode). */}
       {SIDES.map((side) => (
@@ -107,6 +119,43 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
         </span>
       )}
     </div>
+  );
+}
+
+const QUICK_ARROWS = [
+  { side: "top", className: "left-1/2 -top-7 -translate-x-1/2", rotate: -90 },
+  { side: "right", className: "top-1/2 -right-7 -translate-y-1/2", rotate: 0 },
+  { side: "bottom", className: "left-1/2 -bottom-7 -translate-x-1/2", rotate: 90 },
+  { side: "left", className: "top-1/2 -left-7 -translate-y-1/2", rotate: 180 },
+] as const;
+
+/**
+ * draw.io's quick-add arrows: on a hovered or selected shape, a blue arrow off each side. Clicking one adds the
+ * same kind of shape that way, lined up and connected (`addConnectedBlock`); Shift-click adds a decision instead.
+ */
+function QuickAdd({ id }: { id: string }) {
+  const addConnectedBlock = useDiagramStore((state) => state.addConnectedBlock);
+  return (
+    <>
+      {QUICK_ARROWS.map(({ side, className, rotate }) => (
+        <button
+          key={side}
+          type="button"
+          title={`Add a connected shape ${side === "top" ? "above" : side === "bottom" ? "below" : `to the ${side}`} (Shift: a decision)`}
+          aria-label={`Add a connected shape ${side === "top" ? "above" : side === "bottom" ? "below" : `to the ${side}`}`}
+          className={`bb-quick-add nodrag nopan absolute z-10 flex h-5 w-5 min-h-0 items-center justify-center rounded-full text-[#29b6f2] hover:scale-125 hover:text-[#1a8fd1] ${className}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            addConnectedBlock(id, side, event.shiftKey ? "decision" : undefined);
+          }}
+          onDoubleClick={(event) => event.stopPropagation()}
+        >
+          <svg viewBox="0 0 20 20" className="h-4 w-4" style={{ transform: `rotate(${rotate}deg)` }} aria-hidden>
+            <path d="M3 7h8V3l7 7-7 7v-4H3z" fill="currentColor" fillOpacity={0.75} />
+          </svg>
+        </button>
+      ))}
+    </>
   );
 }
 

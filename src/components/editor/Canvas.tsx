@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import {
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   ConnectionMode,
@@ -30,6 +31,7 @@ import { changeMarksForView } from "@/lib/diagram/compare";
 import ContainerNode from "./nodes/ContainerNode";
 import BlockNode from "./nodes/BlockNode";
 import TextNode from "./nodes/TextNode";
+import { shapeInfo } from "@/lib/diagram/shapes";
 import PixelGuides, { useGuides } from "./PixelGuides";
 import ConnectionEdge from "./edges/ConnectionEdge";
 import { useCanvasFocus } from "./canvasFocus";
@@ -199,8 +201,15 @@ export default function Canvas() {
 
   const flowEdges = useMemo(
     () =>
-      toFlowEdges(section.edges ?? [], selectedEdgeId, colorMode === "dark", marks, new Map(section.nodes.map((node) => [node.id, node.data.label]))),
-    [section.edges, section.nodes, selectedEdgeId, colorMode, marks],
+      toFlowEdges(
+        section.edges ?? [],
+        selectedEdgeId,
+        colorMode === "dark",
+        marks,
+        new Map(section.nodes.map((node) => [node.id, node.data.label])),
+        section.look,
+      ),
+    [section.edges, section.nodes, selectedEdgeId, colorMode, marks, section.look],
   );
 
   // Zoom to something found by search or picked in Compare. Going to another view remounts the canvas, so
@@ -390,6 +399,7 @@ export default function Canvas() {
         addText({ x: Math.round(point.x - 80), y: Math.round(point.y - 16) });
         return;
       }
+      const size = payload.kind === "shape" ? shapeInfo(payload.shape).size : { width: 140, height: 56 };
 
       const containers = flowNodes.filter((node) => node.type === "container");
       const target = findContainerAtPoint(containers, point);
@@ -397,12 +407,13 @@ export default function Canvas() {
       const position =
         target && insets
           ? {
-              x: Math.max(insets.left, point.x - target.position.x - 70),
-              y: Math.max(insets.top, point.y - target.position.y - 28),
+              x: Math.round(Math.max(insets.left, point.x - target.position.x - size.width / 2)),
+              y: Math.round(Math.max(insets.top, point.y - target.position.y - size.height / 2)),
             }
-          : { x: point.x - 70, y: point.y - 28 };
+          : { x: Math.round(point.x - size.width / 2), y: Math.round(point.y - size.height / 2) };
 
-      addBlock(position, target?.id ?? null, payload.colorKey as BlockColorKey);
+      if (payload.kind === "shape") addBlock(position, target?.id ?? null, undefined, payload.shape);
+      else addBlock(position, target?.id ?? null, payload.colorKey as BlockColorKey);
     },
     [addBlock, addContainer, addText, flowNodes, readOnly, screenToFlowPosition],
   );
@@ -410,6 +421,7 @@ export default function Canvas() {
   return (
     <ReactFlow
       key={section.id}
+      className={section.look === "drawio" ? "bb-look-drawio" : undefined}
       nodes={flowNodes}
       edges={flowEdges}
       nodeTypes={nodeTypes}
@@ -456,7 +468,15 @@ export default function Canvas() {
       onlyRenderVisibleElements={!renderEverything}
       fitView
     >
-      <Background gap={16} />
+      {section.look === "drawio" ? (
+        // draw.io's grid: fine lines every 10 px, stronger ones every 40.
+        <>
+          <Background id="minor" variant={BackgroundVariant.Lines} gap={10} color={colorMode === "dark" ? "#1c1c1c" : "#f0f0f0"} />
+          <Background id="major" variant={BackgroundVariant.Lines} gap={40} color={colorMode === "dark" ? "#2a2a2a" : "#e0e0e0"} />
+        </>
+      ) : (
+        <Background gap={16} />
+      )}
       <PixelGuides />
       <Controls />
       {wide && <MiniMap pannable zoomable />}

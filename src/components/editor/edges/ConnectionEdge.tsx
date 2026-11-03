@@ -37,6 +37,7 @@ function ConnectionEdgeComponent({
     { sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition },
     data?.shape ?? "step",
     bend,
+    data?.sharp,
   );
   // The dot sits just above the label so it doesn't cover the text.
   const dotY = props.label ? labelY - 20 : labelY;

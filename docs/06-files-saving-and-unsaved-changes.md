@@ -94,7 +94,10 @@ function differsFromSaved(saved, diagram) {
 
 - **Identity, not deep comparison:** the store creates a new diagram object for every edit, so `!==` means
   "edited". It's instant regardless of diagram size.
-- **An empty, never-saved diagram is clean:** there's nothing to lose, so New → New doesn't nag.
+- **An empty, never-saved diagram is clean:** there's nothing to lose, so New → New doesn't nag. "Empty" is
+  `hasContent`: no boxes on any tab **and no participants or steps on any sequence tab**. Sequence tabs keep `nodes`
+  empty, and counting nodes alone made a new sequence diagram look empty: no "Not saved" status, no warning on
+  reload and no recovery copy, so a reload lost it in silence (fixed, and tested).
 - **Navigation isn't an edit:** switching tabs or opening an internal design creates a new object that differs
   only in `activeSectionId`/`activeDetailId`. Comparing every other top-level field *by identity* recognises that
   in O(number of fields). Before this rule, switching tabs showed "Unsaved changes" and triggered an autosave.
@@ -134,7 +137,7 @@ The Save button is highlighted amber while there are changes and no file.
 
 | How work could be lost | Protection |
 | --- | --- |
-| Closing or reloading the tab | `beforeunload` handler while dirty (in `EditorApp`) |
+| Closing or reloading the tab | `beforeunload` handler while dirty (in `EditorApp`). If the person goes ahead, `pagehide` brings the recovery copy up to date (when recovery is on), or else sets a flag in `sessionStorage` (`markLostUnsaved`: just "1", nothing of the diagram), so the start page says the diagram couldn't be brought back and offers to turn recovery copies on |
 | File → New / Open in the editor | `useUnsavedGuard` in the toolbar |
 | Toolbar back button | `useUnsavedGuard`, then `opened: false` |
 | Browser Back, then New / Open / a template / dropping a file on `/diagrams` or `/templates` | `useUnsavedGuard` on those pages (the diagram is still in memory) |

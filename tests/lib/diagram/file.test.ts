@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createBlankDiagram } from "@/lib/diagram/factory";
 import { fileBaseName, isDirty, openDiagramFromDevice, saveDiagramToFile, startDiagram, useFileStore } from "@/lib/diagram/file";
-import { useDiagramStore } from "@/lib/diagram/store";
+import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
+import { sequenceTemplate } from "@/templates/sequence";
 
 function fakeHandle(name = "plan.json") {
   const writes: string[] = [];
@@ -29,6 +30,12 @@ describe("dirty tracking", () => {
   it("treats an untouched blank diagram as having nothing to lose", () => {
     startDiagram(createBlankDiagram());
     expect(isDirty()).toBe(false);
+  });
+
+  it("is dirty for a never-saved sequence diagram, whose tabs keep no boxes", () => {
+    startDiagram(sequenceTemplate.build());
+    expect(getActiveSection(useDiagramStore.getState().diagram).nodes).toEqual([]);
+    expect(isDirty()).toBe(true);
   });
 
   it("is dirty once a never-saved diagram has content", () => {

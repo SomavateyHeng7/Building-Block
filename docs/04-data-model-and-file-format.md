@@ -70,6 +70,9 @@ form.
 `nodes` holds containers and components in one array; `edges` holds connections. `edges` is optional because
 files from before connections existed don't have it.
 
+`look` (architecture tabs only) is `"drawio"` to draw the tab, and its internal designs, the way draw.io does; absent
+is the app's own look. It changes only how things are drawn, never what's in the tab.
+
 `kind` says what the tab holds: absent (or `"architecture"`) for boxes and connections, or `"sequence"` for a
 sequence diagram. A sequence tab keeps `nodes: []` and its content in `sequence`, so code that walks nodes needs
 no special case; files from before sequence tabs have no `kind` and open unchanged.

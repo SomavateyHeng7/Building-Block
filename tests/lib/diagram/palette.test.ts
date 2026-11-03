@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_LEGEND } from "@/lib/diagram/defaultLegend";
-import { PALETTE, colorName, contrastRatio, nextLegendColor, parseHexColor, readableTextOn } from "@/lib/diagram/palette";
+import { PALETTE, colorName, contrastRatio, nextLegendColor, outlineFor, parseHexColor, readableTextOn } from "@/lib/diagram/palette";
 
 describe("palette", () => {
   it("has no repeated colours or names, all as #rrggbb", () => {
@@ -51,5 +51,14 @@ describe("readable text", () => {
       expect(contrastRatio(entry.color, readableTextOn(entry.color)), entry.label).toBeGreaterThanOrEqual(4.5);
     }
     expect(readableTextOn("not a colour")).toBe("#111827");
+  });
+});
+
+describe("outlineFor", () => {
+  it("pairs draw.io's fills with its outlines, and darkens any other colour", () => {
+    expect(outlineFor("#DAE8FC")).toBe("#6c8ebf");
+    expect(outlineFor("#fff2cc")).toBe("#d6b656");
+    expect(outlineFor("#8fd19e")).toBe("#4f7357");
+    expect(outlineFor("not a colour")).toBe("#000000");
   });
 });

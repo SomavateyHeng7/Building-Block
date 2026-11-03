@@ -45,8 +45,14 @@ export function supportsFilePicker(): boolean {
   return typeof window !== "undefined" && !!window.showOpenFilePicker && !!window.showSaveFilePicker;
 }
 
+/**
+ * Whether there's anything to lose: boxes on any tab, or participants or steps on a sequence tab (which keeps
+ * `nodes` empty, so counting nodes alone made a new sequence diagram look empty: no warning on reload, no recovery).
+ */
 export function hasContent(diagram: Diagram): boolean {
-  return diagram.sections.some((section) => section.nodes.length > 0);
+  return diagram.sections.some(
+    (section) => section.nodes.length > 0 || !!section.sequence?.participants.length || !!section.sequence?.steps.length,
+  );
 }
 
 /**

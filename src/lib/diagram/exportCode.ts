@@ -52,7 +52,14 @@ export function flowchartMermaid(canvas: Canvas): string {
     const tech = item.data.kind === "block" && item.data.technology ? `<br/>[${mermaidText(item.data.technology)}]` : "";
     const text = `"${mermaidText(item.data.label)}${tech}"`;
     const shape = item.data.kind === "block" ? item.data.shape : undefined;
-    const drawn = shape === "decision" ? `{${text}}` : shape === "terminal" ? `([${text}])` : `[${text}]`;
+    // Mermaid's nearest shapes: rhombus, stadium, parallelogram, cylinder, subroutine (a document has none).
+    const drawn =
+      shape === "decision" ? `{${text}}`
+      : shape === "terminal" ? `([${text}])`
+      : shape === "data" ? `[/${text}/]`
+      : shape === "database" ? `[(${text})]`
+      : shape === "subprocess" ? `[[${text}]]`
+      : `[${text}]`;
     lines.push(`${indent}${ids.get(item.id)}${drawn}`);
   };
   for (const container of canvas.nodes.filter((item) => item.type === "container")) {

@@ -35,7 +35,7 @@ export default function TemplatesPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-12 sm:px-6 sm:py-16">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-12 sm:px-6 sm:py-16">
       <div className="flex items-center justify-between">
         <Link href="/diagrams" className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
           ← Start
@@ -43,7 +43,7 @@ export default function TemplatesPage() {
         <ThemeToggle />
       </div>
       <h1 className="text-2xl font-semibold tracking-tight">Templates</h1>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {templates.map((template) => (
           <button type="button" key={template.id} onClick={() => applyTemplate(template.id)} className={CARD}>
             <div className="mb-3 w-full">

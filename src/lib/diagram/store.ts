@@ -4,6 +4,7 @@ import { hasBranding } from "./branding";
 import { MAX_CHECKPOINTS, snapshotOf, nextCheckpointName, type Checkpoint } from "./checkpoints";
 import { MAX_COMMENTS, commentTargets, mergeComments, type MergeResult } from "./comments";
 import { nextLegendColor } from "./palette";
+import { shapeInfo } from "./shapes";
 import { syncLinkedParticipants } from "./sequence";
 import {
   absolutePosition,
@@ -33,10 +34,22 @@ import type {
   NodeDetails,
   Position,
   ReviewComment,
+  SectionLook,
   SequenceDiagram,
   Size,
   TextNodeData,
 } from "./types";
+
+/** Legend categories a flowchart shape takes when added, by name (as in the Flowchart template's legend). */
+const SHAPE_CATEGORY: Record<BlockShape, RegExp> = {
+  process: /\b(step|process)\b/i,
+  decision: /decision/i,
+  terminal: /\b(start|end)\b/i,
+  data: /\b(data|input|output)\b/i,
+  document: /document/i,
+  database: /\b(database|store|data)\b/i,
+  subprocess: /\b(subprocess|step|process)\b/i,
+};
 
 function touch(diagram: Diagram): Diagram {
   return { ...diagram, updatedAt: new Date().toISOString() };
@@ -305,7 +318,13 @@ interface DiagramState {
   mergeComments: (incoming: ReviewComment[]) => MergeResult;
   setActiveSectionNodes: (nodes: DiagramNode[], options?: NodesChangeOptions) => void;
   addContainer: (position: Position) => void;
-  addBlock: (position: Position, parentId?: string | null, colorKey?: BlockColorKey) => void;
+  /** With `shape`, a flowchart shape at its usual size, coloured by the legend category named for it if there is one. */
+  addBlock: (position: Position, parentId?: string | null, colorKey?: BlockColorKey, shape?: BlockShape) => void;
+  /**
+   * draw.io's quick add: a new shape off one side of a component (the same kind, or `shape`), lined up with it,
+   * clear of other boxes and connected from it, as one undo step. The new one is selected.
+   */
+  addConnectedBlock: (sourceId: string, side: ConnectionSide, shape?: BlockShape) => void;
   /** Adds a free text box (a heading, caption or note) and selects it. */
   addText: (position: Position, text?: string) => void;
   /** Sets a text box's look; undefined values go back to the defaults. */
@@ -344,6 +363,8 @@ interface DiagramState {
   /** Adds categories (e.g. from a preset) whose names the legend doesn't have yet, and returns how many were added. */
   addLegendEntries: (entries: { label: string; color: string }[]) => number;
   renameSection: (id: string, name: string) => void;
+  /** Draws the open tab (and its internal designs) in the app's look or draw.io's; undefined is the app's. */
+  setSectionLook: (look: SectionLook | undefined) => void;
   deleteSection: (id: string) => void;
   duplicateSection: (id: string) => void;
 }
@@ -815,10 +836,16 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
     }),
 
   // Adding into a container grows the container so the new block is never clipped.
-  addBlock: (position, parentId = null, colorKey) =>
+  addBlock: (position, parentId = null, colorKey, shape) =>
     set((state) => {
       if (onSequenceTab(state.diagram)) return state;
       const id = createId("block");
+      const info = shape ? shapeInfo(shape) : undefined;
+      // The category named for the shape, else the one for steps, else the first.
+      const named = info
+        ? (state.diagram.legend.find((entry) => SHAPE_CATEGORY[info.shape].test(entry.label)) ??
+            state.diagram.legend.find((entry) => SHAPE_CATEGORY.process.test(entry.label)))?.key
+        : undefined;
       return {
         ...commit(
           state,
@@ -829,13 +856,14 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
                 id,
                 type: "block",
                 position,
-                size: { width: 140, height: 56 },
+                size: info ? { ...info.size } : { width: 140, height: 56 },
                 parentId: parentId ?? undefined,
                 data: {
                   kind: "block",
-                  label: "New Block",
-                  colorKey: colorKey ?? state.diagram.legend[0]?.key,
+                  label: info?.defaultName ?? "New Block",
+                  colorKey: colorKey ?? named ?? state.diagram.legend[0]?.key,
                   containerId: parentId ?? null,
+                  ...(info && info.shape !== "process" ? { shape: info.shape } : {}),
                 },
               },
             ];
@@ -843,6 +871,88 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
           }),
         ),
         selectedNodeIds: [id],
+      };
+    }),
+
+  addConnectedBlock: (sourceId, side, shape) =>
+    set((state) => {
+      const view = getActiveSection(state.diagram);
+      const source = view.nodes.find((node) => node.id === sourceId);
+      if (!source || source.data.kind !== "block") return state;
+      const sourceData = source.data;
+      const kind = shape ?? sourceData.shape ?? "process";
+      const info = shapeInfo(kind);
+      const size = kind === (sourceData.shape ?? "process") ? source.size : info.size;
+      const GAP = side === "left" || side === "right" ? 80 : 60;
+      const place = (from: Position & Size): Position => {
+        if (side === "right") return { x: from.x + from.width + GAP, y: from.y + from.height / 2 - size.height / 2 };
+        if (side === "left") return { x: from.x - GAP - size.width, y: from.y + from.height / 2 - size.height / 2 };
+        if (side === "bottom") return { x: from.x + from.width / 2 - size.width / 2, y: from.y + from.height + GAP };
+        return { x: from.x + from.width / 2 - size.width / 2, y: from.y - GAP - size.height };
+      };
+      // Siblings share coordinates (all on the canvas, or all in one container): step past any in the way.
+      const siblings = view.nodes.filter((node) => node.parentId === source.parentId && node.id !== source.id && node.type !== "container");
+      const overlaps = (at: Position) =>
+        siblings.some(
+          (node) =>
+            at.x < node.position.x + node.size.width + 8 &&
+            at.x + size.width + 8 > node.position.x &&
+            at.y < node.position.y + node.size.height + 8 &&
+            at.y + size.height + 8 > node.position.y,
+        );
+      let from = { ...source.position, ...source.size };
+      let position = place(from);
+      for (let tries = 0; tries < 20 && overlaps(position); tries++) {
+        from = { ...position, ...size };
+        position = place(from);
+      }
+      position = { x: Math.round(position.x), y: Math.round(position.y) };
+      // A new decision takes a "decision" category if the legend has one (as the flowchart template does).
+      const decisionKey =
+        shape === "decision" ? state.diagram.legend.find((entry) => /decision/i.test(entry.label))?.key : undefined;
+      const id = createId("block");
+      const node: DiagramNode = {
+        id,
+        type: "block",
+        position,
+        size: { ...size },
+        ...(source.parentId ? { parentId: source.parentId } : {}),
+        data: {
+          kind: "block",
+          // A pill after a pill is where the flow ends.
+          label: kind === "terminal" && sourceData.shape === "terminal" ? "End" : info.defaultName,
+          colorKey: decisionKey ?? sourceData.colorKey,
+          containerId: source.parentId ?? null,
+          ...(kind !== "process" ? { shape: kind } : {}),
+        },
+      };
+      const opposite: Record<ConnectionSide, ConnectionSide> = { top: "bottom", bottom: "top", left: "right", right: "left" };
+      const edges = view.edges ?? [];
+      // Out of a decision, the first way is "Yes" and the next "No".
+      const fromDecision = sourceData.shape === "decision";
+      const label = fromDecision ? (edges.some((edge) => edge.source === sourceId && edge.label === "Yes") ? "No" : "Yes") : undefined;
+      const edge: DiagramEdge = {
+        id: createId("edge"),
+        source: sourceId,
+        target: id,
+        sourceSide: side,
+        targetSide: opposite[side],
+        ...(label ? { label } : {}),
+      };
+      return {
+        ...commit(
+          state,
+          mapActiveSectionFull(state.diagram, (section) => {
+            const nodes = [...section.nodes, node];
+            return {
+              ...section,
+              nodes: source.parentId ? growContainerToFit(nodes, source.parentId) : nodes,
+              edges: [...(section.edges ?? []), edge],
+            };
+          }),
+        ),
+        selectedNodeIds: [id],
+        selectedEdgeId: null,
       };
     }),
 
@@ -1035,6 +1145,25 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
         selectedNodeIds: [],
         selectedEdgeId: null,
       };
+    }),
+
+  setSectionLook: (look) =>
+    set((state) => {
+      const sectionId = state.diagram.activeSectionId;
+      const section = state.diagram.sections.find((candidate) => candidate.id === sectionId);
+      if (!section || section.look === look || isSequenceSection(section)) return state;
+      return commit(
+        state,
+        touch({
+          ...state.diagram,
+          sections: state.diagram.sections.map((candidate) => {
+            if (candidate.id !== sectionId) return candidate;
+            const next = { ...candidate, look };
+            if (!look) delete next.look;
+            return next;
+          }),
+        }),
+      );
     }),
 
   renameSection: (id, name) =>
@@ -1261,6 +1390,8 @@ export function getActiveSection(diagram: Diagram): ActiveView {
     name: component.data.label,
     nodes: component.data.detail?.nodes ?? NO_NODES,
     edges: component.data.detail?.edges,
+    // An internal design is drawn in its tab's look.
+    ...(section.look ? { look: section.look } : {}),
     parent: { section, component },
   };
   detailViews.set(component, view);

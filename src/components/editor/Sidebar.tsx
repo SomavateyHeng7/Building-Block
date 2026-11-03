@@ -3,7 +3,8 @@
 import { useReactFlow } from "@xyflow/react";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { nextSlotInContainer } from "@/lib/diagram/layout";
-import type { BlockColorKey } from "@/lib/diagram/types";
+import { SHAPES, type ShapeInfo } from "@/lib/diagram/shapes";
+import type { BlockColorKey, BlockShape } from "@/lib/diagram/types";
 import { Icon } from "./Icon";
 import PanelToggle from "./PanelToggle";
 
@@ -20,7 +21,8 @@ const GRIP = "h-4 w-4 shrink-0 text-zinc-300 opacity-0 transition-opacity group-
 export type PaletteDragPayload =
   | { kind: "container" }
   | { kind: "text" }
-  | { kind: "block"; colorKey: string };
+  | { kind: "block"; colorKey: string }
+  | { kind: "shape"; shape: BlockShape };
 
 function startDrag(event: React.DragEvent, payload: PaletteDragPayload) {
   event.dataTransfer.setData(PALETTE_DATA_FORMAT, JSON.stringify(payload));
@@ -74,6 +76,12 @@ export default function Sidebar({ className = "", onAdded, onCollapse }: Sidebar
       const center = canvasCenter();
       addBlock({ x: center.x - 70, y: center.y - 28 }, null, colorKey);
     }
+    onAdded?.();
+  }
+
+  function tapAddShape(info: ShapeInfo) {
+    const center = canvasCenter();
+    addBlock({ x: Math.round(center.x - info.size.width / 2), y: Math.round(center.y - info.size.height / 2) }, null, undefined, info.shape);
     onAdded?.();
   }
 
@@ -150,9 +158,44 @@ export default function Sidebar({ className = "", onAdded, onCollapse }: Sidebar
         </div>
       </section>
 
+      <section>
+        <h2 className={HEADING}>Flowchart</h2>
+        <div className="grid grid-cols-4 gap-1">
+          {SHAPES.map((info) => (
+            <div
+              key={info.shape}
+              {...itemProps(() => tapAddShape(info), { kind: "shape", shape: info.shape })}
+              title={`${info.label}: ${info.hint}`}
+              aria-label={`${info.label} shape`}
+              className="flex cursor-grab flex-col items-center gap-1 rounded-lg border border-transparent p-1.5 text-[10px] text-zinc-600 transition-colors hover:border-zinc-200 hover:bg-zinc-50 active:cursor-grabbing dark:text-zinc-300 dark:hover:border-zinc-800 dark:hover:bg-zinc-900"
+            >
+              <ShapeIcon info={info} />
+              <span className="w-full truncate text-center">{info.label}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <p className="mt-auto rounded-lg bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
         Drag onto the canvas or click to add. Drop a component on a container, or select the container first, to put it inside. Double-click a text box to write in it.
       </p>
     </aside>
+  );
+}
+
+/** A flowchart shape in miniature, outlined as draw.io's palette shows it. */
+export function ShapeIcon({ info, className = "h-6 w-9" }: { info: ShapeInfo; className?: string }) {
+  const stroke = "currentColor";
+  return (
+    <svg viewBox="-4 -4 108 108" preserveAspectRatio="none" className={className} aria-hidden>
+      {info.path ? (
+        <>
+          <path d={info.path} fill="none" stroke={stroke} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+          {info.detail && <path d={info.detail} fill="none" stroke={stroke} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />}
+        </>
+      ) : (
+        <rect x={0} y={10} width={100} height={80} rx={info.shape === "terminal" ? 40 : 0} fill="none" stroke={stroke} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+      )}
+    </svg>
   );
 }

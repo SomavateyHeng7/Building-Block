@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { layoutSequence } from "@/lib/diagram/sequence";
-import { readableTextOn } from "@/lib/diagram/palette";
+import { outlineFor, readableTextOn } from "@/lib/diagram/palette";
+import { shapeInfo } from "@/lib/diagram/shapes";
 import type { ConnectionSide, Diagram, DiagramNode, SequenceDiagram } from "@/lib/diagram/types";
 
 const PADDING = 24;
@@ -21,7 +22,7 @@ function anchor(box: { x: number; y: number }, node: DiagramNode, side: Connecti
   return { x: box.x + width, y: box.y + height / 2, dx: 1, dy: 0 };
 }
 
-/** A static, scaled-down picture of a template's first section, drawn from the same data the editor loads. */
+/** A static, scaled-down picture (in one 16:10 frame, so cards line up) of a template's first section, drawn from the same data the editor loads. */
 export default function TemplatePreview({ build, name }: { build: () => Diagram; name: string }) {
   // build() mints fresh ids, so run it once per card rather than on every render.
   const [diagram] = useState(build);
@@ -46,7 +47,7 @@ export default function TemplatePreview({ build, name }: { build: () => Diagram;
       <div
         role="img"
         aria-label={`${name} preview: an empty canvas`}
-        className="flex aspect-[16/9] w-full items-center justify-center rounded-md border border-dashed border-zinc-300 bg-[radial-gradient(circle,_rgb(161_161_170/0.35)_1px,_transparent_1px)] bg-[length:12px_12px] text-xs text-zinc-400 dark:border-zinc-700"
+        className="flex aspect-[16/10] w-full items-center justify-center rounded-md border border-dashed border-zinc-300 bg-[radial-gradient(circle,_rgb(161_161_170/0.35)_1px,_transparent_1px)] bg-[length:12px_12px] text-xs text-zinc-400 dark:border-zinc-700"
       >
         Empty canvas
       </div>
@@ -54,6 +55,7 @@ export default function TemplatePreview({ build, name }: { build: () => Diagram;
   }
 
   const colorOf = (key?: string) => diagram.legend.find((entry) => entry.key === key)?.color ?? "#ffffff";
+  const drawio = section.look === "drawio";
   const containers = layout.boxes.filter((box) => box.node.type === "container");
   const blocks = layout.boxes.filter((box) => box.node.type === "block");
   const texts = layout.boxes.filter((box) => box.node.type === "text");
@@ -63,7 +65,7 @@ export default function TemplatePreview({ build, name }: { build: () => Diagram;
       role="img"
       aria-label={`${name} preview`}
       viewBox={`0 0 ${layout.width} ${layout.height}`}
-      className="w-full rounded-md border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900"
+      className="aspect-[16/10] w-full rounded-md border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900"
     >
       <g transform={`translate(${PADDING} ${PADDING})`}>
         {containers.map(({ node, x, y }) => (
@@ -95,9 +97,9 @@ export default function TemplatePreview({ build, name }: { build: () => Diagram;
               key={edge.id}
               d={`M${from.x} ${from.y} C${from.x + from.dx * bend} ${from.y + from.dy * bend} ${to.x + to.dx * bend} ${to.y + to.dy * bend} ${to.x} ${to.y}`}
               fill="none"
-              strokeWidth={3}
+              strokeWidth={drawio ? 2 : 3}
               strokeDasharray={edge.style === "dashed" ? "10 8" : undefined}
-              className="stroke-zinc-500"
+              className={drawio ? "stroke-zinc-900 dark:stroke-zinc-200" : "stroke-zinc-500"}
             />
           );
         })}
@@ -108,12 +110,14 @@ export default function TemplatePreview({ build, name }: { build: () => Diagram;
           const { width, height } = node.size;
           return (
             <g key={node.id}>
-              {shape === "decision" ? (
-                <polygon
-                  points={`${x + width / 2},${y} ${x + width},${y + height / 2} ${x + width / 2},${y + height} ${x},${y + height / 2}`}
+              {shapeInfo(shape).path ? (
+                <path
+                  d={shapeInfo(shape).path}
+                  transform={`translate(${x} ${y}) scale(${width / 100} ${height / 100})`}
+                  vectorEffect="non-scaling-stroke"
                   fill={color}
-                  stroke="rgba(0,0,0,0.25)"
-                  strokeWidth={1.5}
+                  stroke={drawio ? outlineFor(color) : "rgba(0,0,0,0.25)"}
+                  strokeWidth={drawio ? 2 : 1.5}
                 />
               ) : (
                 <rect
@@ -121,10 +125,10 @@ export default function TemplatePreview({ build, name }: { build: () => Diagram;
                   y={y}
                   width={width}
                   height={height}
-                  rx={shape === "terminal" ? height / 2 : 6}
+                  rx={shape === "terminal" ? height / 2 : drawio ? 0 : 6}
                   fill={color}
-                  stroke="rgba(0,0,0,0.25)"
-                  strokeWidth={1.5}
+                  stroke={drawio ? outlineFor(color) : "rgba(0,0,0,0.25)"}
+                  strokeWidth={drawio ? 2 : 1.5}
                 />
               )}
               <text
@@ -132,7 +136,7 @@ export default function TemplatePreview({ build, name }: { build: () => Diagram;
                 y={y + node.size.height / 2}
                 textAnchor="middle"
                 dominantBaseline="central"
-                fontSize={fitFont(node.data.label, shape === "decision" ? width * 0.7 : width - 16, 17)}
+                fontSize={fitFont(node.data.label, width * (1 - (2 * shapeInfo(shape).inset) / 100) - 16, 17)}
                 fontWeight={500}
                 fill={readableTextOn(color)}
               >
@@ -169,7 +173,7 @@ function SequencePreview({ diagram, sequence, name }: { diagram: Diagram; sequen
       role="img"
       aria-label={`${name} preview`}
       viewBox={`0 0 ${layout.width} ${layout.height}`}
-      className="w-full rounded-md border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900"
+      className="aspect-[16/10] w-full rounded-md border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900"
     >
       {layout.columns.map((column) => (
         <g key={column.participant.id}>

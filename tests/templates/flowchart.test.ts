@@ -44,3 +44,79 @@ describe("updateNodeShape", () => {
     expect(getActiveSection(store().diagram).nodes[0].data).not.toHaveProperty("shape");
   });
 });
+
+describe("draw.io look", () => {
+  it("is how the flowchart is drawn, in draw.io's fills, and survives a saved file", () => {
+    const diagram = flowchartTemplate.build();
+    expect(diagram.sections[0].look).toBe("drawio");
+    expect(diagram.legend.map((entry) => entry.color)).toEqual(["#d5e8d4", "#dae8fc", "#fff2cc", "#f8cecc"]);
+    expect(parseDiagram(JSON.parse(JSON.stringify(diagram))).diagram.sections[0].look).toBe("drawio");
+  });
+
+  it("is set per tab, as one undo step, and carried into internal designs", () => {
+    const store = useDiagramStore.getState;
+    store().loadDiagram(createBlankDiagram());
+    store().setSectionLook("drawio");
+    expect(getActiveSection(store().diagram).look).toBe("drawio");
+    store().addBlock({ x: 0, y: 0 });
+    store().openDetail(store().selectedNodeIds[0]);
+    expect(getActiveSection(store().diagram).look).toBe("drawio");
+    store().closeDetail();
+    store().undo();
+    store().undo();
+    expect(getActiveSection(store().diagram)).not.toHaveProperty("look");
+  });
+});
+
+describe("draw.io-style flowchart editing", () => {
+  const store = useDiagramStore.getState;
+  const nodes = () => getActiveSection(store().diagram).nodes;
+  const edges = () => getActiveSection(store().diagram).edges ?? [];
+
+  it("adds a flowchart shape at its usual size, in the legend category named for it", () => {
+    store().loadDiagram(flowchartTemplate.build());
+    store().addBlock({ x: 900, y: 0 }, null, undefined, "decision");
+    const added = nodes().at(-1)!;
+    expect(added).toMatchObject({ size: { width: 160, height: 96 }, data: { shape: "decision", label: "Decision?", colorKey: "decision" } });
+  });
+
+  it("quick-adds the same shape off a side, lined up, clear of other boxes and connected", () => {
+    store().loadDiagram(createBlankDiagram());
+    store().addBlock({ x: 0, y: 0 });
+    const first = store().selectedNodeIds[0];
+    store().addConnectedBlock(first, "bottom");
+    const second = nodes().at(-1)!;
+    expect(second.position).toEqual({ x: 0, y: 56 + 60 });
+    expect(edges()).toEqual([expect.objectContaining({ source: first, target: second.id, sourceSide: "bottom", targetSide: "top" })]);
+    expect(store().selectedNodeIds).toEqual([second.id]);
+    // Again from the first: the place below is taken, so it goes on past it.
+    store().addConnectedBlock(first, "bottom");
+    expect(nodes().at(-1)!.position.y).toBe(2 * (56 + 60));
+    // One undo takes back one quick add, line and all.
+    store().undo();
+    expect(nodes()).toHaveLength(2);
+    expect(edges()).toHaveLength(1);
+  });
+
+  it("labels the ways out of a decision Yes, then No", () => {
+    store().loadDiagram(createBlankDiagram());
+    store().addBlock({ x: 0, y: 0 }, null, undefined, "decision");
+    const decision = store().selectedNodeIds[0];
+    store().addConnectedBlock(decision, "bottom", "process");
+    store().addConnectedBlock(decision, "right", "process");
+    expect(edges().map((edge) => edge.label)).toEqual(["Yes", "No"]);
+    expect(nodes().at(-1)!.data).not.toHaveProperty("shape");
+  });
+});
+
+describe("flowchart shape colours and names", () => {
+  it("gives a shape with no category of its own the step colour, and names a pill after a pill End", () => {
+    const store = useDiagramStore.getState;
+    store().loadDiagram(flowchartTemplate.build());
+    store().addBlock({ x: 900, y: 0 }, null, undefined, "data");
+    expect(getActiveSection(store().diagram).nodes.at(-1)!.data.colorKey).toBe("step");
+    store().addBlock({ x: 900, y: 300 }, null, undefined, "terminal");
+    store().addConnectedBlock(store().selectedNodeIds[0], "bottom");
+    expect(getActiveSection(store().diagram).nodes.at(-1)!.data).toMatchObject({ label: "End", shape: "terminal" });
+  });
+});

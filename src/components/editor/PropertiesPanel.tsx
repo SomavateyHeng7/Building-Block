@@ -31,6 +31,8 @@ import { ComponentIcon, NOTE_KINDS, NOTES_FIELD_ID, type NoteKind } from "./node
 import ColorPicker from "./ColorPicker";
 import { requestDelete, ungroup } from "./deletePrompt";
 import SequencePanel from "./SequencePanel";
+import { ShapeIcon } from "./Sidebar";
+import { SHAPES, shapeInfo } from "@/lib/diagram/shapes";
 import { DEFAULT_FONT_SIZE } from "./nodes/TextNode";
 
 const DETAIL_FIELDS: {
@@ -204,12 +206,6 @@ function GeometryFields({ node, parent }: { node: DiagramNode; parent?: DiagramN
     </div>
   );
 }
-
-const BLOCK_SHAPE_OPTIONS: { value: BlockShape; label: string; icon: string }[] = [
-  { value: "process", label: "Box", icon: "M4 6h16v12H4z" },
-  { value: "terminal", label: "Start / end", icon: "M8 6h8a6 6 0 0 1 0 12H8A6 6 0 0 1 8 6z" },
-  { value: "decision", label: "Decision", icon: "M12 3l9 9-9 9-9-9z" },
-];
 
 const TEXT_ALIGN_OPTIONS: { value: TextAlign; label: string; icon: string }[] = [
   { value: "left", label: "Left", icon: "M4 6h16M4 12h10M4 18h13" },
@@ -845,6 +841,7 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
   const setSelection = useDiagramStore((state) => state.setSelection);
   const updateContainerStyle = useDiagramStore((state) => state.updateContainerStyle);
   const setShowTechnology = useDiagramStore((state) => state.setShowTechnology);
+  const setSectionLook = useDiagramStore((state) => state.setSectionLook);
   const showTechnology = diagram.showTechnology !== false;
 
   const section = getActiveSection(diagram);
@@ -863,6 +860,24 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
       <div className={PANEL}>
         <PanelTitle action={headerAction}>{section.parent ? "Internal design" : "Diagram"}</PanelTitle>
         {section.parent && <ParentContext parent={section.parent} />}
+        <div className={FIELD_LABEL}>
+          Look
+          <Segmented
+            label="Look"
+            options={[
+              { value: "app", label: "Building Block" },
+              { value: "drawio", label: "draw.io" },
+            ]}
+            value={section.look ?? "app"}
+            onChange={(look) => setSectionLook(look === "drawio" ? "drawio" : undefined)}
+          />
+          <span className="text-[11px] font-normal text-zinc-400">
+            {section.look === "drawio"
+              ? "Outlined shapes, square boxes, thin black lines and a line grid, as draw.io draws them. The draw.io colours are at the end of every colour picker."
+              : "How this tab is drawn. draw.io's look suits flowcharts and diagrams shared with draw.io users."}
+            {section.parent ? " Set for the whole tab." : ""}
+          </span>
+        </div>
         <label className="flex cursor-pointer items-center justify-between gap-3 text-sm text-zinc-700 dark:text-zinc-200">
           <span>
             Show technology
@@ -956,13 +971,28 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
       {node.data.kind === "block" && (
         <div className={FIELD_LABEL}>
           Shape
-          <Segmented
-            label="Shape"
-            options={BLOCK_SHAPE_OPTIONS}
-            value={node.data.shape ?? "process"}
-            onChange={(shape) => updateNodeShape(node.id, shape)}
-          />
-          <span className="text-[11px] font-normal text-zinc-400">Pill for a flowchart&apos;s start or end, diamond for a decision.</span>
+          <div role="radiogroup" aria-label="Shape" className="grid grid-cols-7 gap-0.5 rounded-md border border-zinc-300 p-0.5 dark:border-zinc-700">
+            {SHAPES.map((info) => {
+              const active = (node.data.kind === "block" ? (node.data.shape ?? "process") : "process") === info.shape;
+              return (
+                <button
+                  key={info.shape}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  aria-label={info.label}
+                  title={`${info.label}: ${info.hint}`}
+                  onClick={() => updateNodeShape(node.id, info.shape)}
+                  className={`flex items-center justify-center rounded py-1 ${
+                    active ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  }`}
+                >
+                  <ShapeIcon info={info} className="h-4 w-6" />
+                </button>
+              );
+            })}
+          </div>
+          <span className="text-[11px] font-normal text-zinc-400">{shapeInfo(node.data.kind === "block" ? node.data.shape : undefined).hint}.</span>
         </div>
       )}
 

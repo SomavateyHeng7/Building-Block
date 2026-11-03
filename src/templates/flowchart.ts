@@ -1,23 +1,24 @@
 import { createBlankDiagram, createBlankSection, createId } from "@/lib/diagram/factory";
 import type { BlockShape, ConnectionSide, DiagramEdge, DiagramNode, LegendEntry } from "@/lib/diagram/types";
+import { shapeInfo } from "@/lib/diagram/shapes";
 import type { TemplateDefinition } from "./types";
 
 /**
- * A process flowchart, top to bottom: pills start and end it, boxes are steps, diamonds are decisions with
+ * A process flowchart in draw.io's look, top to bottom: pills start and end it, boxes are steps, diamonds are decisions with
  * Yes/No ways out. Laid out by hand (to the pixel) rather than in containers, as a flowchart isn't grouped.
  */
 
+/** draw.io's own fills: green, blue, yellow and red (each drawn with draw.io's outline for it). */
 const LEGEND: LegendEntry[] = [
-  { key: "terminal", label: "Start / end", color: "#8fd19e" },
-  { key: "step", label: "Step", color: "#dbeafe" },
-  { key: "decision", label: "Decision", color: "#f6d860" },
-  { key: "exception", label: "Exception path", color: "#fca5a5" },
+  { key: "terminal", label: "Start / end", color: "#d5e8d4" },
+  { key: "step", label: "Step", color: "#dae8fc" },
+  { key: "decision", label: "Decision", color: "#fff2cc" },
+  { key: "exception", label: "Exception path", color: "#f8cecc" },
 ];
 
 const MAIN_X = 200;
 const BRANCH_X = 520;
 const WIDTH = 200;
-const HEIGHT: Record<BlockShape, number> = { terminal: 48, process: 56, decision: 96 };
 
 interface StepSpec {
   key: string;
@@ -32,6 +33,7 @@ interface StepSpec {
 const STEPS: StepSpec[] = [
   { key: "start", label: "Order received", shape: "terminal", colorKey: "terminal", x: MAIN_X, y: 100 },
   { key: "validate", label: "Validate order", shape: "process", colorKey: "step", x: MAIN_X, y: 196, description: "Check stock, address and order limits." },
+  { key: "stock", label: "Stock levels", shape: "database", colorKey: "step", x: MAIN_X - 200, y: 184, description: "Read while validating." },
   { key: "valid", label: "Order valid?", shape: "decision", colorKey: "decision", x: MAIN_X, y: 300 },
   { key: "notify", label: "Tell customer what's wrong", shape: "process", colorKey: "exception", x: BRANCH_X, y: 320 },
   { key: "rejected", label: "Order rejected", shape: "terminal", colorKey: "terminal", x: BRANCH_X, y: 428 },
@@ -46,6 +48,7 @@ const STEPS: StepSpec[] = [
 /** [from, to, label]; a branch to the right leaves a decision's right corner, everything else flows down. */
 const FLOWS: [string, string, string?][] = [
   ["start", "validate"],
+  ["stock", "validate", "Reads"],
   ["validate", "valid"],
   ["valid", "pay", "Yes"],
   ["valid", "notify", "No"],
@@ -79,7 +82,8 @@ function buildCanvas(): { nodes: DiagramNode[]; edges: DiagramEdge[] } {
         id: ids.get(step.key)!,
         type: "block",
         position: { x: step.x, y: step.y },
-        size: { width: WIDTH, height: HEIGHT[step.shape] },
+        // Steps share one width so the column lines up; a database keeps its own, narrower one.
+        size: { width: step.shape === "database" ? shapeInfo("database").size.width : WIDTH, height: shapeInfo(step.shape).size.height },
         data: {
           kind: "block",
           label: step.label,
@@ -110,10 +114,11 @@ function buildCanvas(): { nodes: DiagramNode[]; edges: DiagramEdge[] } {
 export const flowchartTemplate: TemplateDefinition = {
   id: "flowchart",
   name: "Flowchart",
-  description: "A process from start to end, with steps, Yes/No decisions and the exception paths they lead to.",
+  description: "A process from start to end, with steps, Yes/No decisions and the exception paths they lead to, drawn the way draw.io draws it.",
   build: () => {
     const diagram = createBlankDiagram("Order Fulfilment Flowchart");
-    const section = { ...createBlankSection("Flow"), ...buildCanvas() };
+    // Drawn the way draw.io draws a flowchart.
+    const section = { ...createBlankSection("Flow"), look: "drawio" as const, ...buildCanvas() };
     return { ...diagram, legend: LEGEND, sections: [section], activeSectionId: section.id };
   },
 };

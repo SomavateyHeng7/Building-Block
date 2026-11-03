@@ -77,7 +77,7 @@ still builds, is tested, and is found by `getTemplate`; removing `hidden` brings
 | `event-driven` | Clients → API gateway → order services → event broker → downstream services, a payment provider, and an **internal design (L2)** for the Order Service. |
 | `serverless` | Clients → CDN and API gateway → functions → a table, a queue that triggers a worker, and a bucket. |
 | `data-platform` | Sources → ingestion (CDC, batch connectors, an event stream) → a lake and a warehouse → ML, dashboards and reverse ETL. |
-| `flowchart` | An order-fulfilment process top to bottom: start/end pills, steps, two decision diamonds with Yes/No connections to exception paths, and a title text box. Laid out by hand (to the pixel) with its own four-entry legend, not built from columns. |
+| `flowchart` | In the **draw.io look**, with draw.io's green, blue, yellow and red fills: an order-fulfilment process top to bottom: start/end pills, steps, two decision diamonds with Yes/No connections to exception paths, and a title text box. Laid out by hand (to the pixel) with its own four-entry legend, not built from columns. |
 | `current-vs-target` | **Hidden for now.** Two tabs, **Current** and **Target**, that differ in added, removed and recategorised components, made to show **Compare tabs**. Browser tests that open it are held back from the TesterArmy sync until it's shown again. |
 | `sequence` | A checkout flow as a sequence tab: calls, a self-call, replies, async events and a note. |
 

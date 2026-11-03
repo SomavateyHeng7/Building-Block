@@ -30,7 +30,7 @@ import { ReadOnlyContext, useMediaQuery } from "./viewMode";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { nextSlotInContainer, nudgeNodes } from "@/lib/diagram/layout";
 import { saveDiagramToFile, supportsFilePicker, useFileStore, useIsDirty } from "@/lib/diagram/file";
-import { clearRecoveryCopy, useRecoveryEnabled, writeRecoveryCopy } from "@/lib/diagram/recovery";
+import { clearRecoveryCopy, isRecoveryEnabled, markLostUnsaved, useRecoveryEnabled, writeRecoveryCopy } from "@/lib/diagram/recovery";
 import { toast } from "@/lib/toast";
 
 /** Wait this long after the last edit before writing to the open file. */
@@ -298,15 +298,25 @@ export default function EditorApp() {
     return () => clearTimeout(timeout);
   }, [opened, recoveryOn, dirty, diagram]);
 
-  // Closing or reloading the tab would lose whatever isn't in a file yet.
+  // Closing or reloading the tab would lose whatever isn't in a file yet: the browser asks first. If the person
+  // goes ahead, the recovery copy (when on) is brought up to date that moment; without one, the start page is told
+  // the changes are gone, so it can say so.
   useEffect(() => {
     if (!dirty) return;
     function handleBeforeUnload(event: BeforeUnloadEvent) {
       event.preventDefault();
       event.returnValue = "";
     }
+    function handlePageHide() {
+      const kept = isRecoveryEnabled() && writeRecoveryCopy(useDiagramStore.getState().diagram, useFileStore.getState().fileName);
+      if (!kept) markLostUnsaved();
+    }
     window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("pagehide", handlePageHide);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pagehide", handlePageHide);
+    };
   }, [dirty]);
 
   if (!opened) {

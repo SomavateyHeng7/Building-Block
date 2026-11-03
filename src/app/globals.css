@@ -202,3 +202,23 @@ button, a, summary, [role="button"], [role="tab"], [role="menuitem"], label {
     transform: translateY(8px);
   }
 }
+
+/* draw.io's look on an architecture tab (SectionLook): its Helvetica text throughout the boxes. */
+.bb-look-drawio .react-flow__node {
+  font-family: Helvetica, Arial, sans-serif;
+}
+
+/* draw.io's quick-add arrows: shown while a shape is hovered or selected. */
+.bb-quick-add {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms;
+}
+.react-flow__node:hover .bb-quick-add,
+.react-flow__node.selected .bb-quick-add {
+  opacity: 1;
+  pointer-events: all;
+}
+.react-flow__node.dragging .bb-quick-add {
+  opacity: 0;
+}

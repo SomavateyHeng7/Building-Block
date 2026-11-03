@@ -178,6 +178,33 @@ what's on screen), a hint about C/B/? on devices with a mouse, and, inside an in
   because image export renders the DOM outside the canvas, where those variables are undefined.
 - `historyKey(kind, ids)`: see [undo](05-diagram-store-and-undo.md#committing-changes-and-undo).
 
+## The draw.io look
+
+**Look** in the Diagram panel (nothing selected) draws an architecture tab the way draw.io does
+(`DiagramSection.look = "drawio"`, read with `useDrawioLook` in `look.ts`); the Flowchart template uses it.
+
+- **Shapes:** each outlined in 1 px of a darker shade of its own fill (`outlineFor` in `palette.ts`: draw.io's own
+  pairing for its fills, e.g. `#dae8fc` → `#6c8ebf`, otherwise the fill at 55%); boxes have square corners; text is
+  12 px Helvetica, black on light fills. A selected shape gets draw.io's dashed blue outline. Containers have a thin
+  grey edge.
+- **Lines:** 1 px black (light grey on a dark canvas), right angles without rounded corners, a filled arrowhead of
+  the same size whatever the line width, and labels on a borderless patch of the canvas colour.
+- **Grid:** draw.io's lines every 10 px with stronger ones every 40, instead of dots.
+- draw.io's six fills (blue, green, orange, yellow, red, purple) are the last row of every colour picker.
+- Exports picture the canvas, so they come out in the same look.
+- **Quick add**, as in draw.io: a hovered or selected component shows a blue arrow off each side. Clicking one adds
+  the same kind of shape that way (Shift-click: a decision), 60 px below or 80 px beside it, stepping past anything in
+  the way, connected from that side (`addConnectedBlock`), as one undo step. Ways out of a decision are labelled
+  "Yes", then "No"; a pill after a pill is called "End".
+
+### Flowchart shapes
+
+The left panel's **Flowchart** section is draw.io's Flowchart palette: process, decision, start/end (pill), data
+(parallelogram), document, database (cylinder) and subprocess (`shapes.ts`: each shape's meaning, usual size and
+outline as an SVG path). Drag one in or click it. It comes in at its usual size, coloured by the legend category named
+for it ("Decision", "Start / end"…), else the one for steps, else the first. **Shape** in the details panel switches
+any component between them. Mermaid code exports draw them as Mermaid's nearest shapes.
+
 ## `SequenceCanvas.tsx` — sequence tabs
 
 Shown instead of `Canvas` when the open tab has `kind: "sequence"`. An SVG at 1:1, laid out by `layoutSequence`:
