@@ -1,50 +1,151 @@
 "use client";
 
-import Link from "next/link";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { templates } from "@/templates";
+import { TEMPLATE_CATEGORIES, filterTemplates, templates, type Orientation, type TemplateCategory } from "@/templates";
 import { startDiagram } from "@/lib/diagram/file";
+import { recordRecentTemplate, useRecentTemplates } from "@/lib/recentTemplates";
 import { ThemeToggle } from "@/components/theme-toggle";
+import BackLink from "@/components/BackLink";
 import TemplatePreview from "@/components/TemplatePreview";
 import { useUnsavedGuard } from "@/components/editor/useUnsavedGuard";
 
 const CARD =
-  "flex h-full flex-col items-start justify-start rounded-lg border border-zinc-200 p-4 text-left transition-colors hover:border-zinc-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 dark:border-zinc-800 dark:hover:border-zinc-600 dark:focus-visible:outline-zinc-100";
+  "flex h-full flex-col rounded-lg border border-zinc-200 transition-colors hover:border-zinc-400 focus-within:border-zinc-400 dark:border-zinc-800 dark:hover:border-zinc-600 dark:focus-within:border-zinc-600";
+const CARD_BUTTON =
+  "flex w-full flex-1 flex-col items-start justify-start rounded-lg p-4 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 dark:focus-visible:outline-zinc-100";
+const CHIP =
+  "rounded-full border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 dark:focus-visible:outline-zinc-100";
+const CHIP_OFF =
+  "border-zinc-300 text-zinc-700 hover:border-zinc-500 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-500 dark:hover:bg-zinc-800";
+const CHIP_ON = "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900";
+
+const ORIENTATIONS: { value: Orientation; label: string }[] = [
+  { value: "vertical", label: "Vertical lanes" },
+  { value: "horizontal", label: "Horizontal lanes" },
+];
 
 export default function TemplatesPage() {
   const router = useRouter();
   // A diagram can still be open in memory, e.g. after the browser's Back button from the editor.
   const { guard, dialog: unsavedDialog } = useUnsavedGuard();
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<TemplateCategory | "All">("All");
+  const [orientations, setOrientations] = useState<Record<string, Orientation>>({});
+  const recentIds = useRecentTemplates();
+
+  const orientationOf = (id: string): Orientation => orientations[id] ?? "vertical";
+  const shown = filterTemplates(templates, query, category);
+  const filtering = query.trim() !== "" || category !== "All";
+  const recent = recentIds.flatMap((id) => templates.filter((template) => template.id === id));
 
   function applyTemplate(id: string) {
     const template = templates.find((candidate) => candidate.id === id);
     if (!template) return;
     guard(() => {
-      startDiagram(template.build());
+      startDiagram(template.build({ orientation: orientationOf(id) }));
+      recordRecentTemplate(id);
       router.push("/editor");
     });
   }
 
+  function clearFilters() {
+    setQuery("");
+    setCategory("All");
+  }
+
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-12 sm:px-6 sm:py-16">
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-12 sm:px-6 sm:py-16">
       <div className="flex items-center justify-between">
-        <Link href="/diagrams" className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
-          ← Start
-        </Link>
+        <BackLink href="/diagrams">Start</BackLink>
         <ThemeToggle />
       </div>
       <h1 className="text-2xl font-semibold tracking-tight">Templates</h1>
-      <div className="grid gap-4 sm:grid-cols-2">
-        {templates.map((template) => (
-          <button type="button" key={template.id} onClick={() => applyTemplate(template.id)} className={CARD}>
-            <div className="mb-3 w-full">
-              <TemplatePreview build={template.build} name={template.name} />
-            </div>
-            <h2 className="font-medium text-zinc-900 dark:text-zinc-100">{template.name}</h2>
-            <p className="mt-1 text-sm text-zinc-500">{template.description}</p>
-          </button>
-        ))}
+
+      <div className="flex flex-col gap-3">
+        <input
+          type="search"
+          aria-label="Search templates"
+          placeholder="Search templates, e.g. swimlane, cloud, roadmap"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-base outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/20 dark:border-zinc-700 dark:bg-zinc-900"
+        />
+        <div role="group" aria-label="Filter by category" className="flex flex-wrap gap-2">
+          {(["All", ...TEMPLATE_CATEGORIES] as const).map((name) => (
+            <button
+              key={name}
+              type="button"
+              aria-pressed={category === name}
+              onClick={() => setCategory(name)}
+              className={`${CHIP} ${category === name ? CHIP_ON : CHIP_OFF}`}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {recent.length > 0 && !filtering && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-zinc-500">Recently used:</span>
+          {recent.map((template) => (
+            <button key={template.id} type="button" onClick={() => applyTemplate(template.id)} className={`${CHIP} ${CHIP_OFF}`}>
+              {template.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <p aria-live="polite" className="text-sm text-zinc-500">
+        {filtering ? `${shown.length} of ${templates.length} templates` : `${templates.length} templates`}
+      </p>
+
+      {shown.length === 0 ? (
+        <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-zinc-300 p-6 dark:border-zinc-700">
+          <p className="text-zinc-700 dark:text-zinc-300">No template matches that search.</p>
+          <button type="button" onClick={clearFilters} className={`${CHIP} ${CHIP_OFF}`}>
+            Clear search and filters
+          </button>
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {shown.map((template) => {
+            const orientation = orientationOf(template.id);
+            return (
+              <div key={template.id} className={CARD}>
+                <button type="button" onClick={() => applyTemplate(template.id)} className={CARD_BUTTON}>
+                  <div className="mb-3 w-full">
+                    <TemplatePreview
+                      key={orientation}
+                      build={() => template.build({ orientation })}
+                      name={template.name}
+                    />
+                  </div>
+                  <span className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-500">{template.category}</span>
+                  <h2 className="font-medium text-zinc-900 dark:text-zinc-100">{template.name}</h2>
+                  <p className="mt-1 text-sm text-zinc-500">{template.description}</p>
+                </button>
+                {template.orientable && (
+                  <div role="group" aria-label={`${template.name} lane direction`} className="flex flex-wrap gap-2 px-4 pb-4">
+                    {ORIENTATIONS.map(({ value, label }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        aria-pressed={orientation === value}
+                        onClick={() => setOrientations((current) => ({ ...current, [template.id]: value }))}
+                        className={`${CHIP} ${orientation === value ? CHIP_ON : CHIP_OFF}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <p className="text-sm text-zinc-500">
         To reuse your own layout and legend, save a diagram as a file, then use <strong>Open file</strong> on the start page next time.

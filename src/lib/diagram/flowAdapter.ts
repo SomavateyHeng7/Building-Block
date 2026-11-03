@@ -8,6 +8,7 @@ import {
   type Position as Side,
 } from "@xyflow/react";
 import { CHANGE_COLORS, type ChangeMarks } from "./compare";
+import { parallelShifts, type EndShift } from "./routing";
 import type { DiagramEdge, DiagramNode, DiagramNodeData, Position } from "./types";
 
 export type FlowNode = Node<DiagramNodeData>;
@@ -16,6 +17,8 @@ export type FlowNode = Node<DiagramNodeData>;
 export interface ConnectionEdgeData extends Record<string, unknown> {
   shape: NonNullable<DiagramEdge["shape"]>;
   bend?: Position;
+  /** Set when other connections would be drawn on top of this one: how far to move each end clear of them. */
+  shift?: EndShift;
 }
 
 export type FlowEdge = Edge<ConnectionEdgeData, "connection">;
@@ -109,19 +112,32 @@ export function connectionCaption(edge: Pick<DiagramEdge, "label" | "protocol">)
   return [edge.label, edge.protocol].filter(Boolean).join(" · ");
 }
 
-/** With `marks`, changed connections are drawn in their change's colour. */
+/** The caption with its step number in front ("2. Orders · REST"), when step numbers are shown. */
+export function numberedCaption(edge: Pick<DiagramEdge, "label" | "protocol" | "step">, numbered: boolean): string {
+  const caption = connectionCaption(edge);
+  if (!numbered || edge.step === undefined) return caption;
+  return caption ? `${edge.step}. ${caption}` : String(edge.step);
+}
+
+/**
+ * With `marks`, changed connections are drawn in their change's colour. With `numbered`, each connection's step
+ * number is shown in front of its text. Connections that would lie on top of each other are moved apart.
+ */
 export function toFlowEdges(
   edges: DiagramEdge[],
   selectedId: string | null,
   dark: boolean,
   marks?: ChangeMarks | null,
+  numbered = false,
 ): FlowEdge[] {
+  const shifts = parallelShifts(edges);
   return edges.map((edge) => {
     const change = marks?.edges.get(edge.id);
     const color = change ? CHANGE_COLORS[change] : dark ? "#a1a1aa" : "#52525b";
     const direction = edge.direction ?? "forward";
     const marker = { type: MarkerType.ArrowClosed, color, width: 16, height: 16 };
-    const caption = connectionCaption(edge);
+    const caption = numberedCaption(edge, numbered);
+    const shift = shifts.get(edge.id);
     return {
       id: edge.id,
       source: edge.source,
@@ -129,7 +145,7 @@ export function toFlowEdges(
       sourceHandle: edge.sourceSide ?? null,
       targetHandle: edge.targetSide ?? null,
       type: "connection",
-      data: { shape: edge.shape ?? "step", ...(edge.bend ? { bend: edge.bend } : {}) },
+      data: { shape: edge.shape ?? "step", ...(edge.bend ? { bend: edge.bend } : {}), ...(shift ? { shift } : {}) },
       selected: edge.id === selectedId,
       interactionWidth: 24,
       label: caption || undefined,

@@ -133,6 +133,8 @@ function parseNode(
   }
   const colorKey = text(data.colorKey);
   const icon = type === "block" ? oneOf(data.icon, COMPONENT_ICON_KEYS) : undefined;
+  // "process" is the default, so it isn't kept.
+  const shape = type === "block" ? oneOf(data.shape, ["decision", "terminator"] as const) : undefined;
   const unknownIcon = type === "block" && data.icon !== undefined && !icon;
   const label = text(data.label) ?? (type === "container" ? "Untitled Container" : "Untitled");
   const repaired =
@@ -170,10 +172,14 @@ function parseNode(
             containerId: null,
             ...(colorKey && legendKeys.has(colorKey) ? { colorKey } : {}),
             ...(icon ? { icon } : {}),
+            ...(shape ? { shape } : {}),
           },
   };
   return { node, repaired, unknownIcon };
 }
+
+/** The most a connection can be numbered. */
+export const MAX_STEP = 9999;
 
 const SIDES = ["top", "right", "bottom", "left"] as const satisfies readonly ConnectionSide[];
 
@@ -209,6 +215,8 @@ function parseEdges(raw: unknown, nodes: DiagramNode[], name: string, fixes: str
     if (direction) edge.direction = direction;
     if (style) edge.style = style;
     if (shape) edge.shape = shape;
+    const step = finite(item.step);
+    if (step !== undefined && Number.isInteger(step) && step >= 1 && step <= MAX_STEP) edge.step = step;
     if (bend?.x !== undefined && bend.y !== undefined && (bend.x || bend.y)) {
       edge.bend = { x: clamp(bend.x, MAX_COORDINATE), y: clamp(bend.y, MAX_COORDINATE) };
     }
@@ -444,6 +452,7 @@ export function parseDiagram(input: unknown): ParsedDiagram {
     updatedAt: text(input.updatedAt) ?? now,
   };
   if (typeof input.showTechnology === "boolean") diagram.showTechnology = input.showTechnology;
+  if (input.numberConnections === true) diagram.numberConnections = true;
   // Reopen the internal design that was open when the file was saved, if that component is still there.
   const activeDetailId = text(input.activeDetailId);
   const activeSection = sections.find((section) => section.id === diagram.activeSectionId)!;

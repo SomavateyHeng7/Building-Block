@@ -32,8 +32,17 @@ function ConnectionEdgeComponent({
   const drag = useRef<{ start: Position; bend: Position } | null>(null);
 
   const bend = data?.bend;
+  // Lines that would lie on top of each other are drawn side by side (see parallelShifts).
+  const shift = data?.shift;
   const { path, labelX, labelY } = connectionPath(
-    { sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition },
+    {
+      sourceX: sourceX + (shift?.source.x ?? 0),
+      sourceY: sourceY + (shift?.source.y ?? 0),
+      sourcePosition,
+      targetX: targetX + (shift?.target.x ?? 0),
+      targetY: targetY + (shift?.target.y ?? 0),
+      targetPosition,
+    },
     data?.shape ?? "step",
     bend,
   );

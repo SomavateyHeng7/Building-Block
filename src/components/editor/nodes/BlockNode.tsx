@@ -33,14 +33,21 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
   const color = entryColor ?? "#ffffff";
   const icon = componentIcon(data.icon);
 
+  const shape = data.shape ?? "process";
+  const decision = shape === "decision";
+  const border = selected ? "#2563eb" : "rgba(0,0,0,0.25)";
+
   return (
     <div
-      className="relative flex h-full w-full items-center justify-center rounded border text-center text-xs font-medium"
+      className={`relative flex h-full w-full items-center justify-center text-center text-xs font-medium ${
+        decision ? "" : shape === "terminator" ? "rounded-full border" : "rounded border"
+      }`}
       title={data.description ?? (entryColor ? undefined : "No legend category assigned")}
       style={{
-        backgroundColor: color,
-        borderColor: selected ? "#2563eb" : "rgba(0,0,0,0.25)",
-        borderStyle: entryColor ? "solid" : "dashed",
+        // A diamond is drawn by the SVG below, so the box itself has no fill or edge.
+        backgroundColor: decision ? undefined : color,
+        borderColor: decision ? undefined : border,
+        borderStyle: decision ? undefined : entryColor ? "solid" : "dashed",
         color: readableTextOn(color),
       }}
       onDoubleClick={() => {
@@ -49,17 +56,35 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
         setEditing(true);
       }}
     >
-      <NodeResizer minWidth={80} minHeight={32} isVisible={selected && !readOnly} />
+      {decision && (
+        <svg className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+          <polygon
+            points="50,0 100,50 50,100 0,50"
+            fill={color}
+            stroke={border}
+            strokeWidth={selected ? 2 : 1}
+            strokeDasharray={entryColor ? undefined : "4 3"}
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+      )}
+      <NodeResizer minWidth={decision ? 100 : 80} minHeight={decision ? 56 : 32} isVisible={selected && !readOnly} />
       {/* Every side starts and ends connections (the canvas uses loose connection mode). */}
       {SIDES.map((side) => (
         <Handle key={side.id} id={side.id} type="source" position={side.position} className="bb-handle" />
       ))}
-      {data.notes && <NotesMarker id={id} notes={data.notes} />}
-      {data.detail?.nodes.length ? <DetailBadge id={id} count={data.detail.nodes.length} /> : null}
+      {data.notes && (decision ? <Corner className="right-[25%] top-[25%]"><NotesMarker id={id} notes={data.notes} /></Corner> : <NotesMarker id={id} notes={data.notes} />)}
+      {data.detail?.nodes.length ? (
+        decision ? (
+          <Corner className="bottom-[25%] right-[25%]"><DetailBadge id={id} count={data.detail.nodes.length} /></Corner>
+        ) : (
+          <DetailBadge id={id} count={data.detail.nodes.length} />
+        )
+      ) : null}
       {editing ? (
         <input
           autoFocus
-          className="nodrag nopan w-full bg-transparent px-1 text-center outline-none"
+          className={`nodrag nopan relative w-full bg-transparent text-center outline-none ${decision ? "px-[18%]" : "px-1"}`}
           defaultValue={data.label}
           onBlur={(event) => {
             if (!cancelled.current) updateNodeLabel(id, event.target.value.trim() ? event.target.value : defaultLabel("block"));
@@ -74,7 +99,7 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
           }}
         />
       ) : (
-        <span className="flex min-w-0 items-center gap-1.5 px-1">
+        <span className={`relative flex min-w-0 items-center gap-1.5 ${decision ? "px-[18%]" : shape === "terminator" ? "px-3" : "px-1"}`}>
           {icon && <ComponentIcon path={icon.path} label={icon.label} />}
           <span className="flex min-w-0 flex-col leading-tight">
             <span>{data.label}</span>
@@ -86,6 +111,11 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
       )}
     </div>
   );
+}
+
+/** Anchors a corner badge a little way in, where a diamond's edge actually is (its bounding box corner is empty). */
+function Corner({ className, children }: { className: string; children: React.ReactNode }) {
+  return <span className={`absolute h-0 w-0 ${className}`}>{children}</span>;
 }
 
 /** The component's built-in icon, in the label's colour so it reads on any category colour. */

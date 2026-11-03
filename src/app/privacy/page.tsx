@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import BackLink from "@/components/BackLink";
 import { PRIVACY_VERSION } from "@/lib/consent";
 import WithdrawConsent from "./WithdrawConsent";
 
@@ -20,7 +20,7 @@ const SECTIONS = [
   {
     title: "What is stored in your browser",
     body: [
-      "A few small preferences are kept in your browser's local storage: the colour theme, which editor panels are collapsed, and your last export choices (format, light or dark style, one file or several). They contain no diagram content or personal information, and you can clear them at any time in your browser settings.",
+      "A few small preferences are kept in your browser's local storage: the colour theme, which editor panels are collapsed, which templates you started most recently (only which template, never anything from a diagram), and your last export choices (format, light or dark style, one file or several). They contain no diagram content or personal information, and you can clear them at any time in your browser settings.",
       "When you accept this notice, the browser also keeps a note of which version you accepted and when, so you aren't asked every time.",
       "Recovery copies are off unless you turn them on (on the start page, or File in the editor). When they're on, the unsaved changes to the diagram you're editing are kept in your browser's local storage until you save them to a file or discard them, so a reload or crash doesn't lose them. The copy stays on your device and is never sent anywhere. Turning the option off deletes it.",
       "So the app opens without an internet connection, your browser caches Building Block's own pages, code and fonts. No diagram content is ever cached this way.",
@@ -64,9 +64,7 @@ const SECTIONS = [
 export default function PrivacyPage() {
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-12 sm:px-6 sm:py-16">
-      <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
-        ← Home
-      </Link>
+      <BackLink href="/">Home</BackLink>
       <header className="flex flex-col gap-3">
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Privacy</h1>
         <p className="text-zinc-600 dark:text-zinc-400">

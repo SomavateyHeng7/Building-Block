@@ -142,13 +142,62 @@ export const tests = [
     ],
   },
   {
+    title: "Cross-functional template opens as swimlanes with hand-offs",
+    settings: desktop,
+    steps: [
+      ...openTemplate("Cross-functional process"),
+      assert("Lanes named Requester, Manager, Finance, Procurement and Supplier are shown side by side."),
+      assert("The 'Draft Request' component sits in the Requester lane, 'Issue Purchase Order' in Procurement and 'Deliver Goods' in the Supplier lane."),
+      assert("Connections link the lanes, including dashed ones labelled 'Rejected, revise' and 'Over budget'."),
+    ],
+  },
+  {
+    title: "Templates can be searched and filtered by category",
+    settings: desktop,
+    steps: [
+      consent,
+      act("Open the /templates page."),
+      act("Type 'roadmap' into the 'Search templates' box."),
+      assert("Only 'Migration roadmap' is listed, and the count reads '1 of' the total number of templates."),
+      act("Clear the search box, then click the 'Process' category button."),
+      assert("Only 'Cross-functional process' is listed and the 'Process' button is shown as selected."),
+      act("Type 'kubernetes' into the search box."),
+      assert("The page says 'No template matches that search.' and offers 'Clear search and filters'."),
+      act("Click 'Clear search and filters'."),
+      assert("All the templates are listed again and the 'All' button is selected."),
+    ],
+  },
+  {
+    title: "Cross-functional lanes can run vertically or horizontally",
+    settings: desktop,
+    steps: [
+      consent,
+      act("Open the /templates page."),
+      assert("The 'Cross-functional process' card has 'Vertical lanes' and 'Horizontal lanes' buttons, with 'Vertical lanes' selected."),
+      act("Click 'Horizontal lanes' on the 'Cross-functional process' card, then click the card."),
+      assert("The editor opens (URL ends in /editor) and the Requester lane is shown above the Manager lane, as rows."),
+      act("Go back to the /templates page."),
+      assert("The 'Recently used' row lists 'Cross-functional process'."),
+    ],
+  },
+  {
+    title: "Recently used templates are offered on the start page",
+    settings: desktop,
+    steps: [
+      ...openTemplate("Three-tier web application"),
+      act("Go back to the /diagrams page."),
+      assert("A 'Recently used:' row shows 'Three-tier web application', and the page offers 'All 10 templates'."),
+      assert("The start page shows six template cards, not all ten."),
+    ],
+  },
+  {
     title: "Templates page lists every template",
     settings: desktop,
     steps: [
       consent,
       act("Open the /templates page."),
       assert(
-        "These templates are all listed: L0 Architecture, Three-tier web application, Event-driven microservices, Current vs target state.",
+        "These templates are all listed: L0 Architecture, Three-tier web application, Event-driven microservices, Current vs target state, Cross-functional process, System context (C4), Data pipeline, Cloud landing zone, Migration roadmap.",
       ),
     ],
   },

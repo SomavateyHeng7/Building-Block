@@ -5,7 +5,9 @@ Recipes for common changes, with the files to touch and the rules to keep. After
 
 ## Add a template
 
-1. Create `src/templates/<id>.ts` exporting a `TemplateDefinition` (`id`, `name`, `description`, `build`).
+1. Create `src/templates/<id>.ts` exporting a `TemplateDefinition` (`id`, `name`, `description`, `category`, `build`).
+   Add `keywords` for words people might search for. Set `orientable: true` and read `build({ orientation })` if
+   its lanes can run vertically or horizontally (pass `{ orientation }` on to `buildDiagram`).
    The easy way is a `CanvasSpec` per tab (columns of containers, components, connections by name; a component's
    `detail` is its internal design) and `build: () => buildDiagram(name, tabs)` from `./build`, which mints fresh
    ids and copies the legend. A hand-written `build()` must do both too: a **new** diagram with **fresh ids** every
@@ -13,7 +15,8 @@ Recipes for common changes, with the files to touch and the rules to keep. After
 2. Add it to the list in `src/templates/index.ts`.
 3. `tests/templates/templates.test.ts` runs every listed template through the validator and the layout checks.
 
-It appears on `/templates` and the start page automatically, with a preview drawn from `build()`.
+It appears on `/templates` (with search and its category) automatically, and on the start page if it is one of the
+first six after Blank (`START_PAGE_TEMPLATES`). Its preview is drawn from `build()`.
 
 ## Add a store action
 

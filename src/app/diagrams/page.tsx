@@ -16,6 +16,7 @@ import {
   supportsFilePicker,
   takeDroppedFile,
 } from "@/lib/diagram/file";
+import { recordRecentTemplate, useRecentTemplates } from "@/lib/recentTemplates";
 import { clearRecoveryCopy, setRecoveryEnabled, useRecoveryCopy, useRecoveryEnabled, type RecoveryCopy } from "@/lib/diagram/recovery";
 import { downloadLegacyItem, readLegacyItems, removeLegacyItems, type LegacyItem } from "@/lib/diagram/legacy";
 import { toast } from "@/lib/toast";
@@ -26,6 +27,9 @@ import { ImportError, diagramFromImport, importDiagramText, isImportable, type I
 const noopSubscribe = () => () => {};
 const NO_ITEMS: LegacyItem[] = [];
 let legacySnapshot: LegacyItem[] | null = null;
+
+/** How many template cards the start page shows before sending people to the templates page. */
+const START_PAGE_TEMPLATES = 6;
 
 /** Read once per page load; a stable reference keeps useSyncExternalStore from looping. */
 function getLegacySnapshot(): LegacyItem[] {
@@ -163,7 +167,11 @@ export default function StartPage() {
   // Which browser this is is only known on the client.
   const mounted = useMounted();
   const legacy = removed ? NO_ITEMS : found;
-  const starterTemplates = templates.filter((template) => template.id !== "blank");
+  const allStarterTemplates = templates.filter((template) => template.id !== "blank");
+  // The first few are shown here; the rest, with search and categories, are on the templates page.
+  const starterTemplates = allStarterTemplates.slice(0, START_PAGE_TEMPLATES);
+  const recentIds = useRecentTemplates();
+  const recentTemplates = recentIds.flatMap((id) => allStarterTemplates.filter((template) => template.id === id));
   // A diagram can still be open in memory, e.g. after the browser's Back button from the editor.
   const { guard, dialog: unsavedDialog } = useUnsavedGuard();
   const recovered = useRecoveryCopy();
@@ -199,6 +207,7 @@ export default function StartPage() {
     if (!template) return;
     guard(() => {
       startDiagram(template.build());
+      recordRecentTemplate(id);
       router.push("/editor");
     });
   }
@@ -356,9 +365,24 @@ export default function StartPage() {
             <div className="flex items-baseline justify-between gap-4">
               <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Start from a template</h2>
               <Link href="/templates" className="text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
-                All templates →
+                All {allStarterTemplates.length} templates →
               </Link>
             </div>
+            {recentTemplates.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-zinc-500">Recently used:</span>
+                {recentTemplates.map((template) => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    onClick={() => startTemplate(template.id)}
+                    className="rounded-full border border-zinc-300 px-3 py-1.5 font-medium text-zinc-700 transition-colors hover:border-zinc-500 hover:bg-zinc-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-500 dark:hover:bg-zinc-800 dark:focus-visible:outline-zinc-100"
+                  >
+                    {template.name}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               {starterTemplates.map((template, index) => (
                 <TemplateCard

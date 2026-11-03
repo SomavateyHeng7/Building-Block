@@ -13,7 +13,7 @@ import {
   newParticipant,
   participantFor,
 } from "@/lib/diagram/sequence";
-import type { BlockColorKey, SequenceParticipant } from "@/lib/diagram/types";
+import type { BlockColorKey, BlockShape, SequenceParticipant } from "@/lib/diagram/types";
 import { showDetails } from "./detailsPanel";
 import { SEQUENCE_LABEL_FIELD_ID, findSequenceItem, selectSequenceItem, useSequenceSelection } from "./sequenceSelection";
 import { Icon } from "./Icon";
@@ -29,9 +29,15 @@ const ITEM =
   "group flex cursor-grab items-center gap-2.5 rounded-lg border border-transparent px-2 py-1.5 text-sm text-zinc-700 transition-colors hover:border-zinc-200 hover:bg-zinc-50 focus-visible:border-zinc-300 focus-visible:outline-none active:cursor-grabbing pointer-coarse:py-2.5 dark:text-zinc-200 dark:hover:border-zinc-800 dark:hover:bg-zinc-900";
 const GRIP = "h-4 w-4 shrink-0 text-zinc-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-zinc-600";
 
+/** The shapes for process diagrams, with a small picture of each. */
+const FLOW_SHAPES: { shape: BlockShape; label: string; preview: React.ReactNode }[] = [
+  { shape: "decision", label: "Decision", preview: <polygon points="14,1 27,10 14,19 1,10" fill="none" stroke="currentColor" strokeWidth={1.5} /> },
+  { shape: "terminator", label: "Start / end", preview: <rect x="1" y="4" width="26" height="12" rx="6" fill="none" stroke="currentColor" strokeWidth={1.5} /> },
+];
+
 export type PaletteDragPayload =
   | { kind: "container" }
-  | { kind: "block"; colorKey: string };
+  | { kind: "block"; colorKey: string; shape?: BlockShape };
 
 function startDrag(event: React.DragEvent, payload: PaletteDragPayload) {
   event.dataTransfer.setData(PALETTE_DATA_FORMAT, JSON.stringify(payload));
@@ -70,16 +76,16 @@ export default function Sidebar({ className = "", onAdded, onCollapse }: Sidebar
     onAdded?.();
   }
 
-  function tapAddBlock(colorKey: BlockColorKey) {
+  function tapAddBlock(colorKey: BlockColorKey, shape?: BlockShape) {
     const { diagram, selectedNodeIds } = useDiagramStore.getState();
     const nodes = getActiveSection(diagram).nodes;
     const selected = selectedNodeIds.length === 1 ? nodes.find((node) => node.id === selectedNodeIds[0]) : undefined;
     const containerId = selected?.type === "container" ? selected.id : selected?.parentId;
     if (containerId) {
-      addBlock(nextSlotInContainer(nodes, containerId), containerId, colorKey);
+      addBlock(nextSlotInContainer(nodes, containerId), containerId, colorKey, shape);
     } else {
       const center = canvasCenter();
-      addBlock({ x: center.x - 70, y: center.y - 28 }, null, colorKey);
+      addBlock({ x: center.x - 70, y: center.y - 28 }, null, colorKey, shape);
     }
     onAdded?.();
   }
@@ -247,6 +253,27 @@ export default function Sidebar({ className = "", onAdded, onCollapse }: Sidebar
           ))}
         </div>
       </section>
+
+      {legend.length > 0 && (
+        <section>
+          <h2 className={HEADING}>Flowchart shapes</h2>
+          <div className="flex flex-col gap-1">
+            {FLOW_SHAPES.map(({ shape, label, preview }) => (
+              <div
+                key={shape}
+                {...itemProps(() => tapAddBlock(legend[0].key, shape), { kind: "block", colorKey: legend[0].key, shape })}
+                className={ITEM}
+              >
+                <svg aria-hidden viewBox="0 0 28 20" className="h-5 w-7 shrink-0 text-zinc-500">
+                  {preview}
+                </svg>
+                <span className="flex-1 truncate">{label}</span>
+                <Icon name="grip" className={GRIP} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <p className="mt-auto rounded-lg bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
         Drag onto the canvas or click to add. Drop a component on a container, or select the container first, to put it inside.

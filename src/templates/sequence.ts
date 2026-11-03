@@ -30,6 +30,8 @@ export const sequenceTemplate: TemplateDefinition = {
   id: "sequence",
   name: "Sequence diagram",
   description: "A checkout flow step by step: who calls whom, in what order, sync or async. Pair it with an L0 tab to explain how the architecture is used.",
+  category: "Sequence",
+  keywords: ["checkout", "messages", "participants"],
   build: () => {
     const diagram = createBlankDiagram("Checkout flow");
     const section = createBlankSection("Checkout", "sequence");

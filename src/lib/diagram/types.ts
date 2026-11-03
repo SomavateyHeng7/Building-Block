@@ -51,6 +51,12 @@ export interface ContainerNodeData extends NodeDetails, ContainerStyle {
   colorKey?: BlockColorKey;
 }
 
+/**
+ * How a component is drawn: a box (the default), a diamond for a decision, or a rounded start/end. Process
+ * diagrams read the same way as flowcharts that way.
+ */
+export type BlockShape = "process" | "decision" | "terminator";
+
 export interface BlockNodeData extends NodeDetails {
   [key: string]: unknown;
   kind: "block";
@@ -60,6 +66,8 @@ export interface BlockNodeData extends NodeDetails {
   containerId: string | null;
   /** A built-in icon shown beside the name; absent means none. */
   icon?: ComponentIconKey;
+  /** Absent means a plain box ("process"). */
+  shape?: BlockShape;
   /** The component's internal design (L2). Absent until something is drawn in it. */
   detail?: ComponentDetail;
 }
@@ -113,6 +121,11 @@ export interface DiagramEdge {
   style?: ConnectionLineStyle;
   /** Defaults to "step" (right angles). */
   shape?: ConnectionShape;
+  /**
+   * Where this connection comes in the flow (1, 2, 3…). Shown on the line while the diagram's
+   * `numberConnections` is on; set by "Number in flow order" or typed in.
+   */
+  step?: number;
   /**
    * How far the middle of the line is moved from where it's drawn by default, in canvas pixels; set by
    * dragging the dot on a selected connection. Relative, so the line keeps its bend when components move.
@@ -196,6 +209,8 @@ export interface Diagram {
   activeDetailId?: string;
   /** Show each component's technology under its label. Defaults to true. */
   showTechnology?: boolean;
+  /** Show each connection's step number (see `DiagramEdge.step`) on the line. Defaults to false. */
+  numberConnections?: boolean;
   createdAt: string;
   updatedAt: string;
 }

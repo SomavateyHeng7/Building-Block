@@ -59,5 +59,7 @@ export const l0ArchitectureTemplate: TemplateDefinition = {
   name: "L0 Architecture",
   description:
     "A generic multi-layer system architecture: engagement channels, core systems, integration layer, and infrastructure, color-coded by component type, with a few example connections.",
+  category: "Architecture",
+  keywords: ["layers", "overview"],
   build: () => buildDiagram("L0 Architecture", [{ name: "Overview", canvas: CANVAS }]),
 };

@@ -7,6 +7,7 @@ const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: "B", action: "Add a component (inside the selected container)" },
   { keys: "C", action: "Add a container" },
   { keys: "Drag from a dot", action: "Connect a component to another (dots appear on hover, selection or touch)" },
+  { keys: "Hold Alt / Option while dragging", action: "Turn off the alignment guides and snapping for that drag" },
   { keys: "Arrow keys", action: "Nudge the selection by 8 px (hold Shift for 32 px)" },
   { keys: "Delete / Backspace", action: "Delete the selection, including a selected connection (asks before deleting a container's components)" },
   { keys: "Ctrl/⌘ + G", action: "Group the selected components in a new container" },

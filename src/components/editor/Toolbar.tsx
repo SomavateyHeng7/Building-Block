@@ -425,10 +425,10 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
         type="button"
         title="Back to the start page"
         aria-label="Back to the start page"
-        className="group inline-flex h-8 shrink-0 items-center gap-1 rounded-md pl-1 pr-1.5 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+        className="group inline-flex h-8 shrink-0 items-center gap-1 rounded-md pl-1 pr-1.5 text-zinc-800 transition-colors hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
         onClick={handleLeave}
       >
-        <Icon name="arrowLeft" className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
+        <Icon name="arrowLeft" className="h-5 w-5 transition-transform group-hover:-translate-x-0.5" />
         <LogoMark className="h-6 w-6" />
       </button>
       <div className={DIVIDER} />

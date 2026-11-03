@@ -52,5 +52,7 @@ export const threeTierTemplate: TemplateDefinition = {
   name: "Three-tier web application",
   description:
     "The classic presentation, application and data tiers, with an external identity provider and the connections between them.",
+  category: "Architecture",
+  keywords: ["web", "tiers", "database"],
   build: () => buildDiagram("Three-tier Web Application", [{ name: "Overview", canvas: CANVAS }]),
 };

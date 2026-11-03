@@ -33,6 +33,14 @@ interface Cell {
   height: number;
 }
 
+/** The flowchart shape a draw.io cell stands for, if it is one. */
+function drawioShape(cell: { shape?: string; style: Map<string, string> }): "decision" | "terminator" | undefined {
+  const name = cell.shape ?? cell.style.get("shape");
+  if (name === "rhombus") return "decision";
+  if (name === "ellipse") return "terminator";
+  return undefined;
+}
+
 function parseStyle(style: string): { map: Map<string, string>; shape?: string } {
   const map = new Map<string, string>();
   let shape: string | undefined;
@@ -234,6 +242,8 @@ function convertPage(
           label: cell.label || "Untitled",
           containerId: null,
           ...(color ? { colorKey: categoryFor(color) } : {}),
+          // draw.io's diamond is a decision and its oval a start or end.
+          ...(drawioShape(cell) ? { shape: drawioShape(cell) } : {}),
           ...(cell.tooltip ? { description: cell.tooltip } : {}),
         },
       });

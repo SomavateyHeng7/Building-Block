@@ -44,7 +44,9 @@ environment: no browser, so tests cover the pure logic and the stores.
 | `tests/proxy.test.ts` | 2 | 503 on every page during maintenance (incl. `/maintenance`); redirect home afterwards |
 | `tests/lib/levels.test.ts` | 2 | Roadmap statuses and heading wording |
 | `tests/lib/diagram/compare.test.ts` | 13 | Compare tabs: matching by name across ids, added/removed/changed fields, container moves, ignoring layout, connection matching (incl. two-way), internal designs, change-list rows |
-| `tests/templates/templates.test.ts` | 20 | Every template opens without repairs, mints fresh ids, connects real components, fits its containers; the richer templates have connections, an L2 design and two tabs |
+| `tests/templates/templates.test.ts` | 40 | Every template opens without repairs, mints fresh ids, connects real components, fits its containers; horizontal lanes (valid, fit, in flow order, one step per spot); the richer templates have connections, an L2 design and several tabs |
+| `tests/templates/filter.test.ts` | 5 | Template search (any order, case and accents ignored, every word must match), category filter, every template has a known category |
+| `tests/lib/recentTemplates.test.ts` | 4 | Newest first, no repeats, at most three; damaged values ignored; blocked storage lasts for the tab |
 | `tests/lib/diagram/search.test.ts` | 9 | Names first, then details; several words in any order; accents ignored; a changed diagram is searched afresh; highlighting; sequence participants, messages and notes |
 | `tests/lib/diagram/sequence.test.ts` | 11 | Editing and laying out sequences; sequence tabs (undo, duplicate, save, picture); picking a component for a participant, tab-safe |
 | `tests/lib/diagram/flowAdapter.test.ts` | 6 | Line paths and bends; change marks; unchanged nodes keep their objects (undo history shares them) |
@@ -66,7 +68,7 @@ environment: no browser, so tests cover the pure logic and the stores.
 ## Browser tests (TesterArmy)
 
 The app is tested in a real browser by [TesterArmy](https://tester.army): an AI agent follows plain-language steps
-in a cloud browser. The tests are defined in **`testerarmy/tests.mjs`** (41, one or more per area of the app, each on
+in a cloud browser. The tests are defined in **`testerarmy/tests.mjs`** (45, one or more per area of the app, each on
 a desktop, tablet or phone screen) and copied into TesterArmy with `pnpm testerarmy:sync`, so they're reviewed with
 the code. Where the agent can't see or do something itself, a `javascript` step does it: hiding the native file
 pickers and handing the app a file, recording downloads, reading CSS classes and browser storage, measuring contrast.

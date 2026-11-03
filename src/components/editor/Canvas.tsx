@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   Background,
   Controls,
@@ -8,6 +8,7 @@ import {
   ConnectionMode,
   ReactFlow,
   SelectionMode,
+  ViewportPortal,
   applyNodeChanges,
   useReactFlow,
   type Connection,
@@ -22,7 +23,8 @@ import { useTheme } from "next-themes";
 import { useMounted } from "@/components/theme-toggle";
 import { getActiveSection, useDiagramStore, type NodesChangeOptions } from "@/lib/diagram/store";
 import { fromFlowNodes, historyKey, toFlowEdges, toFlowNodes, type FlowNode } from "@/lib/diagram/flowAdapter";
-import { containerInsets, dropIntoContainers, growContainerToFit } from "@/lib/diagram/layout";
+import { absolutePosition, containerInsets, dropIntoContainers, growContainerToFit } from "@/lib/diagram/layout";
+import { snapToOthers, type GuideLine, type Rect } from "@/lib/diagram/guides";
 import { changeMarksForView } from "@/lib/diagram/compare";
 import ContainerNode from "./nodes/ContainerNode";
 import BlockNode from "./nodes/BlockNode";
@@ -46,6 +48,9 @@ function subscribeWide(callback: () => void) {
 function useIsWide() {
   return useSyncExternalStore(subscribeWide, () => window.matchMedia("(min-width: 768px)").matches, () => true);
 }
+
+/** How close (in screen pixels) a dragged box has to come to another's edge or middle to line up with it. */
+const GUIDE_PULL = 6;
 
 const nodeTypes = { container: ContainerNode, block: BlockNode };
 const edgeTypes = { connection: ConnectionEdge };
@@ -95,7 +100,7 @@ export default function Canvas() {
   const reconnectConnection = useDiagramStore((state) => state.reconnectConnection);
   const addContainer = useDiagramStore((state) => state.addContainer);
   const addBlock = useDiagramStore((state) => state.addBlock);
-  const { screenToFlowPosition, fitView, getNode } = useReactFlow();
+  const { screenToFlowPosition, fitView, getNode, getZoom } = useReactFlow();
   const focus = useCanvasFocus((state) => state.target);
   const comparePair = useCompareView((state) => state.pair);
   const renderEverything = useRenderEverything((state) => state.on);
@@ -104,6 +109,26 @@ export default function Canvas() {
   const wide = useIsWide();
   const readOnly = useReadOnly();
   const colorMode = mounted && resolvedTheme === "dark" ? "dark" : "light";
+  const numbered = diagram.numberConnections === true;
+  // Guides drawn while a box is dragged near the edge or middle of others; Alt (Option) turns them off.
+  const [guides, setGuides] = useState<GuideLine[]>([]);
+  const altHeld = useRef(false);
+  useEffect(() => {
+    const track = (event: KeyboardEvent) => {
+      altHeld.current = event.altKey;
+    };
+    const release = () => {
+      altHeld.current = false;
+    };
+    window.addEventListener("keydown", track);
+    window.addEventListener("keyup", track);
+    window.addEventListener("blur", release);
+    return () => {
+      window.removeEventListener("keydown", track);
+      window.removeEventListener("keyup", track);
+      window.removeEventListener("blur", release);
+    };
+  }, []);
 
   const section = getActiveSection(diagram);
 
@@ -125,8 +150,8 @@ export default function Canvas() {
   );
 
   const flowEdges = useMemo(
-    () => toFlowEdges(section.edges ?? [], selectedEdgeId, colorMode === "dark", marks),
-    [section.edges, selectedEdgeId, colorMode, marks],
+    () => toFlowEdges(section.edges ?? [], selectedEdgeId, colorMode === "dark", marks, numbered),
+    [section.edges, selectedEdgeId, colorMode, marks, numbered],
   );
 
   // Zoom to something found by search or picked in Compare. Going to another view remounts the canvas, so
@@ -212,8 +237,65 @@ export default function Canvas() {
     setSelectedEdge(null);
   }, [setSelection, setSelectedEdge]);
 
+  /**
+   * While boxes are dragged, pulls them into line with the edges and middles of the others and says where to draw
+   * the guides. Boxes inside a dragged container move with it and are left alone, and a component is never pulled
+   * towards its own container.
+   */
+  const snapDrag = useCallback(
+    (changes: NodeChange[]): NodeChange[] => {
+      const moves = changes.filter(
+        (change): change is Extract<NodeChange, { type: "position" }> => change.type === "position" && !!change.dragging && !!change.position,
+      );
+      if (!moves.length || altHeld.current || readOnly) {
+        if (guides.length) setGuides([]);
+        return changes;
+      }
+      const moved = new Set(moves.map((change) => change.id));
+      const top = moves.filter((change) => {
+        const node = section.nodes.find((candidate) => candidate.id === change.id);
+        return node && !(node.parentId && moved.has(node.parentId));
+      });
+      const rects = top.flatMap((change) => {
+        const node = section.nodes.find((candidate) => candidate.id === change.id)!;
+        const parent = node.parentId ? section.nodes.find((candidate) => candidate.id === node.parentId) : undefined;
+        return [{ x: change.position!.x + (parent?.position.x ?? 0), y: change.position!.y + (parent?.position.y ?? 0), width: node.size.width, height: node.size.height }];
+      });
+      if (!rects.length) return changes;
+      const left = Math.min(...rects.map((rect) => rect.x));
+      const topEdge = Math.min(...rects.map((rect) => rect.y));
+      const moving: Rect = {
+        x: left,
+        y: topEdge,
+        width: Math.max(...rects.map((rect) => rect.x + rect.width)) - left,
+        height: Math.max(...rects.map((rect) => rect.y + rect.height)) - topEdge,
+      };
+      const skip = new Set<string>(moved);
+      for (const change of top) {
+        const node = section.nodes.find((candidate) => candidate.id === change.id);
+        if (node?.parentId) skip.add(node.parentId);
+        for (const child of section.nodes) if (child.parentId === change.id) skip.add(child.id);
+      }
+      const others: Rect[] = section.nodes
+        .filter((node) => !skip.has(node.id))
+        .map((node) => ({ ...absolutePosition(node, section.nodes), width: node.size.width, height: node.size.height }));
+      const snap = snapToOthers(moving, others, GUIDE_PULL / Math.max(getZoom(), 0.01));
+      const next = JSON.stringify(snap.lines);
+      if (next !== JSON.stringify(guides)) setGuides(snap.lines);
+      if (!snap.dx && !snap.dy) return changes;
+      return changes.map((change) =>
+        change.type === "position" && change.dragging && change.position && top.some((entry) => entry.id === change.id)
+          ? { ...change, position: { x: change.position.x + snap.dx, y: change.position.y + snap.dy } }
+          : change,
+      );
+    },
+    [getZoom, guides, readOnly, section.nodes],
+  );
+
   const handleNodesChange = useCallback(
-    (changes: NodeChange[]) => {
+    (rawChanges: NodeChange[]) => {
+      const changes = snapDrag(rawChanges);
+      if (guides.length && changes.some((change) => change.type === "position" && change.dragging === false)) setGuides([]);
       // Selection lives in the store; React Flow reports clicks, shift-clicks and box selection here.
       const selectChanges = changes.filter((change) => change.type === "select");
       const removed = new Set(
@@ -240,7 +322,7 @@ export default function Canvas() {
       );
       setActiveSectionNodes([...parents].reduce((nodes, id) => growContainerToFit(nodes, id), updated), options);
     },
-    [flowNodes, section.nodes, selectedNodeIds, setActiveSectionNodes, setSelection],
+    [flowNodes, guides.length, section.nodes, selectedNodeIds, setActiveSectionNodes, setSelection, snapDrag],
   );
 
   // Dropping decides which container each dragged component is in: into one, out of one, or across.
@@ -288,7 +370,7 @@ export default function Canvas() {
             }
           : { x: point.x - 70, y: point.y - 28 };
 
-      addBlock(position, target?.id ?? null, payload.colorKey as BlockColorKey);
+      addBlock(position, target?.id ?? null, payload.colorKey as BlockColorKey, payload.shape);
     },
     [addBlock, addContainer, flowNodes, readOnly, screenToFlowPosition],
   );
@@ -325,6 +407,25 @@ export default function Canvas() {
       fitView
     >
       <Background gap={16} />
+      {guides.length > 0 && (
+        <ViewportPortal>
+          <svg aria-hidden className="pointer-events-none absolute left-0 top-0 overflow-visible" width={1} height={1} style={{ zIndex: 1000 }}>
+            {guides.map((line) => (
+              <line
+                key={`${line.axis}:${line.at}`}
+                x1={line.axis === "x" ? line.at : line.from}
+                x2={line.axis === "x" ? line.at : line.to}
+                y1={line.axis === "x" ? line.from : line.at}
+                y2={line.axis === "x" ? line.to : line.at}
+                stroke="#ec4899"
+                strokeWidth={1}
+                strokeDasharray="4 3"
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+          </svg>
+        </ViewportPortal>
+      )}
       <Controls />
       {wide && <MiniMap pannable zoomable />}
       {section.nodes.length === 0 && (

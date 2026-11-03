@@ -51,6 +51,7 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 | --- | --- |
 | `ConsentGate.tsx` | Privacy-notice acceptance dialog on app pages ([consent](11-privacy-consent-and-forms.md#the-consent-gate)) |
 | `ToastViewport.tsx` | Renders toasts; per-toast timers that pause ([notifications](12-notifications.md)) |
+| `BackLink.tsx` | The "← Home" / "← Start" button at the top of a page |
 | `TemplatePreview.tsx` | SVG preview of a template's first tab |
 | `Logo.tsx` | The brand mark (`LogoMark`) |
 | `theme-provider.tsx` | Client wrapper around `next-themes`' provider (server layouts can't import it directly) |
@@ -122,6 +123,7 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 | `zip.ts` | Minimal ZIP writer |
 | `toast.ts` | Toast store and API |
 | `consent.ts` | Privacy-notice acceptance, versioned |
+| `recentTemplates.ts` | The last three template ids started (a small preference); `useRecentTemplates` |
 | `levels.ts` | Roadmap levels computed from store actions |
 | `maintenance.ts` | Reads maintenance settings; `Retry-After`; upcoming end |
 
@@ -129,14 +131,20 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 
 | File | Purpose |
 | --- | --- |
-| `types.ts` | `TemplateDefinition` |
-| `index.ts` | The list of templates; `getTemplate(id)` |
+| `types.ts` | `TemplateDefinition` (category, keywords, `orientable`, `build(options)`), `TEMPLATE_CATEGORIES` |
+| `index.ts` | The list of templates; `getTemplate(id)`; re-exports `filterTemplates` |
+| `filter.ts` | `filterTemplates`: search words and category for the templates page |
 | `blank.ts` | Blank canvas |
-| `build.ts` | Lays out templates written as data (`CanvasSpec`) and builds diagrams with fresh ids |
+| `build.ts` | Lays out templates written as data (`CanvasSpec`), vertically or as horizontal lanes (steps placed by their place in the flow), and builds diagrams with fresh ids |
 | `l0-architecture.ts` | Four-layer L0 example with connections |
 | `three-tier.ts` | Three-tier web application |
 | `event-driven.ts` | Event-driven microservices, with an internal design (L2) |
 | `current-vs-target.ts` | Two tabs, current and target, for Compare tabs |
+| `cross-functional.ts` | Swimlane process: one lane per team, hand-offs between lanes; vertical or horizontal |
+| `c4-context.ts` | System context: people, our system, external systems |
+| `data-pipeline.ts` | Sources, ingestion, lake and warehouse, consumption |
+| `cloud-landing-zone.ts` | Public, private and data subnets with shared services |
+| `migration-roadmap.ts` | Current, Transition and Target tabs |
 | `sequence.ts` | A checkout flow as a sequence tab |
 
 ## `src/types/`
