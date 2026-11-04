@@ -219,6 +219,9 @@ function TextPanel({ node, data, action }: { node: DiagramNode; data: TextNodeDa
   const updateNodeLabel = useDiagramStore((state) => state.updateNodeLabel);
   const updateTextStyle = useDiagramStore((state) => state.updateTextStyle);
   const fontSize = data.fontSize ?? DEFAULT_FONT_SIZE;
+  const parent = useDiagramStore((state) =>
+    node.parentId ? getActiveSection(state.diagram).nodes.find((candidate) => candidate.id === node.parentId) : undefined,
+  );
   return (
     <div className={PANEL}>
       <PanelTitle action={action}>Text box</PanelTitle>
@@ -271,7 +274,7 @@ function TextPanel({ node, data, action }: { node: DiagramNode; data: TextNodeDa
           onChange={(align) => updateTextStyle(node.id, { align: align === "left" ? undefined : align })}
         />
       </div>
-      <GeometryFields node={node} />
+      <GeometryFields node={node} parent={parent} />
       <CommentsSection targetId={node.id} />
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={() => requestDelete([node.id])} className={DELETE_BUTTON}>

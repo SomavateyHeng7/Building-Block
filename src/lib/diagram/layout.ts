@@ -242,7 +242,8 @@ export function fitContainerToContents(nodes: DiagramNode[], containerId: string
  */
 export function tidyContainer(nodes: DiagramNode[], containerId: string): DiagramNode[] {
   const container = nodes.find((node) => node.id === containerId);
-  const children = childrenOf(nodes, containerId).sort(
+  // Only components are laid out in the grid: a text box (a caption, a note) stays where it was put.
+  const children = childrenOf(nodes, containerId).filter((node) => node.type === "block").sort(
     (a, b) => a.position.y - b.position.y || a.position.x - b.position.x,
   );
   if (!container || !children.length) return nodes;
@@ -306,9 +307,8 @@ export function tidyOverlappingContainers(nodes: DiagramNode[]): { nodes: Diagra
 }
 
 /**
- * Settles components after a drag. `moved` gives each dragged node's new position (relative to its
- * current container, if any). A component belongs to the top-most container its centre is over, or to
- * none: so it can be dragged into a container, out of one, or into another. Inside, it is kept clear of
+ * Settles components and text boxes after a drag. `moved` gives each dragged node's new position (relative to
+ * its current container, if any). One belongs to the top-most container its centre is over, or to none: so it can be dragged into a container, out of one, or into another. Inside, it is kept clear of
  * the header and padding, and the container grows to fit it. Children moving with their container
  * are left alone.
  */
@@ -319,7 +319,8 @@ export function dropIntoContainers(nodes: DiagramNode[], moved: { id: string; po
   let next = nodes;
   for (const { id, position } of moved) {
     const node = nodes.find((candidate) => candidate.id === id);
-    if (!node || node.type !== "block" || (node.parentId && movedIds.has(node.parentId))) continue;
+    // Containers aren't nested; components and text boxes go wherever they're dropped.
+    if (!node || node.type === "container" || (node.parentId && movedIds.has(node.parentId))) continue;
     const oldParent = node.parentId ? containers.find((candidate) => candidate.id === node.parentId) : undefined;
     const absolute = { x: position.x + (oldParent?.position.x ?? 0), y: position.y + (oldParent?.position.y ?? 0) };
     const centre = { x: absolute.x + node.size.width / 2, y: absolute.y + node.size.height / 2 };

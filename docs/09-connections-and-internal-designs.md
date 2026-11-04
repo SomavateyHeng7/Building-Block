@@ -38,7 +38,7 @@ caption is "What flows · Protocol" (`connectionCaption`).
 
 **Routing:** *Route* picks right angles (`step`, the default), curved or straight. A selected line shows a blue dot
 just above its label (`edges/ConnectionEdge.tsx`): dragging it stores `bend`, the offset of the line's middle from
-its default position, snapped to 8 px, coalesced into one undo step per drag. Double-clicking the dot, or **Reset
+its default position, in whole pixels, coalesced into one undo step per drag. Double-clicking the dot, or **Reset
 line**, removes it. The geometry is `connectionPath` in `flowAdapter.ts` (tested): a right-angled line moves its
 middle segment to the point, and curved and straight lines pass through it. **Attach to nearest sides** sets the
 facing sides (`suggestConnectionSides`) and clears the bend.

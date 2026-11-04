@@ -1,4 +1,4 @@
-import type { BlockShape } from "./types";
+import type { BlockShape, DiagramNode } from "./types";
 
 /**
  * The flowchart shapes, as draw.io's Flowchart palette offers them: what each means, its usual size, and its
@@ -41,4 +41,20 @@ export const SHAPES: ShapeInfo[] = [
 
 export function shapeInfo(shape: BlockShape | undefined): ShapeInfo {
   return SHAPES.find((info) => info.shape === (shape ?? "process")) ?? SHAPES[0];
+}
+
+// Worked out once per nodes array (every edit makes a new one), so asking per box costs nothing on big diagrams.
+const flowchartCache = new WeakMap<readonly DiagramNode[], boolean>();
+
+/**
+ * Whether a canvas is a flowchart: it has a component drawn as a flowchart shape (a decision, a pill…). Flowcharts
+ * get draw.io's quick-add arrows, and aren't checked for owners or protocols (which are architecture questions).
+ */
+export function isFlowchart(nodes: readonly DiagramNode[]): boolean {
+  let flowchart = flowchartCache.get(nodes);
+  if (flowchart === undefined) {
+    flowchart = nodes.some((node) => node.data.kind === "block" && node.data.shape !== undefined);
+    flowchartCache.set(nodes, flowchart);
+  }
+  return flowchart;
 }

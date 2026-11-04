@@ -160,7 +160,7 @@ and every change React Flow reports is turned into a store action.
 | `onBeforeDelete` | When nodes are deleted, React Flow also reports their connections as deleted. The store already removes those, so they're filtered out here to keep it **one** undo step. Goes through `requestDelete` (`deletePrompt.ts`): when a container that holds components is among the nodes, `DeleteContainerDialog` asks **Keep components** (the default) or **Delete everything** first. Nodes and selected connections are deleted in one undo step (`deleteNodes` with `edgeIds`). A box selection or Select all picks up a container's components with it, so deleting them silently was easy to do by accident. |
 | `onPaneClick` | Clears the selection. |
 | `onDragOver` / `onDrop` | Palette drag-and-drop: drops a container centred on the cursor, or a component into the top-most container under the cursor (`findContainerAtPoint`), kept clear of its header. |
-| No grid snap | Drags move to whole pixels and snap to other boxes' edges and middles within 6 screen px (`snapDrag` + `guides.ts`), drawing pink alignment guides, orange px gaps and an x/y readout; Alt moves freely. Resizes show W × H. |
+| No grid snap | Drags move to whole pixels and snap to other boxes' edges and middles within 6 screen px (`snapDrag` + `guides.ts`), drawing pink alignment guides, orange px gaps and an x/y readout; Alt moves freely. Resizes snap the same way (`snapResizeChanges` + `snapResize`) and show W × H. |
 | `minZoom 0.2`, `maxZoom 2`, `fitView` | Sensible zoom range; open fitted to content. |
 | `selectionMode={Partial}` | Box selection includes nodes it only partly covers (easier on dense diagrams). |
 | `colorMode` | Follows the app theme once mounted (avoids a hydration flash). |
@@ -172,6 +172,13 @@ and every change React Flow reports is turned into a store action.
 - **Snapping while dragging** (`snapDrag` in `Canvas.tsx`): the dragged boxes (together, by their bounding box) snap
   so an edge or middle meets another box's edge or middle within 6 screen pixels (`snapToBoxes`). Children of a
   dragged container are left out. Alt held: no snapping, but the guides still show exact matches.
+- **Snapping while resizing** (`snapResizeChanges` in `Canvas.tsx`, `snapResize` in `guides.ts`): the edges the
+  handle moves (worked out against where the box started) snap within 6 screen pixels to another box's edge or
+  middle, **or to the same width or height as another box**. Pink markers then show the size on the resized box and
+  on up to three of the nearest boxes that match it; guides and px gaps show as for a drag. Snaps never go below the
+  minimum size, a container is never snapped smaller than its contents, and when a container's left or top edge
+  snaps, its children are shifted back so they stay put. The node's own containers and contents aren't snap targets.
+  Alt held: no snapping. User testing found resizing gave no sense of size relative to other blocks.
 - **What's drawn** (`PixelGuides`, in a `ViewportPortal` so it's in canvas coordinates, with line widths divided by
   the zoom): pink lines through every edge or middle shared to the pixel (`alignmentLines`), orange measures with the
   gap in px to the nearest box on each side that faces it (`nearestGaps`), and a readout under the box: `x · y`
@@ -203,7 +210,7 @@ Flowcharts are drawn in the app's own look, like every architecture tab; draw.io
 **edited**, not for how they look.
 
 - **Quick add**, as in draw.io: on a **flowchart tab** (one with at least one flowchart shape on it: `isFlowchart` in
-  `flowchartView.ts`, worked out once per nodes array), a hovered or selected component shows a blue arrow off each
+  `shapes.ts`, worked out once per nodes array; `useIsFlowchart` in `flowchartView.ts` reads it for the view on screen), a hovered or selected component shows a blue arrow off each
   side. Clicking one adds the same kind of shape that way (Shift-click: a decision), 60 px below or 80 px beside it,
   stepping past anything in the way, connected from that side (`addConnectedBlock`), as one undo step. Ways out of a
   decision are labelled "Yes", then "No"; a pill after a pill is called "End". Tabs without flowchart shapes (L0
@@ -339,7 +346,9 @@ See the [decision log](17-decision-log.md#import-drawio-for-architecture-mermaid
 
 - **Check** (tab bar, with a count): `HintsDialog` lists, from `diagramHints` (`src/lib/diagram/hints.ts`), components
   nothing connects to (only on a canvas that has connections at all), connections with no protocol, and L0 components
-  with no owner, across every tab and internal design. Picking one opens it. Hints never block saving or exporting.
+  with no owner, across every tab and internal design. A **flowchart** canvas (one with flowchart shapes,
+  `isFlowchart` in `shapes.ts`) is a process, not a system, so it's only checked for steps nothing connects to and
+  open comments: no owners, and no protocols on its Yes/No lines. The Flowchart template has nothing to flag. Picking one opens it. Hints never block saving or exporting.
 - **Legend → Reuse:** adds the categories of **C4** or **ArchiMate** (`LEGEND_PRESETS` in `defaultLegend.ts`), or of a
   legend file (**Add from a file…**), that the legend doesn't already have by name, as one undo step
   (`addLegendEntries`). **Save this legend to a file** downloads names and colours only (`legendFile.ts`); a whole
@@ -356,7 +365,12 @@ See the [decision log](17-decision-log.md#import-drawio-for-architecture-mermaid
 
 - Filled with its category colour; **dashed border and white when unassigned** (tooltip says so); text colour
   chosen for contrast (`readableTextOn`).
-- `NodeResizer` when selected (minimum 80×32).
+- `NodeResizer` when selected (minimum 80×32). Resize controls are styled in `globals.css` to look nothing like
+  connection dots: white squares at the corners and a 9 px grab strip (drawn as a 1 px line) along each edge, under
+  the round blue connection dot in the middle of the side (`z-index`, crosshair cursor, "Drag to draw a connection").
+  React Flow's default 1 px edge line meant users grabbed the dot and drew an arrow when they meant to resize.
+  While resizing (`bb-resizing` on the canvas), connection dots and quick-add arrows hide; while drawing a
+  connection, resize controls hide.
 - **Shape** (`data.shape`): a box or pill in CSS; the other flowchart shapes are an SVG outline from `shapes.ts`
   behind the label, stretched to the box, with the label kept inside by the shape's `inset` (a diamond's corners are
   where its connection dots are).
@@ -394,6 +408,9 @@ See the [decision log](17-decision-log.md#import-drawio-for-architecture-mermaid
 - **Grows to fit:** when the text needs more height than the box has (typing, a bigger font, an edit in the panel),
   the box grows (`setNodeGeometry`); it never shrinks by itself.
 - No handles: a text box can't be connected (the store and `isValidConnection` refuse it too).
+- **In a container:** dropped on a container (or added with T, or from the palette, while a container or one of its
+  components is selected) it goes inside and moves with it; dragged off, it leaves (`dropIntoContainers`). Its X/Y
+  are then relative to the container.
 
 ## `Sidebar.tsx` — the palette
 

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { flowchartTemplate } from "@/templates/flowchart";
 import { l0ArchitectureTemplate } from "@/templates/l0-architecture";
-import { isFlowchart } from "@/components/editor/flowchartView";
+import { isFlowchart } from "@/lib/diagram/shapes";
 import { templates } from "@/templates";
 import { parseDiagram } from "@/lib/diagram/validate";
 import { flowchartMermaid } from "@/lib/diagram/exportCode";

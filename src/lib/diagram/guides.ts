@@ -28,6 +28,25 @@ export interface Gap {
   from: number;
   to: number;
   length: number;
+  /** "size": a box's own width or height, marked because another box has the same (while resizing). */
+  kind?: "size";
+}
+
+/** Which edges of a box a resize is moving (a corner moves two). */
+export interface ResizeEdges {
+  left: boolean;
+  right: boolean;
+  top: boolean;
+  bottom: boolean;
+}
+
+export interface ResizeSnapResult {
+  /** The resized box, after snapping. */
+  box: Box;
+  /** Guides through the moved edges where they line up with another box. */
+  lines: GuideLine[];
+  /** Width and height markers on the resized box and the boxes it now matches in size. */
+  sizes: Gap[];
 }
 
 export interface SnapResult {
@@ -144,7 +163,8 @@ export function nearestGaps(box: Box, others: Box[]): Gap[] {
     const from = box.y + box.height;
     gaps.push({ axis: "y", at: middle(box.x, box.x + box.width, b.x, b.x + b.width), from, to: b.y, length: b.y - from });
   }
-  return gaps.map((gap) => ({ ...gap, length: Math.round(gap.length) }));
+  // Boxes that touch have nothing to measure.
+  return gaps.map((gap) => ({ ...gap, length: Math.round(gap.length) })).filter((gap) => gap.length > 0);
 }
 
 /**
@@ -175,4 +195,70 @@ export function distancesBetween(box: Box, other: Box): Gap[] {
   if (other.y + other.height <= box.y) push("y", cx, other.y + other.height, box.y);
   else if (other.y >= box.y + box.height) push("y", cx, box.y + box.height, other.y);
   return gaps;
+}
+
+/** How far off a size marker is drawn from the box it measures. */
+const SIZE_MARK_OFFSET = 10;
+/** At most this many other boxes get a "same size" marker, the nearest first, so a busy canvas stays readable. */
+const MAX_SIZE_MATCHES = 3;
+
+/**
+ * Snaps a resize to the other boxes, as a drag snaps: each moving edge goes to the nearest edge or middle of
+ * another box, or to where the box would be exactly as wide (or tall) as another, within `threshold`. Snaps
+ * that would make the box smaller than `min` are skipped. Returns the box with the guides and size markers.
+ */
+export function snapResize(box: Box, edges: ResizeEdges, others: Box[], threshold: number, min: { width: number; height: number }): ResizeSnapResult {
+  /** The best spot for the moving edge on one axis, and whether it came from matching a size. */
+  function snapAxis(start: number, length: number, lowMoves: boolean, highMoves: boolean, minLength: number, stops: (other: Box) => number[], size: (other: Box) => number) {
+    if (lowMoves === highMoves) return { start, length };
+    const fixed = lowMoves ? start + length : start;
+    const edge = lowMoves ? start : start + length;
+    let best = edge;
+    let bestDistance = Infinity;
+    const consider = (target: number) => {
+      const distance = Math.abs(target - edge);
+      if (distance > threshold || distance >= bestDistance) return;
+      if (Math.abs(target - fixed) < minLength) return;
+      best = target;
+      bestDistance = distance;
+    };
+    for (const other of others) {
+      for (const stop of stops(other)) consider(stop);
+      consider(lowMoves ? fixed - size(other) : fixed + size(other));
+    }
+    return lowMoves ? { start: best, length: fixed - best } : { start, length: best - start };
+  }
+  const x = snapAxis(box.x, box.width, edges.left, edges.right, min.width, xStops, (other) => other.width);
+  const y = snapAxis(box.y, box.height, edges.top, edges.bottom, min.height, yStops, (other) => other.height);
+  const snapped = { x: x.start, y: y.start, width: x.length, height: y.length };
+
+  const moving = new Set<string>();
+  if (edges.left) moving.add(`x:${snapped.x}`);
+  if (edges.right) moving.add(`x:${snapped.x + snapped.width}`);
+  if (edges.top) moving.add(`y:${snapped.y}`);
+  if (edges.bottom) moving.add(`y:${snapped.y + snapped.height}`);
+  const lines = alignmentLines(snapped, others).filter((line) => moving.has(`${line.axis}:${line.at}`));
+
+  return { box: snapped, lines, sizes: sizeMatches(snapped, edges, others) };
+}
+
+/** Markers on the box and on the nearest boxes with the same width (when resizing across) or height. */
+function sizeMatches(box: Box, edges: ResizeEdges, others: Box[]): Gap[] {
+  const same = (a: number, b: number) => Math.abs(a - b) < 0.5;
+  const centre = (item: Box) => ({ x: item.x + item.width / 2, y: item.y + item.height / 2 });
+  const distance = (other: Box) => Math.hypot(centre(other).x - centre(box).x, centre(other).y - centre(box).y);
+  const nearest = (matches: Box[]) => [...matches].sort((a, b) => distance(a) - distance(b)).slice(0, MAX_SIZE_MATCHES);
+  const width = (item: Box): Gap => ({ axis: "x", at: item.y - SIZE_MARK_OFFSET, from: item.x, to: item.x + item.width, length: Math.round(item.width), kind: "size" });
+  const height = (item: Box): Gap => ({ axis: "y", at: item.x - SIZE_MARK_OFFSET, from: item.y, to: item.y + item.height, length: Math.round(item.height), kind: "size" });
+
+  const marks: Gap[] = [];
+  if (edges.left || edges.right) {
+    const matches = nearest(others.filter((other) => same(other.width, box.width)));
+    if (matches.length) marks.push(width(box), ...matches.map(width));
+  }
+  if (edges.top || edges.bottom) {
+    const matches = nearest(others.filter((other) => same(other.height, box.height)));
+    if (matches.length) marks.push(height(box), ...matches.map(height));
+  }
+  return marks;
 }

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
 import { componentIcon } from "@/lib/diagram/componentIcons";
 import { shapeInfo } from "@/lib/diagram/shapes";
+import { MIN_NODE_SIZE } from "@/lib/diagram/layout";
 import { defaultLabel } from "@/lib/diagram/factory";
 import { readableTextOn } from "@/lib/diagram/palette";
 import { useDiagramStore } from "@/lib/diagram/store";
@@ -77,10 +78,11 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
         </svg>
       )}
       {flowchart && !readOnly && <QuickAdd id={id} />}
-      <NodeResizer minWidth={80} minHeight={32} isVisible={selected && !readOnly} />
+      {/* Corner squares and edge strips resize; the round dots in the middle of each side draw connections. */}
+      <NodeResizer minWidth={MIN_NODE_SIZE.block.width} minHeight={MIN_NODE_SIZE.block.height} isVisible={selected && !readOnly} />
       {/* Every side starts and ends connections (the canvas uses loose connection mode). */}
       {SIDES.map((side) => (
-        <Handle key={side.id} id={side.id} type="source" position={side.position} className="bb-handle" />
+        <Handle key={side.id} id={side.id} type="source" position={side.position} className="bb-handle" title="Drag to draw a connection" />
       ))}
       {/* Colour alone says nothing to a screen reader, so the category is said in words. */}
       {entry && <span className="sr-only">Category: {entry.label}</span>}

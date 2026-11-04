@@ -59,9 +59,18 @@ export default function Sidebar({ className = "", onAdded, onCollapse }: Sidebar
     onAdded?.();
   }
 
+  /** Into the selected container (below what's in it), like a component; otherwise in the middle of the screen. */
   function tapAddText() {
-    const center = canvasCenter();
-    addText({ x: Math.round(center.x - 80), y: Math.round(center.y - 16) });
+    const { diagram, selectedNodeIds } = useDiagramStore.getState();
+    const nodes = getActiveSection(diagram).nodes;
+    const selected = selectedNodeIds.length === 1 ? nodes.find((node) => node.id === selectedNodeIds[0]) : undefined;
+    const containerId = selected?.type === "container" ? selected.id : selected?.parentId;
+    if (containerId) {
+      addText(nextSlotInContainer(nodes, containerId), undefined, containerId);
+    } else {
+      const center = canvasCenter();
+      addText({ x: Math.round(center.x - 80), y: Math.round(center.y - 16) });
+    }
     onAdded?.();
   }
 

@@ -147,8 +147,9 @@ size and outline. An unknown shape is read as a box.
 
 ### `TextNodeData` (a text box)
 
-A heading, caption or note written on the canvas: not a component, so it has no category, details, connections,
-container or internal design. `label` holds the text **as written, line breaks included** (so search and compare
+A heading, caption or note written on the canvas: not a component, so it has no category, details, connections
+or internal design. Like a component it can sit in a container (`parentId`, position relative to it), so a caption
+moves with the container it labels. `label` holds the text **as written, line breaks included** (so search and compare
 read it like a name); `fontSize` (8–96 px, default 14), `align` (`left` default, `center`, `right`) and `bold` are
 optional. Text boxes are left out of the component list (CSV) and the document's component tables.
 
@@ -237,7 +238,7 @@ The store and the validator together keep these true. Code may rely on them.
 1. A diagram has at least one section, and `activeSectionId` names one of them.
 2. Node ids are unique within their canvas (a tab, or one internal design). Section ids are unique.
 3. Only components have `parentId`, it names a **container in the same canvas**, and containers have no parent
-   (one level of nesting). Text boxes are never in a container.
+   (one level of nesting). Text boxes can be in a container too, the same way.
 4. A component's `data.containerId` equals its `parentId` (or `null`).
 5. Every edge joins two different components (or containers) that exist in the same canvas, never a text box. Deleting a component deletes its
    edges (`withoutDanglingEdges` in the store).
@@ -295,7 +296,7 @@ throws `DiagramFileError`, whose message is shown to the user.
 | `colorKey` not in the legend | Dropped (the node becomes unassigned). | — |
 | `icon` not a built-in key, or on a container | Dropped. | "removed N icons this version doesn't have" |
 | Component `shape` not one of the flowchart shapes | Dropped (drawn as a box). | — |
-| Text box: text kept as written (line breaks too, up to 10,000 characters); `fontSize` rounded and kept to 8–96; `align` not `center`/`right`, or `bold` not `true` | Dropped (defaults apply). Size defaults to 160×32. A text box with a `parentId` is taken out of the container. | — |
+| Text box: text kept as written (line breaks too, up to 10,000 characters); `fontSize` rounded and kept to 8–96; `align` not `center`/`right`, or `bold` not `true` | Dropped (defaults apply). Size defaults to 160×32. A `parentId` that isn't a container is removed, as for a component. | — |
 | Section `look` (written by one earlier version for a draw.io look) | Ignored. | — |
 | Container style values not in the allowed lists | Dropped (defaults apply). | — |
 | `parentId` naming something that isn't a container, or a container having a parent | Parent removed; position converted to canvas coordinates so the node stays where it was on screen. | "took N items out of a container…" |

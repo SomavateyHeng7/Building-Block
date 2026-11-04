@@ -324,8 +324,8 @@ interface DiagramState {
    * clear of other boxes and connected from it, as one undo step. The new one is selected.
    */
   addConnectedBlock: (sourceId: string, side: ConnectionSide, shape?: BlockShape) => void;
-  /** Adds a free text box (a heading, caption or note) and selects it. */
-  addText: (position: Position, text?: string) => void;
+  /** Adds a text box (a heading, caption or note), in a container if given (growing it to fit), and selects it. */
+  addText: (position: Position, text?: string, parentId?: string | null) => void;
   /** Sets a text box's look; undefined values go back to the defaults. */
   updateTextStyle: (id: string, patch: Pick<TextNodeData, "fontSize" | "align" | "bold">) => void;
   /**
@@ -953,17 +953,27 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       };
     }),
 
-  addText: (position, text = "Text") =>
+  addText: (position, text = "Text", parentId = null) =>
     set((state) => {
       if (onSequenceTab(state.diagram)) return state;
       const id = createId("text");
       return {
         ...commit(
           state,
-          mapActiveSection(state.diagram, (nodes) => [
-            ...nodes,
-            { id, type: "text", position, size: { width: 160, height: 32 }, data: { kind: "text", label: text } },
-          ]),
+          mapActiveSection(state.diagram, (nodes) => {
+            const added: DiagramNode[] = [
+              ...nodes,
+              {
+                id,
+                type: "text",
+                position,
+                size: { width: 160, height: 32 },
+                ...(parentId ? { parentId } : {}),
+                data: { kind: "text", label: text },
+              },
+            ];
+            return parentId ? growContainerToFit(added, parentId) : added;
+          }),
         ),
         selectedNodeIds: [id],
       };

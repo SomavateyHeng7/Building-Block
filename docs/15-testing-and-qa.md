@@ -55,8 +55,9 @@ Library and jsdom are dev dependencies).
 | `tests/lib/diagram/exportMermaid.test.ts` | 7 | Sequence → Mermaid (aliases, arrows, protocol, escapes, autonumber, indented frames, activation marks) and back to the same sequence; which line each item is on; applying keeps colours, descriptions and links; errors |
 | `tests/lib/diagram/import.test.ts` | 14 | XML reading (incl. very deep nesting); draw.io shapes, swimlanes, arrows and compressed pages; parents that loop or nest deep; Mermaid sequences with frames and activations; character codes past Unicode; refusals with reasons |
 | `tests/lib/diagram/sequenceFrames.test.ts` | 13 | Frames: wrapping steps, finding a frame from any marker, removing it whole, pairing markers up, moving within bounds, nested layout; activation bars and arrow ends; Mermaid round trip with nested frames, unclosed frames, colour boxes, activate lines, saved files; the code tokenizer; caption splitting |
-| `tests/lib/diagram/textBox.test.ts` | 5 | Text boxes: adding, line breaks and style, a saved file, no connections, not in the component list; exact position and size, minimum size, container growth |
-| `tests/lib/diagram/guides.test.ts` | 9 | Pixel guides: snapping edges and middles within a threshold, guide lines, gaps to the nearest facing boxes, distances between and inside boxes, bounding boxes |
+| `tests/lib/diagram/hints.test.ts` | 6 | Check before you share: quiet when complete; missing owners, protocols and unconnected components; no "unconnected" flood before any connections; internal designs without owners; flowcharts checked only for unconnected steps; the Flowchart template has nothing to flag |
+| `tests/lib/diagram/textBox.test.ts` | 8 | Text boxes: adding, line breaks and style, a saved file, no connections, not in the component list; in containers (dropped in, carried, dragged out, added in, left alone by Tidy, kept in a file, released when the container goes); exact position and size, minimum size, container growth |
+| `tests/lib/diagram/guides.test.ts` | 15 | Pixel guides: snapping edges and middles within a threshold, resize snapping to edges and same width/height (with minimum sizes and Alt), guide lines, gaps to the nearest facing boxes, distances between and inside boxes, bounding boxes |
 | `tests/templates/flowchart.test.ts` | 9 | The Flowchart template (pills, decisions with Yes/No, a title, Mermaid shapes, a saved file); shapes on blocks; the app's palette, quick add only on tabs with flowchart shapes, an old `look` ignored; dropping flowchart shapes in their categories; quick add (placement, stepping past boxes, one undo, Yes/No, "End") |
 | `tests/lib/diagram/legend.test.ts` | 3 | Reordering entries; removing one moves its items to another, inside internal designs too |
 | `tests/lib/diagram/recovery.test.ts` | 6 | Recovery copy: off by default, read back like a file, cleared, full or blocked storage reported |
@@ -74,7 +75,7 @@ Library and jsdom are dev dependencies).
 ## Browser tests (TesterArmy)
 
 The app is tested in a real browser by [TesterArmy](https://tester.army): an AI agent follows plain-language steps
-in a cloud browser. The tests are defined in **`testerarmy/tests.mjs`** (41, one or more per area of the app, each on
+in a cloud browser. The tests are defined in **`testerarmy/tests.mjs`** (45, one or more per area of the app, each on
 a desktop, tablet or phone screen) and copied into TesterArmy with `pnpm testerarmy:sync`, so they're reviewed with
 the code. Where the agent can't see or do something itself, a `javascript` step does it: hiding the native file
 pickers and handing the app a file, recording downloads, reading CSS classes and browser storage, measuring contrast.
@@ -147,6 +148,9 @@ a real device or a deployment setting, which is why they're here:
 - [ ] Collapse both side panels; reload: still collapsed.
 - [ ] Drag a component near another: pink guides and an orange gap in px; it snaps; hold Alt to move freely. Arrow
       keys move 1 px (Shift 10) with the box focused or not. X/Y/W/H fields move and size it exactly.
+- [ ] Resize a component by an edge strip (not the round dot) towards another's width: it snaps, pink size markers
+      show on both, and the connection dots hide meanwhile; hold Alt to resize freely. Dragging the round dot still
+      draws a connection.
 - [ ] Select one box, hold Alt and point at another: the distances show.
 - [ ] Drag a Text box in, double-click, write two lines: the box grows; Ctrl/⌘+Enter finishes.
 - [ ] Flowchart template: hover a shape, click a blue arrow: a connected shape appears; drag Data/Database shapes
@@ -174,6 +178,22 @@ a real device or a deployment setting, which is why they're here:
 - [ ] Phone: drawers open and close; tapping the palette adds; handles are visible; no zoom when typing.
 
 ## QA history
+
+**4 November 2026:** after user testing found that resizing gave no sense of size against other blocks and that
+grabbing an edge often drew an arrow instead, resizes now snap (edges, same width/height) and the resize controls
+were restyled. A browser test was added ("Resizing a box snaps to another's width…"); its `javascript` steps fire
+the resize with mouse events, so the snap is checked exactly. Walked locally with Playwright, with a regression pass:
+connections from the dots, the edge strip next to a dot resizing rather than connecting, quick-add arrows, drag
+guides, top-left corner resize and its undo, a component widened in a container, container handles on hover, text
+box resize, dark mode and phone view mode. All passed.
+
+**3 November 2026:** the browser tests caught up with text boxes, pixel-exact layout, flowcharts and the live
+sequence editor. Three sequence tests still clicked the removed Apply and Undo edits buttons, or expected a new
+message to be named in the code, and the templates list lacked the Flowchart; they were rewritten. Eight tests were
+added (text boxes in containers, 1 px nudges and typed sizes, drag guides, quick add and a clean Check on the
+Flowchart, the shape palette and no arrows on L0, frames and the sequence toolbar, the lost-changes notice, the start
+page's width and real previews). Their steps were walked locally with Playwright, running each test's own
+`javascript` checks, before syncing; TesterArmy itself needs a deployment to run against.
 
 **October 2026:** a browser pass on Chrome, WebKit, a tablet and a phone (the former Playwright suite plus checks of
 the newer features), an axe-core accessibility scan and a CPU profile of dragging on big diagrams found and fixed:

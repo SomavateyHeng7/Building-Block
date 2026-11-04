@@ -356,7 +356,8 @@ want to reverse.
 
 - **Context:** there was no way to write a heading, caption or note on the canvas; people misused components.
 - **Decision:** `DiagramNode.type = "text"` with `TextNodeData` (text in `label`, font size, alignment, bold). Not
-  a component: no category, details, connections, container or internal design, and left out of the component list.
+  a component: no category, details, connections or internal design, and left out of the component list. It can sit
+  in a container (first it couldn't, so captions were left behind when a container moved).
 - **Alternatives:** a component with a "text" variant (would have shown up as a component in the CSV, the document
   and the checks, and could be connected); comments (attached to things, not placed on the canvas).
 - **Consequences:** every place that branches on node type had to decide what a text box means (exports, search,
@@ -372,6 +373,19 @@ want to reverse.
   (exact, but nothing to line up against).
 - **Consequences:** older diagrams on the 8 px grid stay where they are. Box-to-box snapping is relative, so it
   works at any zoom.
+
+### Resizes snap to other boxes too, and resize controls look unlike connection dots
+
+- **Context:** user testing (November 2026): resizing a block gave no sense of its size next to other blocks, and
+  people grabbing an edge to resize often caught the connection dot in its middle and drew an arrow instead (React
+  Flow's edge control is 1 px wide; the dot is 10 px).
+- **Decision:** resizes snap as drags do: moving edges to other boxes' edges and middles, and to the same width or
+  height as another box, with pink size markers on the matching boxes (Alt turns it off). Corners are white squares;
+  each edge has a 9 px grab strip; the round blue dot keeps the middle of the side and a crosshair cursor. Connection
+  dots and quick-add arrows hide during a resize, and resize controls hide while a connection is drawn.
+- **Alternatives:** move connection dots off the edge (would break where existing lines attach); resize only from
+  the corners (edges are what people reach for); a "match size" button (exists as Same width/height, but isn't
+  where the hand is).
 
 ### Flowcharts in the app's own look
 
@@ -392,8 +406,9 @@ want to reverse.
 - **Alternatives:** separate node types per shape (every branch on node type would multiply); quick add on every
   tab (changes how L0 architecture is edited without being asked); a per-tab flowchart switch (one more setting,
   when the shapes already say it's a flowchart).
-- **Consequences:** a shape is how a component is drawn, not what it is, so flowchart steps are still components:
-  they appear in the component list and the checks (which ask for owners).
+- **Consequences:** a shape is how a component is drawn, not what it is, so flowchart steps are still components and
+  appear in the component list. The checks treat a canvas with flowchart shapes as a process: they don't ask its
+  steps for owners or its lines for protocols (which flagged every step of the Flowchart template).
 
 ### A sequence diagram counts as something to lose
 

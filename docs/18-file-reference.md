@@ -78,9 +78,9 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 | `canvasFocus.ts` | `goTo`: open a view, select an item and ask the canvas to zoom to it |
 | `exportRendering.ts` | `useRenderEverything`: mounts off-screen nodes while an export pictures the canvas |
 | `edges/ConnectionEdge.tsx` | A connection line: right-angled, curved or straight, with the dot that bends it |
-| `Canvas.tsx` | React Flow canvas: changes → store, drops, connections, snapping drags to other boxes, 1 px nudges, the draw.io grid, empty state |
+| `Canvas.tsx` | React Flow canvas: changes → store, drops, connections, snapping drags and resizes to other boxes, 1 px nudges, the draw.io grid, empty state |
 | `PixelGuides.tsx` | Alignment guides, px gaps and the position/size readout while dragging or resizing; Alt + hover measuring (`useGuides`) |
-| `flowchartView.ts` | `isFlowchart` / `useIsFlowchart`: whether a view has flowchart shapes (so its shapes show quick-add arrows) |
+| `flowchartView.ts` | `useIsFlowchart`: whether the view on screen has flowchart shapes (so its shapes show quick-add arrows) |
 | `Sidebar.tsx` | Palette: drag or tap to add containers, text boxes, components and flowchart shapes; `ShapeIcon` |
 | `PropertiesPanel.tsx` | Details for the selection (component, container, text box, connection, several, diagram, internal design): X/Y/W/H, shape, look |
 | `LegendPanel.tsx` | Legend categories: colour, name, usage, add, remove |
@@ -113,8 +113,8 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 | `diagram/factory.ts` | Ids, blank diagrams and tabs, default labels |
 | `diagram/defaultLegend.ts` | The default legend |
 | `diagram/palette.ts` | Named colours, colour names, next colour, parsing colour codes, readable text colour |
-| `diagram/shapes.ts` | The flowchart shapes: meaning, usual size, default name, SVG outline, label inset |
-| `diagram/guides.ts` | Pixel guides: snapping to other boxes, alignment lines, gaps to neighbours, distances between two boxes |
+| `diagram/shapes.ts` | The flowchart shapes: meaning, usual size, default name, SVG outline, label inset; `isFlowchart` |
+| `diagram/guides.ts` | Pixel guides: snapping moves and resizes to other boxes (including same width/height), alignment lines, gaps to neighbours, distances between two boxes |
 | `diagram/layout.ts` | Nesting, insets, minimum sizes, arrange, tidy, fit, nudge, re-parenting ([layout](08-layout-and-containers.md)) |
 | `diagram/flowAdapter.ts` | Our nodes/edges ↔ React Flow's; undo keys; connection captions; line geometry (`connectionPath`); change marks |
 | `diagram/search.ts` | Finding components, containers, connections and sequence steps across the diagram; highlighting matches |
@@ -125,7 +125,7 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 | `diagram/legacy.ts` | Finds, downloads and removes diagrams left by earlier versions |
 | `diagram/sequence.ts` | Sequence diagrams: editing helpers (pure), frames (`frameOf`, `balanceSteps`, `wrapSteps`), `splitCaption`, and `layoutSequence` (frames and activation bars included) |
 | `diagram/importFile.ts` | Import entry point: picks draw.io or Mermaid, checks the result with `parseDiagram` |
-| `diagram/hints.ts` | "Check before you share": unconnected components, connections without a protocol, components without an owner |
+| `diagram/hints.ts` | "Check before you share": unconnected components, connections without a protocol, components without an owner (flowcharts: only unconnected steps) |
 | `diagram/importDrawio.ts` | draw.io (.drawio/.xml, compressed or not) → architecture tabs |
 | `diagram/importMermaid.ts` | Mermaid `sequenceDiagram` → a sequence (frames, activations); `tokenizeMermaidLine` for highlighting; `ImportError` |
 | `diagram/exportMermaid.ts` | A sequence → Mermaid code, and code applied back keeping colours, descriptions and links; `mermaidLineOf` / `mermaidIdAtLine` |

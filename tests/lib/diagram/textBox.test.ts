@@ -3,6 +3,7 @@ import { createBlankDiagram } from "@/lib/diagram/factory";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { parseDiagram } from "@/lib/diagram/validate";
 import { componentRows } from "@/lib/diagram/export";
+import { absolutePosition, dropIntoContainers, nudgeNodes } from "@/lib/diagram/layout";
 
 const store = () => useDiagramStore.getState();
 const nodes = () => getActiveSection(store().diagram).nodes;
@@ -61,5 +62,49 @@ describe("setNodeGeometry", () => {
     store().addBlock({ x: 16, y: 40 }, container);
     store().setNodeGeometry(store().selectedNodeIds[0], { x: 400 });
     expect(nodes().find((node) => node.id === container)!.size.width).toBeGreaterThanOrEqual(400 + 140);
+  });
+});
+
+describe("text boxes in containers", () => {
+  beforeEach(() => store().loadDiagram(createBlankDiagram()));
+
+  it("go into a container when dropped on it, move with it, and come out when dragged off", () => {
+    store().addContainer({ x: 100, y: 100 });
+    const container = store().selectedNodeIds[0];
+    store().addText({ x: 0, y: 600 });
+    const text = store().selectedNodeIds[0];
+    // Dragged so its middle is over the container: it goes inside, relative to it.
+    store().setActiveSectionNodes(dropIntoContainers(nodes(), [{ id: text, position: { x: 150, y: 180 } }]));
+    expect(nodes().find((node) => node.id === text)).toMatchObject({ parentId: container, position: { x: 50, y: 80 } });
+    // The container carries it.
+    store().setActiveSectionNodes(nudgeNodes(nodes(), [container], 10, 0));
+    expect(absolutePosition(nodes().find((node) => node.id === text)!, nodes())).toEqual({ x: 160, y: 180 });
+    // Dragged well clear: out again, where it is on screen.
+    store().setActiveSectionNodes(dropIntoContainers(nodes(), [{ id: text, position: { x: 900, y: 0 } }]));
+    expect(nodes().find((node) => node.id === text)!.parentId).toBeUndefined();
+  });
+
+  it("are added into a container, which grows, and stay put when the container is tidied", () => {
+    store().addContainer({ x: 0, y: 0 });
+    const container = store().selectedNodeIds[0];
+    store().addText({ x: 16, y: 400 }, "Caption", container);
+    const text = nodes().at(-1)!;
+    expect(text.parentId).toBe(container);
+    expect(nodes().find((node) => node.id === container)!.size.height).toBeGreaterThanOrEqual(400 + 32);
+    store().addBlock({ x: 200, y: 200 }, container);
+    store().tidyContainer(container);
+    expect(nodes().find((node) => node.id === text.id)!.position).toEqual({ x: 16, y: 400 });
+  });
+
+  it("keep their container in a saved file, and leave it when it's deleted", () => {
+    store().addContainer({ x: 100, y: 100 });
+    const container = store().selectedNodeIds[0];
+    store().addText({ x: 20, y: 50 }, "Caption", container);
+    const { diagram, fixes } = parseDiagram(JSON.parse(JSON.stringify(store().diagram)));
+    expect(fixes).toEqual([]);
+    expect(diagram.sections[0].nodes.find((node) => node.type === "text")!.parentId).toBe(container);
+    store().deleteNodes([container]);
+    expect(nodes()).toEqual([expect.objectContaining({ type: "text", position: { x: 120, y: 150 } })]);
+    expect(nodes()[0]).not.toHaveProperty("parentId");
   });
 });

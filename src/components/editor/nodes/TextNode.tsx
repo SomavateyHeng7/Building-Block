@@ -59,7 +59,6 @@ function TextNodeComponent({ id, data, selected, height }: NodeProps<TextFlowNod
         minWidth={MIN_NODE_SIZE.text.width}
         minHeight={MIN_NODE_SIZE.text.height}
         isVisible={selected && !readOnly && !editing}
-        color="#2563eb"
       />
       <CommentMarker id={id} />
       {editing ? (

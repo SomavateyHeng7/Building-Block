@@ -9,7 +9,7 @@ import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 
 /**
  * What the canvas is measuring right now: guide lines and gaps while a box is dragged, its size while it's
- * resized. Screen state, not part of the diagram.
+ * resized (with what it lines up with and which boxes it now matches in size). Screen state, not part of the diagram.
  */
 interface GuidesState {
   lines: GuideLine[];
@@ -18,9 +18,12 @@ interface GuidesState {
   readout: { box: Box; text: string } | null;
   /** The box under the pointer, for Alt + hover measuring. */
   hoveredId: string | null;
+  /** Whether a box is being resized right now (connection dots and quick-add arrows hide meanwhile). */
+  resizing: boolean;
   show: (guides: Pick<GuidesState, "lines" | "gaps" | "readout">) => void;
   clear: () => void;
   hover: (id: string | null) => void;
+  setResizing: (resizing: boolean) => void;
 }
 
 export const useGuides = create<GuidesState>()((set) => ({
@@ -28,9 +31,11 @@ export const useGuides = create<GuidesState>()((set) => ({
   gaps: [],
   readout: null,
   hoveredId: null,
+  resizing: false,
   show: (guides) => set(guides),
-  clear: () => set({ lines: [], gaps: [], readout: null }),
+  clear: () => set({ lines: [], gaps: [], readout: null, resizing: false }),
   hover: (hoveredId) => set({ hoveredId }),
+  setResizing: (resizing) => set((state) => (state.resizing === resizing ? state : { resizing })),
 }));
 
 const GUIDE_COLOR = "#ec4899";
@@ -114,8 +119,9 @@ export default function PixelGuides() {
   );
 }
 
-/** A measured line with end ticks and its length in pixels. */
+/** A measured line with end ticks and its length in pixels (pink for a size another box shares). */
 function GapMeasure({ gap, px }: { gap: Gap; px: number }) {
+  const color = gap.kind === "size" ? GUIDE_COLOR : GAP_COLOR;
   const tick = 4 * px;
   const horizontal = gap.axis === "x";
   const middle = (gap.from + gap.to) / 2;
@@ -123,22 +129,26 @@ function GapMeasure({ gap, px }: { gap: Gap; px: number }) {
   const label = String(gap.length);
   const labelWidth = (label.length * 6.5 + 8) * px;
   const labelHeight = 14 * px;
-  const [lx, ly] = horizontal ? [middle, gap.at - labelHeight - 2 * px] : [gap.at + 4 * px + labelWidth / 2, middle - labelHeight / 2];
+  // A height marker sits left of its box, so its label goes further left rather than over the box.
+  const side = gap.kind === "size" ? -1 : 1;
+  const [lx, ly] = horizontal
+    ? [middle, gap.at - labelHeight - 2 * px]
+    : [gap.at + side * (4 * px + labelWidth / 2), middle - labelHeight / 2];
   return (
     <g>
-      <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={GAP_COLOR} strokeWidth={px} />
+      <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth={px} />
       {horizontal ? (
         <>
-          <line x1={x1} x2={x1} y1={y1 - tick} y2={y1 + tick} stroke={GAP_COLOR} strokeWidth={px} />
-          <line x1={x2} x2={x2} y1={y2 - tick} y2={y2 + tick} stroke={GAP_COLOR} strokeWidth={px} />
+          <line x1={x1} x2={x1} y1={y1 - tick} y2={y1 + tick} stroke={color} strokeWidth={px} />
+          <line x1={x2} x2={x2} y1={y2 - tick} y2={y2 + tick} stroke={color} strokeWidth={px} />
         </>
       ) : (
         <>
-          <line y1={y1} y2={y1} x1={x1 - tick} x2={x1 + tick} stroke={GAP_COLOR} strokeWidth={px} />
-          <line y1={y2} y2={y2} x1={x2 - tick} x2={x2 + tick} stroke={GAP_COLOR} strokeWidth={px} />
+          <line y1={y1} y2={y1} x1={x1 - tick} x2={x1 + tick} stroke={color} strokeWidth={px} />
+          <line y1={y2} y2={y2} x1={x2 - tick} x2={x2 + tick} stroke={color} strokeWidth={px} />
         </>
       )}
-      <rect x={lx - labelWidth / 2} y={ly} width={labelWidth} height={labelHeight} rx={3 * px} fill={GAP_COLOR} />
+      <rect x={lx - labelWidth / 2} y={ly} width={labelWidth} height={labelHeight} rx={3 * px} fill={color} />
       <text
         x={lx}
         y={ly + labelHeight / 2}

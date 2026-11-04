@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createBlankDiagram } from "@/lib/diagram/factory";
 import { diagramHints } from "@/lib/diagram/hints";
+import { flowchartTemplate } from "@/templates/flowchart";
 import type { DiagramNode } from "@/lib/diagram/types";
 
 function block(id: string, label: string, owner?: string): DiagramNode {
@@ -48,5 +49,22 @@ describe("diagramHints", () => {
     const hints = diagramHints(diagramWith([parent]));
     expect(hints).toHaveLength(1);
     expect(hints[0]).toMatchObject({ kind: "no-protocol", detailId: "p", where: "Section 1 › Orders" });
+  });
+
+  it("asks a flowchart only about steps nothing leads to, not owners or protocols", () => {
+    const decision = block("d", "Valid?");
+    if (decision.data.kind === "block") decision.data.shape = "decision";
+    const diagram = diagramWith(
+      [block("a", "Validate"), decision, block("b", "Ship"), block("lost", "Forgotten step")],
+      [
+        { id: "e1", source: "a", target: "d" },
+        { id: "e2", source: "d", target: "b" },
+      ],
+    );
+    expect(diagramHints(diagram).map((hint) => `${hint.kind}:${hint.label}`)).toEqual(["unconnected:Forgotten step"]);
+  });
+
+  it("finds nothing to fix in the Flowchart template", () => {
+    expect(diagramHints(flowchartTemplate.build())).toEqual([]);
   });
 });

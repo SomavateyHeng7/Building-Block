@@ -81,15 +81,13 @@ function ContainerNodeComponent({ id, data, selected }: NodeProps<ContainerFlowN
       <NodeResizer
         minWidth={Math.max(CONTAINER_MIN.width, contentRight + insets.right)}
         minHeight={Math.max(CONTAINER_MIN.height, contentBottom + insets.bottom)}
-        color="#2563eb"
-        handleStyle={{ width: 10, height: 10, borderRadius: 2 }}
         handleClassName={selected ? "" : "opacity-0 group-hover:opacity-100"}
         lineClassName={selected ? "" : "opacity-0 group-hover:opacity-100"}
       />
       )}
       {/* Containers start and end connections too, like components. */}
       {SIDES.map((side) => (
-        <Handle key={side.id} id={side.id} type="source" position={side.position} className="bb-handle" />
+        <Handle key={side.id} id={side.id} type="source" position={side.position} className="bb-handle" title="Drag to draw a connection" />
       ))}
       {contentRight > 0 && !readOnly && (
         <NodeToolbar position={Position.Top} align="end" offset={6}>

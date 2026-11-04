@@ -154,7 +154,7 @@ const allTests = [
       consent,
       act("Open the /templates page."),
       assert(
-        "These templates are all listed: L0 Architecture, Three-tier web application, Event-driven microservices, Serverless API, Data and analytics platform, Sequence diagram; 'Current vs target state' is not.",
+        "These templates are all listed: L0 Architecture, Three-tier web application, Event-driven microservices, Serverless API, Data and analytics platform, Flowchart, Sequence diagram; 'Current vs target state' is not.",
       ),
     ],
   },
@@ -534,9 +534,9 @@ ${ok}`,
         "Drag horizontally from the second participant's lifeline (just below its header, above the first message) to the fourth participant's lifeline.",
       ),
       expectCount("messages", ".bb-sequence-sheet [data-step]", 1),
-      assert("The cursor is in the Mermaid code box on the left, which has a new message line ending in a colon with nothing after it."),
-      act("Type ' Refund' at the end of that line (after the colon), then click 'Apply'."),
-      assert("The sheet shows a 'Refund' message as the first message."),
+      assert("A text field has opened on the sheet, over the new message, for typing its name."),
+      act("Type 'Refund' and press Enter."),
+      assert("The sheet shows a 'Refund' message as the first message, and the Mermaid code on the left has a line ending in ': Refund'."),
       act("Click the 'Refund' message on the sheet, then press the Down arrow key."),
       assert("'Refund' is now the second message."),
       act("Press Delete."),
@@ -553,7 +553,7 @@ ${ok}`,
       act("Click 'Add a sequence tab'."),
       assert("A selected tab named 'Sequence 2' (sequence diagram) asks 'Who takes part in this flow?'."),
       act("Click 'Write Mermaid code'."),
-      act("Replace all the code in the left panel with: sequenceDiagram (then a new line) actor Architect (then a new line) participant Microservices, and click 'Apply'."),
+      act("Replace all the code in the left panel with: sequenceDiagram (then a new line) actor Architect (then a new line) participant Microservices. There's no button to press: wait a moment."),
       assert("The sheet shows an 'Architect' participant drawn as a person and a 'Microservices' participant."),
       act("Drag horizontally from the Architect's lifeline (just below its header) to the Microservices lifeline."),
       assert("The sheet has exactly one message."),
@@ -739,13 +739,245 @@ ${ok}`,
     steps: [
       ...openTemplate("Sequence diagram"),
       assert("The left panel is a Mermaid code box starting with 'sequenceDiagram' and listing the participants."),
-      act("At the end of the code, add a new line: Customer->>Customer: Celebrate"),
-      act("Click 'Apply'."),
+      assert("Under the code it says 'Live: the sheet follows as you type'. There is no 'Apply' button."),
+      act("At the end of the code, add a new line: Customer->>Customer: Celebrate, then wait a moment without clicking anything."),
       assert("The sheet now ends with a 'Celebrate' message from Customer to itself."),
-      act("Replace all the code with: flowchart LR (then a new line) A --> B, and click 'Apply'."),
-      assert("An error under the code says it's a flowchart, and the sheet hasn't changed."),
-      act("Click 'Undo edits'."),
-      assert("The code starts with 'sequenceDiagram' again."),
+      act("At the end of the code, add another new line: this line is nonsense, then wait a moment."),
+      assert("That line is shown in red with a wavy underline, its line number is red, and the sheet still shows the 'Celebrate' message."),
+      act("Replace all the code with: flowchart LR (then a new line) A --> B, and wait a moment."),
+      assert("An error under the code says it's a flowchart, and the sheet still shows the checkout flow."),
+      act("Click 'Back to what the sheet shows'."),
+      assert("The code starts with 'sequenceDiagram' again and the error is gone."),
+    ],
+  },
+
+  // Added with text boxes, pixel-exact layout, flowcharts and the live sequence editor.
+  {
+    title: "A text box is written in place, grows to fit, and moves with its container",
+    settings: desktop,
+    steps: [
+      consent,
+      ...startBlankWithContainer,
+      act("Click the container to select it, then press the 't' key."),
+      assert("A text box saying 'Text' appears inside the container."),
+      act("Double-click the text box. Type 'Payments domain', press Enter, type 'Owned by Team A', then press Ctrl+Enter."),
+      assert("The text box shows both lines, 'Payments domain' and 'Owned by Team A', neither cut off."),
+      js(
+        "The text box is inside the container",
+        `const text = document.querySelector(".react-flow__node-text");
+const box = document.querySelector(".react-flow__node-container");
+if (!text || !box) ${fail('"text box or container missing"')}
+const t = text.getBoundingClientRect(), c = box.getBoundingClientRect();
+if (t.left < c.left || t.right > c.right || t.top < c.top || t.bottom > c.bottom) ${fail('"the text box isn\'t inside the container"')}
+sessionStorage.setItem("ta:textLeft", String(t.left - c.left));
+${ok}`,
+      ),
+      act("Drag the container by its header about 200 pixels to the right."),
+      js(
+        "The text box moved with the container",
+        `const t = document.querySelector(".react-flow__node-text").getBoundingClientRect();
+const c = document.querySelector(".react-flow__node-container").getBoundingClientRect();
+const before = Number(sessionStorage.getItem("ta:textLeft"));
+if (Math.abs(t.left - c.left - before) > 2) ${fail('"the text box stayed behind"')}
+${ok}`,
+      ),
+    ],
+  },
+  {
+    title: "Boxes move by the pixel and their exact position and size can be typed",
+    settings: desktop,
+    steps: [
+      consent,
+      act("Click 'New blank diagram'."),
+      act("If an 'Edit' button is shown in the toolbar, click it to switch to editing."),
+      act("On the empty canvas, click the 'Component' button."),
+      assert("The details panel on the right shows 'Position & size' with X, Y, W and H fields."),
+      js(
+        "Remember the component's X",
+        `const x = document.querySelector('[title="Distance from the left"] input');
+if (!x) ${fail('"no X field"')}
+sessionStorage.setItem("ta:x", x.value);
+${ok}`,
+      ),
+      act("Click the component on the canvas, then press the Right arrow key once, then Shift+Right arrow once."),
+      js(
+        "X went up by 11 (1, then 10)",
+        `const x = Number(document.querySelector('[title="Distance from the left"] input').value);
+const before = Number(sessionStorage.getItem("ta:x"));
+if (x !== before + 11) ${fail("`X went from ${before} to ${x}`")}
+${ok}`,
+      ),
+      act("Select everything in the W field, type 173 and press Enter."),
+      js(
+        "The component is 173 px wide",
+        `const node = document.querySelector(".react-flow__node-block");
+const width = parseFloat(node.style.width);
+if (width !== 173) ${fail('"width is " + node.style.width')}
+${ok}`,
+      ),
+    ],
+  },
+  {
+    title: "Dragging a box near another shows alignment guides and the gap in pixels",
+    settings: desktop,
+    steps: [
+      ...openTemplate("Flowchart"),
+      act("Press the mouse down on the 'Take payment' box, move slowly about 40 pixels to the right, and keep the button held."),
+      assert("While dragging, pink guide lines and/or orange measuring lines with a number of pixels are shown, and a small blue label under the box shows 'x … · y …'."),
+      act("Let go of the mouse button."),
+      assert("The guide lines and the blue label are gone."),
+    ],
+  },
+  {
+    title: "Resizing a box snaps to another's width, and resize handles look unlike connection dots",
+    settings: desktop,
+    steps: [
+      ...openTemplate("Flowchart"),
+      act("Click the blue 'Stock levels' cylinder on the left to select it."),
+      js(
+        "Corners are white squares, edges have a wide grab strip, and dots draw connections",
+        `const node = [...document.querySelectorAll(".react-flow__node-block")].find((el) => el.innerText.includes("Stock levels"));
+if (!node) ${fail('"no Stock levels box"')}
+const corner = node.querySelector(".react-flow__resize-control.handle");
+const strip = node.querySelector(".react-flow__resize-control.line.right");
+const dot = node.querySelector(".react-flow__handle.bb-handle");
+if (!corner || !strip || !dot) ${fail('"resize controls or connection dots missing"')}
+const white = getComputedStyle(corner).backgroundColor.replace(/\\s/g, "");
+if (white !== "rgb(255,255,255)") ${fail('"corner handle is " + white')}
+if (strip.getBoundingClientRect().width < 6) ${fail('"edge strip is only " + strip.getBoundingClientRect().width + " px wide"')}
+if (getComputedStyle(dot).cursor !== "crosshair") ${fail('"connection dot cursor is " + getComputedStyle(dot).cursor')}
+${ok}`,
+      ),
+      js(
+        "Drag its right edge until it is 3 px short of 200 wide, and keep holding",
+        `const node = [...document.querySelectorAll(".react-flow__node-block")].find((el) => el.innerText.includes("Stock levels"));
+const strip = node.querySelector(".react-flow__resize-control.line.right");
+const zoom = new DOMMatrix(getComputedStyle(document.querySelector(".react-flow__viewport")).transform).a;
+const r = strip.getBoundingClientRect();
+const x = r.x + r.width / 2;
+const y = r.y + r.height * 0.8;
+const distance = (197 - node.offsetWidth) * zoom;
+const fire = (target, type, clientX) =>
+  target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window, button: 0, buttons: type === "mouseup" ? 0 : 1, clientX, clientY: y }));
+fire(strip, "mousedown", x);
+for (let i = 1; i <= 20; i++) fire(window, "mousemove", x + (distance * i) / 20);
+window.__resizeEnd = x + distance;
+${ok}`,
+      ),
+      assert("While still resizing: pink '200' size labels are shown above 'Stock levels' and above other boxes of the same width, a blue label under it reads '200 × 80', and no round connection dots or blue quick-add arrows are shown on it."),
+      js(
+        "Let go: the box is exactly 200 px wide and the guides are gone",
+        `window.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, view: window, button: 0, clientX: window.__resizeEnd }));
+return new Promise((resolve) => setTimeout(() => {
+  const node = [...document.querySelectorAll(".react-flow__node-block")].find((el) => el.innerText.includes("Stock levels"));
+  if (node.offsetWidth !== 200) return resolve({ success: false, reason: "width is " + node.offsetWidth + ", expected it to snap to 200" });
+  if (document.querySelector(".react-flow__viewport-portal text")) return resolve({ success: false, reason: "guides still shown" });
+  if (document.querySelector(".react-flow.bb-resizing")) return resolve({ success: false, reason: "canvas still marked as resizing" });
+  resolve({ success: true });
+}, 300));`,
+      ),
+      act("Press Ctrl+Z (Cmd+Z on a Mac)."),
+      js(
+        "Undo puts it back to 120 px wide",
+        `const node = [...document.querySelectorAll(".react-flow__node-block")].find((el) => el.innerText.includes("Stock levels"));
+if (node.offsetWidth !== 120) ${fail('"width is " + node.offsetWidth')}
+${ok}`,
+      ),
+    ],
+  },
+  {
+    title: "A flowchart grows from a shape's blue arrows, and Check has nothing to flag",
+    settings: desktop,
+    steps: [
+      ...openTemplate("Flowchart"),
+      assert("The canvas shows a flowchart with rounded start and end shapes, yellow diamond decisions and 'Yes' / 'No' labels on lines."),
+      act("Click 'Check' near the tabs."),
+      assert("The 'Check before you share' dialog says 'Nothing to flag.'"),
+      act("Close the dialog."),
+      remember("boxes", ".react-flow__node-block"),
+      act("Hover over the 'Pack and ship' box, then click the small blue arrow on its right."),
+      expectCount("boxes", ".react-flow__node-block", 1),
+      assert("A new box has appeared to the right of 'Pack and ship', joined to it by an arrow, and it is selected."),
+      act("Press Ctrl+Z."),
+      expectCount("boxes", ".react-flow__node-block", 0),
+    ],
+  },
+  {
+    title: "Flowchart shapes are added from the left panel, and architecture tabs have no blue arrows",
+    settings: desktop,
+    steps: [
+      ...openTemplate("Flowchart"),
+      assert("The left panel has a 'Flowchart' section with Process, Decision, Start / end, Data, Document, Database and Subprocess shapes."),
+      act("Click the 'Database' shape in the Flowchart section."),
+      assert("A cylinder-shaped 'Database' box appears on the canvas and the details panel shows its Shape as the database cylinder."),
+      ...openTemplate("L0 Architecture"),
+      act("If asked about unsaved changes, click 'Don't save'."),
+      act("Hover over any component."),
+      js(
+        "No quick-add arrows on an architecture tab",
+        `const arrows = document.querySelectorAll(".bb-quick-add").length;
+if (arrows) ${fail("arrows + ' quick-add arrows on an L0 tab'")}
+${ok}`,
+      ),
+    ],
+  },
+  {
+    title: "A sequence diagram has frames and activation bars, and is built from the toolbar",
+    settings: desktop,
+    steps: [
+      ...openTemplate("Sequence diagram"),
+      assert("The sheet shows an 'alt' frame labelled '[Payment approved]' with a dashed line before '[Payment declined]', and narrow bars on some lifelines."),
+      assert("The toolbar says 'Not saved to a file', so a reload would warn first."),
+      act("Click the 'Place order' message on the sheet."),
+      assert("Its line in the Mermaid code on the left is highlighted."),
+      act("Click 'Frame' in the bar above the sheet, then choose 'loop'."),
+      assert("A text field opens on the sheet for the frame's condition."),
+      act("Type 'For each item' and press Enter."),
+      assert("A 'loop' frame labelled '[For each item]' is drawn round 'Place order', and the code has a 'loop For each item' line followed by the message and 'end'."),
+      act("Double-click the 'Customer' participant at the top, type 'Shopper' and press Enter."),
+      assert("The participant is now called 'Shopper' on the sheet and in the code."),
+    ],
+  },
+  {
+    title: "Leaving with unsaved changes is explained on the start page",
+    settings: desktop,
+    steps: [
+      consent,
+      js(
+        "Pretend the last page was left with unsaved changes",
+        `localStorage.removeItem("bb:recovery:enabled");
+localStorage.removeItem("bb:recovery:copy");
+sessionStorage.setItem("bb:lost-unsaved", "1");
+${ok}`,
+      ),
+      act("Reload the page."),
+      assert("An amber notice says 'Your last diagram wasn't saved, so it couldn't be brought back', with a 'Turn on recovery copies' button."),
+      act("Click 'Turn on recovery copies'."),
+      assert("The notice says recovery copies are on now, and the 'Keep a recovery copy in this browser' box further down is ticked."),
+      act("Reload the page."),
+      assert("The amber notice is gone: it's only shown once."),
+      js("Turn recovery copies off again", `localStorage.removeItem("bb:recovery:enabled");\n${ok}`),
+    ],
+  },
+  {
+    title: "The start page uses the width of a wide screen and shows each template's real picture",
+    settings: desktop,
+    steps: [
+      consent,
+      js(
+        "New, Open and Import sit in one row, and templates three or more to a row",
+        `const top = (el) => Math.round(el.getBoundingClientRect().top);
+const actions = [...document.querySelectorAll("main button")].filter((b) => /New blank diagram|Open a diagram file|Import from draw.io/.test(b.textContent));
+if (actions.length !== 3) ${fail('"found " + actions.length + " action cards"')}
+if (window.innerWidth >= 1024 && new Set(actions.map(top)).size !== 1) ${fail('"the three actions are not in one row"')}
+const previews = [...document.querySelectorAll('main [role="img"][aria-label$=" preview"]')];
+if (previews.length < 6) ${fail('"only " + previews.length + " template previews"')}
+if (window.innerWidth >= 1024 && previews.slice(0, 3).map(top).some((t, i, all) => t !== all[0])) ${fail('"fewer than three templates in the first row"')}
+const labels = new Set(previews.map((p) => p.getAttribute("aria-label")));
+if (labels.size !== previews.length) ${fail('"two previews are the same"')}
+${ok}`,
+      ),
+      assert("The Flowchart card's picture shows a top-to-bottom flowchart with diamonds, and the Sequence diagram card's picture shows participants with lifelines, unlike the other cards."),
     ],
   },
 ];

@@ -213,8 +213,13 @@ export default function EditorApp() {
         }
         else if (event.key === "?") setHelpOpen((open) => !open);
         else if (event.key.toLowerCase() === "t" && !event.shiftKey) {
+          // Like B: into the selected container, or the selected box's container.
+          const selected =
+            store.selectedNodeIds.length === 1 ? section.nodes.find((node) => node.id === store.selectedNodeIds[0]) : undefined;
+          const containerId = selected?.type === "container" ? selected.id : selected?.parentId;
           const count = section.nodes.length;
-          store.addText({ x: 80 + (count % 5) * 48, y: 80 + Math.floor(count / 5) * 48 });
+          if (containerId) store.addText(nextSlotInContainer(section.nodes, containerId), undefined, containerId);
+          else store.addText({ x: 80 + (count % 5) * 48, y: 80 + Math.floor(count / 5) * 48 });
         } else if (event.key === "Enter" && store.selectedNodeIds.length === 1) {
           // Enter on a selected text box starts writing in it, like double-clicking.
           const node = section.nodes.find((candidate) => candidate.id === store.selectedNodeIds[0]);

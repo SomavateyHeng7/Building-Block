@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alignmentLines, distancesBetween, nearestGaps, snapToBoxes, unionBox } from "@/lib/diagram/guides";
+import { alignmentLines, distancesBetween, nearestGaps, snapResize, snapToBoxes, unionBox } from "@/lib/diagram/guides";
 
 const box = (x: number, y: number, width = 100, height = 40) => ({ x, y, width, height });
 
@@ -61,5 +61,49 @@ describe("unionBox", () => {
   it("bounds several boxes", () => {
     expect(unionBox([box(0, 0), box(200, 100)])).toEqual({ x: 0, y: 0, width: 300, height: 140 });
     expect(unionBox([])).toBeNull();
+  });
+});
+
+describe("snapResize", () => {
+  const right = { left: false, right: true, top: false, bottom: false };
+  const left = { left: true, right: false, top: false, bottom: false };
+  const bottom = { left: false, right: false, top: false, bottom: true };
+  const min = { width: 80, height: 32 };
+
+  it("snaps the moving edge to another box's edge and draws the guide", () => {
+    // Right edge at 297 vs the other's right edge at 300 (the other box is 160 wide, so it isn't a width match).
+    const result = snapResize(box(0, 200, 297), right, [box(140, 0, 160)], 6, min);
+    expect(result.box).toEqual(box(0, 200, 300));
+    expect(result.lines).toContainEqual(expect.objectContaining({ axis: "x", at: 300 }));
+  });
+
+  it("snaps to the same width as another box and marks both widths", () => {
+    const other = box(400, 0, 120);
+    const result = snapResize(box(0, 200, 116), right, [other], 6, min);
+    expect(result.box.width).toBe(120);
+    expect(result.sizes).toContainEqual(expect.objectContaining({ kind: "size", axis: "x", from: 0, to: 120, length: 120 }));
+    expect(result.sizes).toContainEqual(expect.objectContaining({ kind: "size", axis: "x", from: 400, to: 520, length: 120 }));
+  });
+
+  it("keeps the fixed edge where it is when the left edge moves", () => {
+    const result = snapResize(box(103, 200, 97), left, [box(100, 0, 300)], 6, min);
+    expect(result.box).toEqual(box(100, 200, 100));
+  });
+
+  it("matches heights when resizing down", () => {
+    const result = snapResize(box(0, 0, 100, 58), bottom, [box(300, 300, 100, 60)], 6, min);
+    expect(result.box.height).toBe(60);
+    expect(result.sizes.filter((size) => size.axis === "y")).toHaveLength(2);
+  });
+
+  it("doesn't snap below the minimum size", () => {
+    const result = snapResize(box(0, 0, 82), right, [box(200, 0, 78, 20)], 6, min);
+    expect(result.box.width).toBe(82);
+  });
+
+  it("only reports exact matches with no threshold (Alt)", () => {
+    const result = snapResize(box(0, 200, 118), right, [box(400, 0, 120)], 0, min);
+    expect(result.box.width).toBe(118);
+    expect(result.sizes).toEqual([]);
   });
 });

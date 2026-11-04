@@ -5,8 +5,9 @@ Pure functions that take a node list and return a new one. The store and the can
 
 ## Nesting rules
 
-- Only **components** sit inside containers, and only **one level** deep (no containers in containers). Text boxes
-  stay on the canvas: dropping one on a container doesn't put it inside.
+- Only **components and text boxes** sit inside containers, and only **one level** deep (no containers in
+  containers). A text box goes in and out the same way a component does (dropped on one, dragged off it), so a
+  caption moves with its container. **Tidy layout** arranges only the components; text boxes stay where they were put.
 - A nested component's `position` is **relative to its container**; `absolutePosition(node, nodes)` adds the
   container's position to get canvas coordinates.
 - Inside a container, components stay clear of the **header** and **padding**. `containerInsets(style)` gives

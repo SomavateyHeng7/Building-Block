@@ -1,9 +1,12 @@
 import { isSequenceSection } from "./factory";
+import { isFlowchart } from "./shapes";
 import type { Diagram, DiagramEdge, DiagramNode, ReviewComment } from "./types";
 
 /**
  * Things worth a second look before a diagram goes into a review deck. Hints, not errors: nothing here stops
- * anyone saving or exporting. Checked on every architecture tab and every component's internal design.
+ * anyone saving or exporting. Checked on every architecture tab and every component's internal design. A flowchart
+ * (a canvas with flowchart shapes) is a process, not a system: its steps have no owners and its Yes/No lines no
+ * protocols, so only open comments and unconnected steps are checked there.
  */
 export type HintKind = "unconnected" | "no-protocol" | "no-owner" | "open-comment";
 
@@ -44,6 +47,7 @@ function hintsFor(
 ): Hint[] {
   const names = new Map(nodes.map((node) => [node.id, node.data.label || "Untitled"]));
   const connected = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
+  const flowchart = isFlowchart(nodes);
   const hints: Hint[] = [];
   for (const node of nodes) {
     if (node.data.kind !== "block") continue;
@@ -53,12 +57,12 @@ function hintsFor(
       hints.push({ kind: "unconnected", id: node.id, target: "node", ...place, label, message: "Nothing is connected to it." });
     }
     // Owners are recorded against L0 components; an internal design belongs to its parent's owner.
-    if (!place.detailId && blank(node.data.owner)) {
+    if (!place.detailId && !flowchart && blank(node.data.owner)) {
       hints.push({ kind: "no-owner", id: node.id, target: "node", ...place, label, message: "No owner recorded." });
     }
   }
   for (const edge of edges) {
-    if (!blank(edge.protocol)) continue;
+    if (flowchart || !blank(edge.protocol)) continue;
     const label = `${names.get(edge.source) ?? "?"} → ${names.get(edge.target) ?? "?"}`;
     hints.push({ kind: "no-protocol", id: edge.id, target: "edge", ...place, label, message: "No protocol (REST, Kafka…)." });
   }

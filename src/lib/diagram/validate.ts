@@ -429,7 +429,8 @@ function parseView(
   let detached = 0;
   const linked = nodes.map((node) => {
     if (!node.parentId) return node;
-    const parent = node.type === "block" ? containers.get(node.parentId) : undefined;
+    // Components and text boxes can be in a container; containers can't.
+    const parent = node.type !== "container" ? containers.get(node.parentId) : undefined;
     if (!parent) {
       detached += 1;
       // Keep it where it was on screen when the parent is known but not allowed.

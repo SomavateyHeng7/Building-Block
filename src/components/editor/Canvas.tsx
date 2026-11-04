@@ -24,8 +24,8 @@ import { useTheme } from "next-themes";
 import { useMounted } from "@/components/theme-toggle";
 import { getActiveSection, useDiagramStore, type NodesChangeOptions } from "@/lib/diagram/store";
 import { fromFlowNodes, historyKey, toFlowEdges, toFlowNodes, type FlowNode } from "@/lib/diagram/flowAdapter";
-import { absolutePosition, containerInsets, dropIntoContainers, growContainerToFit, nudgeNodes } from "@/lib/diagram/layout";
-import { alignmentLines, boxOf, nearestGaps, snapToBoxes, unionBox } from "@/lib/diagram/guides";
+import { MIN_NODE_SIZE, absolutePosition, containerInsets, dropIntoContainers, growContainerToFit, nudgeNodes } from "@/lib/diagram/layout";
+import { alignmentLines, boxOf, nearestGaps, snapResize, snapToBoxes, unionBox, type Box } from "@/lib/diagram/guides";
 import { changeMarksForView } from "@/lib/diagram/compare";
 import ContainerNode from "./nodes/ContainerNode";
 import BlockNode from "./nodes/BlockNode";
@@ -102,6 +102,99 @@ function snapDrag(changes: NodePositionChange[], nodes: DiagramNode[], zoom: num
     readout: { box, text: `x ${box.x} · y ${box.y}` },
   };
 }
+
+interface ResizeStart {
+  id: string;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+}
+
+/** The ids of a node, the containers it's in and everything inside it: a resize doesn't snap to those. */
+function relatives(node: DiagramNode, nodes: DiagramNode[]): Set<string> {
+  const ids = new Set<string>([node.id]);
+  for (const parent of containersOf(node, nodes)) ids.add(parent);
+  for (const candidate of nodes) if (containersOf(candidate, nodes).includes(node.id)) ids.add(candidate.id);
+  return ids;
+}
+
+/** The containers a node is in, innermost first. */
+function containersOf(node: DiagramNode, nodes: DiagramNode[]): string[] {
+  const found: string[] = [];
+  for (let parent = node.parentId; parent && !found.includes(parent); parent = nodes.find((candidate) => candidate.id === parent)?.parentId) {
+    found.push(parent);
+  }
+  return found;
+}
+
+/**
+ * Lines up a resize with the other boxes, as `snapDrag` does for moves: the edges the handle moves snap to other
+ * boxes' edges and middles, or to the same width or height as another box (unless Alt is held). Changes the
+ * resize's size and position in place (and a container's children, so they stay put), and reports the guides,
+ * size markers, gaps and W × H to show.
+ */
+function snapResizeChanges(
+  changes: NodeChange[],
+  resize: NodeDimensionChange & { dimensions: { width: number; height: number } },
+  node: DiagramNode,
+  start: ResizeStart,
+  nodes: DiagramNode[],
+  zoom: number,
+  free: boolean,
+) {
+  const parent = node.parentId ? nodes.find((candidate) => candidate.id === node.parentId) : undefined;
+  const offset = parent ? absolutePosition(parent, nodes) : { x: 0, y: 0 };
+  const moved = changes.find((change): change is NodePositionChange => change.type === "position" && change.id === node.id && !!change.position);
+  const position = moved?.position ?? node.position;
+  const { width, height } = resize.dimensions;
+  const edges = {
+    left: position.x !== start.position.x,
+    right: position.x === start.position.x && width !== start.size.width,
+    top: position.y !== start.position.y,
+    bottom: position.y === start.position.y && height !== start.size.height,
+  };
+  const raw: Box = { x: position.x + offset.x, y: position.y + offset.y, width, height };
+  const skip = relatives(node, nodes);
+  const others = nodes.filter((other) => !skip.has(other.id)).map((other) => boxOf(absolutePosition(other, nodes), other.size));
+  const snap = snapResize(raw, edges, others, free ? 0 : SNAP_DISTANCE / zoom, MIN_NODE_SIZE[node.type]);
+
+  // A container can't be snapped smaller than what's inside it: keep the unsnapped size on that axis instead.
+  // Snapping to a middle can land on half a pixel.
+  let box = { x: Math.round(snap.box.x), y: Math.round(snap.box.y), width: Math.round(snap.box.width), height: Math.round(snap.box.height) };
+  let kept = true;
+  if (node.type === "container") {
+    const insets = containerInsets(node.data as ContainerNodeData);
+    const content = unionBox(nodes.filter((child) => child.parentId === node.id).map((child) => boxOf(absolutePosition(child, nodes), child.size)));
+    if (content) {
+      if (box.x > content.x - insets.left || box.x + box.width < content.x + content.width + insets.right) {
+        box = { ...box, x: raw.x, width: raw.width };
+        kept = false;
+      }
+      if (box.y > content.y - insets.top || box.y + box.height < content.y + content.height + insets.bottom) {
+        box = { ...box, y: raw.y, height: raw.height };
+        kept = false;
+      }
+    }
+  }
+
+  resize.dimensions = { width: box.width, height: box.height };
+  const dx = box.x - raw.x;
+  const dy = box.y - raw.y;
+  if (moved && (dx || dy)) {
+    moved.position = { x: box.x - offset.x, y: box.y - offset.y };
+    // React Flow moves a container's children back by the unsnapped change; the snap moved the edge a bit further.
+    for (const change of changes) {
+      if (change.type !== "position" || !change.position) continue;
+      if (nodes.find((candidate) => candidate.id === change.id)?.parentId !== node.id) continue;
+      change.position = { x: change.position.x - dx, y: change.position.y - dy };
+    }
+  }
+  return {
+    lines: kept ? snap.lines : [],
+    gaps: [...(kept ? snap.sizes : []), ...nearestGaps(box, others)],
+    readout: { box, text: `${box.width} × ${box.height}` },
+  };
+}
+
 const edgeTypes = { connection: ConnectionEdge };
 
 /** The top-most container under the point (later containers render above earlier ones). */
@@ -154,6 +247,10 @@ export default function Canvas() {
   const showGuides = useGuides((state) => state.show);
   const clearGuides = useGuides((state) => state.clear);
   const hoverNode = useGuides((state) => state.hover);
+  const setResizing = useGuides((state) => state.setResizing);
+  const resizingBox = useGuides((state) => state.resizing);
+  // Where the box being resized started, to tell which edges the handle moves.
+  const resizeStart = useRef<ResizeStart | null>(null);
   // Alt while dragging moves freely, without snapping to other boxes.
   const altHeld = useRef(false);
   useEffect(() => {
@@ -318,7 +415,7 @@ export default function Canvas() {
         const guides = snapDrag(dragged, section.nodes, getZoom(), altHeld.current);
         if (guides) showGuides(guides);
       }
-      // While resizing, sizes go to whole pixels and the new size is shown.
+      // While resizing, sizes go to whole pixels, snap to other boxes (Alt to resize freely) and are measured.
       const resizing = changes.filter(
         (change): change is NodeDimensionChange & { dimensions: { width: number; height: number } } =>
           change.type === "dimensions" && !!change.resizing && !!change.dimensions,
@@ -333,15 +430,14 @@ export default function Canvas() {
       }
       if (resizing.length === 1) {
         const node = section.nodes.find((candidate) => candidate.id === resizing[0].id);
-        const moved = changes.find((change) => change.type === "position" && change.id === resizing[0].id);
         if (node) {
-          const position = moved?.type === "position" && moved.position ? moved.position : node.position;
-          const parent = node.parentId ? section.nodes.find((candidate) => candidate.id === node.parentId) : undefined;
-          const { width, height } = resizing[0].dimensions;
-          const box = { x: position.x + (parent?.position.x ?? 0), y: position.y + (parent?.position.y ?? 0), width, height };
-          showGuides({ lines: [], gaps: [], readout: { box, text: `${width} × ${height}` } });
+          if (resizeStart.current?.id !== node.id) resizeStart.current = { id: node.id, position: node.position, size: node.size };
+          setResizing(true);
+          const guides = snapResizeChanges(changes, resizing[0], node, resizeStart.current, section.nodes, getZoom(), altHeld.current);
+          showGuides(guides);
         }
       } else if (changes.some((change) => change.type === "dimensions" && change.resizing === false)) {
+        resizeStart.current = null;
         clearGuides();
       }
 
@@ -356,7 +452,7 @@ export default function Canvas() {
       );
       setActiveSectionNodes([...parents].reduce((nodes, id) => growContainerToFit(nodes, id), updated), options);
     },
-    [flowNodes, section.nodes, selectedNodeIds, setActiveSectionNodes, setSelection, getZoom, showGuides, clearGuides],
+    [flowNodes, section.nodes, selectedNodeIds, setActiveSectionNodes, setSelection, getZoom, showGuides, clearGuides, setResizing],
   );
 
   // Dropping decides which container each dragged component is in: into one, out of one, or across.
@@ -393,11 +489,9 @@ export default function Canvas() {
         addContainer({ x: Math.round(point.x - 160), y: Math.round(point.y - 32) });
         return;
       }
-      if (payload.kind === "text") {
-        addText({ x: Math.round(point.x - 80), y: Math.round(point.y - 16) });
-        return;
-      }
-      const size = payload.kind === "shape" ? shapeInfo(payload.shape).size : { width: 140, height: 56 };
+      // Components and text boxes dropped on a container go inside it.
+      const size =
+        payload.kind === "shape" ? shapeInfo(payload.shape).size : payload.kind === "text" ? { width: 160, height: 32 } : { width: 140, height: 56 };
 
       const containers = flowNodes.filter((node) => node.type === "container");
       const target = findContainerAtPoint(containers, point);
@@ -410,7 +504,8 @@ export default function Canvas() {
             }
           : { x: Math.round(point.x - size.width / 2), y: Math.round(point.y - size.height / 2) };
 
-      if (payload.kind === "shape") addBlock(position, target?.id ?? null, undefined, payload.shape);
+      if (payload.kind === "text") addText(position, undefined, target?.id ?? null);
+      else if (payload.kind === "shape") addBlock(position, target?.id ?? null, undefined, payload.shape);
       else addBlock(position, target?.id ?? null, payload.colorKey as BlockColorKey);
     },
     [addBlock, addContainer, addText, flowNodes, readOnly, screenToFlowPosition],
@@ -419,6 +514,7 @@ export default function Canvas() {
   return (
     <ReactFlow
       key={section.id}
+      className={resizingBox ? "bb-resizing" : undefined}
       nodes={flowNodes}
       edges={flowEdges}
       nodeTypes={nodeTypes}

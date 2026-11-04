@@ -11,13 +11,21 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-04",
+    title: "Resizing that lines up with the rest of your diagram",
+    changes: [
+      "Resizing a box now snaps to the edges of the boxes around it and to the same width or height as another box, with pink markers showing which boxes match. Hold Alt to resize freely.",
+      "Resize handles are easier to tell apart from connection dots: drag a white corner square or anywhere along an edge to resize, and the round blue dot to draw a connection.",
+    ],
+  },
+  {
     date: "2026-11-03",
     title: "Flowcharts like draw.io, sequence diagrams like Mermaid, and pixel-exact layout",
     changes: [
-      "New Flowchart template: a process with steps, Yes/No decisions and exception paths.",
+      "New Flowchart template: a process with steps, Yes/No decisions and exception paths. Check no longer asks flowchart steps for owners or their lines for protocols.",
       "Add draw.io's flowchart shapes from the left panel: process, decision, start/end, data, document, database and subprocess. Change any component's shape in its details.",
       "On a flowchart, hover a shape and click one of its blue arrows to add a connected shape in that direction, as in draw.io.",
-      "Write on the canvas with text boxes: drag one in or press T, then double-click to type.",
+      "Write on the canvas with text boxes: drag one in or press T, then double-click to type. Drop one on a container and it moves with the container.",
       "Line things up to the pixel: boxes snap to each other's edges and middles while you drag, with guides and the gaps shown in px. Arrow keys move 1 px (Shift 10), the details panel has exact X, Y, width and height, and holding Alt while pointing at another box measures the distance.",
       "Sequence diagrams now have loop, alt, opt, par, critical and break frames and activation bars, read from and written to Mermaid.",
       "The Mermaid code updates the sequence as you type, with colours and the lines it can't read marked in red. Click a line to select that step.",
