@@ -18,6 +18,21 @@ Recipes for common changes, with the files to touch and the rules to keep. After
 It appears on `/templates` (with search and its category) automatically, and on the start page if it is one of the
 first six after Blank (`START_PAGE_TEMPLATES`). Its preview is drawn from `build()`.
 
+- A **sequence template** is easiest written as Mermaid code: `sequenceFromMermaid(name, tab, code, colors)` from
+  `./sequence-build` (frames and activation marks included; `colors` maps participant names to legend keys).
+- A **flowchart** is placed by hand (see `flowchart.ts`): use `shapeInfo(shape).size` for each shape's size and its own
+  legend; its shapes make it a flowchart tab, so they get quick-add arrows.
+
+## Add a flowchart shape
+
+1. Add the key to `BlockShape` in `types.ts` and to `BLOCK_SHAPES` in `validate.ts` (files store the key, so never
+   rename one).
+2. Add a `ShapeInfo` to `SHAPES` in `src/lib/diagram/shapes.ts`: label, default name, hint, usual size, the outline
+   as an SVG path in a 100 × 100 box (plus `detail` lines if it has any) and how far in the label keeps (`inset`).
+   The canvas, palette, shape picker and template previews all draw from it.
+3. Give it a legend-name pattern in `SHAPE_CATEGORY` (`store.ts`) and, if Mermaid has a near shape, a case in
+   `flowchartMermaid` (`exportCode.ts`).
+
 ## Add a store action
 
 1. Add its signature to `DiagramState` in `src/lib/diagram/store.ts`, with a doc comment if it isn't obvious.
@@ -36,6 +51,10 @@ first six after Blank (`START_PAGE_TEMPLATES`). Its preview is drawn from `build
 1. Add it to `src/lib/diagram/types.ts` as **optional**, so older files stay valid, with a doc comment saying its
    default.
 2. Read it in `src/lib/diagram/validate.ts` explicitly (type-check it; never spread raw input).
+   A new kind of node (as `text` was) also needs: its `type` in `parseNode`, a node component in `nodeTypes`
+   (`Canvas.tsx`), a details panel, and a decision in each export and in search, describe and compare about whether
+   it counts (grep for `type === "container"` and `kind === "block"`). If it can hold content, check `hasContent`
+   (`file.ts`) still sees it, or a diagram of only that will look empty and lose its leave warning.
 3. If it's navigation state rather than content, add it to the ignored keys in `differsFromSaved` (`file.ts`).
 4. Show it in the UI, include it in exports if relevant (CSV columns in `export.ts`), and document it in
    [the data model](04-data-model-and-file-format.md).

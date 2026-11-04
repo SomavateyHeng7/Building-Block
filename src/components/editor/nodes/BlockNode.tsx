@@ -4,12 +4,16 @@ import { memo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
 import { componentIcon } from "@/lib/diagram/componentIcons";
+import { shapeInfo } from "@/lib/diagram/shapes";
+import { MIN_NODE_SIZE } from "@/lib/diagram/layout";
 import { defaultLabel } from "@/lib/diagram/factory";
 import { readableTextOn } from "@/lib/diagram/palette";
 import { useDiagramStore } from "@/lib/diagram/store";
 import type { BlockNodeData } from "@/lib/diagram/types";
 import { showDetails } from "../detailsPanel";
+import { CommentMarker } from "./CommentMarker";
 import { useReadOnly } from "../viewMode";
+import { useIsFlowchart } from "../flowchartView";
 
 export type BlockFlowNode = Node<BlockNodeData, "block">;
 
@@ -29,25 +33,28 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
   // Escape leaves the name as it was; the blur that follows must not save what was typed.
   const cancelled = useRef(false);
 
-  const entryColor = legend.find((entry) => entry.key === data.colorKey)?.color;
+  const entry = legend.find((candidate) => candidate.key === data.colorKey);
+  const entryColor = entry?.color;
   const color = entryColor ?? "#ffffff";
   const icon = componentIcon(data.icon);
-
   const shape = data.shape ?? "process";
-  const decision = shape === "decision";
-  const border = selected ? "#2563eb" : "rgba(0,0,0,0.25)";
+  const outline = selected ? "#2563eb" : "rgba(0,0,0,0.25)";
+  const corners = shape === "terminal" ? "rounded-full px-3" : "rounded";
+  // Quick-add arrows on a flowchart tab (one with flowchart shapes on it), as draw.io offers them.
+  const flowchart = useIsFlowchart();
+  const info = shapeInfo(shape);
+  // Shapes other than a box or pill are an SVG outline behind the label, inset so the text stays inside.
+  const drawn = !!info.path;
 
   return (
     <div
-      className={`relative flex h-full w-full items-center justify-center text-center text-xs font-medium ${
-        decision ? "" : shape === "terminator" ? "rounded-full border" : "rounded border"
-      }`}
+      className={`relative flex h-full w-full items-center justify-center text-center text-xs font-medium ${drawn ? "" : `border ${corners}`}`}
       title={data.description ?? (entryColor ? undefined : "No legend category assigned")}
       style={{
-        // A diamond is drawn by the SVG below, so the box itself has no fill or edge.
-        backgroundColor: decision ? undefined : color,
-        borderColor: decision ? undefined : border,
-        borderStyle: decision ? undefined : entryColor ? "solid" : "dashed",
+        backgroundColor: drawn ? undefined : color,
+        paddingInline: drawn ? `${info.inset}%` : undefined,
+        borderColor: outline,
+        borderStyle: entryColor ? "solid" : "dashed",
         color: readableTextOn(color),
       }}
       onDoubleClick={() => {
@@ -56,35 +63,36 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
         setEditing(true);
       }}
     >
-      {decision && (
-        <svg className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-          <polygon
-            points="50,0 100,50 50,100 0,50"
+      {/* The shape's outline behind the label (a diamond's corners are where its connection dots are). */}
+      {info.path && (
+        <svg aria-hidden className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <path
+            d={info.path}
             fill={color}
-            stroke={border}
+            stroke={outline}
             strokeWidth={selected ? 2 : 1}
             strokeDasharray={entryColor ? undefined : "4 3"}
             vectorEffect="non-scaling-stroke"
           />
+          {info.detail && <path d={info.detail} fill="none" stroke={outline} strokeWidth={1} vectorEffect="non-scaling-stroke" />}
         </svg>
       )}
-      <NodeResizer minWidth={decision ? 100 : 80} minHeight={decision ? 56 : 32} isVisible={selected && !readOnly} />
+      {flowchart && !readOnly && <QuickAdd id={id} />}
+      {/* Corner squares and edge strips resize; the round dots in the middle of each side draw connections. */}
+      <NodeResizer minWidth={MIN_NODE_SIZE.block.width} minHeight={MIN_NODE_SIZE.block.height} isVisible={selected && !readOnly} />
       {/* Every side starts and ends connections (the canvas uses loose connection mode). */}
       {SIDES.map((side) => (
-        <Handle key={side.id} id={side.id} type="source" position={side.position} className="bb-handle" />
+        <Handle key={side.id} id={side.id} type="source" position={side.position} className="bb-handle" title="Drag to draw a connection" />
       ))}
-      {data.notes && (decision ? <Corner className="right-[25%] top-[25%]"><NotesMarker id={id} notes={data.notes} /></Corner> : <NotesMarker id={id} notes={data.notes} />)}
-      {data.detail?.nodes.length ? (
-        decision ? (
-          <Corner className="bottom-[25%] right-[25%]"><DetailBadge id={id} count={data.detail.nodes.length} /></Corner>
-        ) : (
-          <DetailBadge id={id} count={data.detail.nodes.length} />
-        )
-      ) : null}
+      {/* Colour alone says nothing to a screen reader, so the category is said in words. */}
+      {entry && <span className="sr-only">Category: {entry.label}</span>}
+      {data.notes && <NotesMarker id={id} notes={data.notes} />}
+      <CommentMarker id={id} />
+      {data.detail?.nodes.length ? <DetailBadge id={id} count={data.detail.nodes.length} /> : null}
       {editing ? (
         <input
           autoFocus
-          className={`nodrag nopan relative w-full bg-transparent text-center outline-none ${decision ? "px-[18%]" : "px-1"}`}
+          className="nodrag nopan w-full bg-transparent px-1 text-center outline-none"
           defaultValue={data.label}
           onBlur={(event) => {
             if (!cancelled.current) updateNodeLabel(id, event.target.value.trim() ? event.target.value : defaultLabel("block"));
@@ -99,7 +107,7 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
           }}
         />
       ) : (
-        <span className={`relative flex min-w-0 items-center gap-1.5 ${decision ? "px-[18%]" : shape === "terminator" ? "px-3" : "px-1"}`}>
+        <span className="relative flex min-w-0 items-center gap-1.5 px-1">
           {icon && <ComponentIcon path={icon.path} label={icon.label} />}
           <span className="flex min-w-0 flex-col leading-tight">
             <span>{data.label}</span>
@@ -113,9 +121,41 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
   );
 }
 
-/** Anchors a corner badge a little way in, where a diamond's edge actually is (its bounding box corner is empty). */
-function Corner({ className, children }: { className: string; children: React.ReactNode }) {
-  return <span className={`absolute h-0 w-0 ${className}`}>{children}</span>;
+const QUICK_ARROWS = [
+  { side: "top", className: "left-1/2 -top-7 -translate-x-1/2", rotate: -90 },
+  { side: "right", className: "top-1/2 -right-7 -translate-y-1/2", rotate: 0 },
+  { side: "bottom", className: "left-1/2 -bottom-7 -translate-x-1/2", rotate: 90 },
+  { side: "left", className: "top-1/2 -left-7 -translate-y-1/2", rotate: 180 },
+] as const;
+
+/**
+ * draw.io's quick-add arrows: on a hovered or selected shape, a blue arrow off each side. Clicking one adds the
+ * same kind of shape that way, lined up and connected (`addConnectedBlock`); Shift-click adds a decision instead.
+ */
+function QuickAdd({ id }: { id: string }) {
+  const addConnectedBlock = useDiagramStore((state) => state.addConnectedBlock);
+  return (
+    <>
+      {QUICK_ARROWS.map(({ side, className, rotate }) => (
+        <button
+          key={side}
+          type="button"
+          title={`Add a connected shape ${side === "top" ? "above" : side === "bottom" ? "below" : `to the ${side}`} (Shift: a decision)`}
+          aria-label={`Add a connected shape ${side === "top" ? "above" : side === "bottom" ? "below" : `to the ${side}`}`}
+          className={`bb-quick-add nodrag nopan absolute z-10 flex h-5 w-5 min-h-0 items-center justify-center rounded-full text-[#29b6f2] hover:scale-125 hover:text-[#1a8fd1] ${className}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            addConnectedBlock(id, side, event.shiftKey ? "decision" : undefined);
+          }}
+          onDoubleClick={(event) => event.stopPropagation()}
+        >
+          <svg viewBox="0 0 20 20" className="h-4 w-4" style={{ transform: `rotate(${rotate}deg)` }} aria-hidden>
+            <path d="M3 7h8V3l7 7-7 7v-4H3z" fill="currentColor" fillOpacity={0.75} />
+          </svg>
+        </button>
+      ))}
+    </>
+  );
 }
 
 /** The component's built-in icon, in the label's colour so it reads on any category colour. */

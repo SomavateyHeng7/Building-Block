@@ -52,6 +52,9 @@ describe("planExport", () => {
   it("puts every view in one PDF when bundled, and one PDF per view when separate", () => {
     expect(names(planExport(diagram, { views: all, formats: ["pdf"], bundle: "one" }))).toEqual(["plan.pdf"]);
     expect(planExport(diagram, { views: all, formats: ["pdf"], bundle: "one" }).zipName).toBeUndefined();
+    // The interactive viewer follows the PDF: one page with a tab per view, or one per view.
+    expect(names(planExport(diagram, { views: all, formats: ["html"], bundle: "one" }))).toEqual(["plan.html"]);
+    expect(names(planExport(diagram, { views: all, formats: ["html"], bundle: "separate" }))[0]).toBe("plan-current.html");
     expect(names(planExport(diagram, { views: all, formats: ["pdf"], bundle: "separate" }))).toEqual([
       "plan-current.pdf",
       "plan-current-orders-internal.pdf",

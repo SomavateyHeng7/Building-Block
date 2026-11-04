@@ -10,6 +10,8 @@ const COLUMNS = [
       { label: "Features", href: "/#features" },
       { label: "How it works", href: "/#how-it-works" },
       { label: "Roadmap", href: "/#roadmap" },
+      { label: "Pricing", href: "/pricing" },
+      { label: "What's new", href: "/changelog" },
     ],
   },
   {
@@ -26,7 +28,7 @@ const LINK = "text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc
 export default function Footer() {
   return (
     <footer className="border-t border-zinc-200 dark:border-zinc-800">
-      <div className="mx-auto grid max-w-6xl grid-cols-2 gap-10 px-4 py-12 sm:px-6 md:grid-cols-[2fr_1fr_1fr]">
+      <div className="mx-auto grid max-w-7xl grid-cols-2 gap-10 px-4 py-12 sm:px-6 md:grid-cols-[2fr_1fr_1fr]">
         <div className="col-span-2 flex max-w-xs flex-col gap-3 md:col-span-1">
           <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
             <LogoMark className="h-6 w-6" />
@@ -54,7 +56,7 @@ export default function Footer() {
       </div>
 
       <div className="border-t border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-sm text-zinc-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-sm text-zinc-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <span>
             &copy; <CurrentYear /> Building Block. Built by Somatech.
           </span>

@@ -1,6 +1,7 @@
 import { createId } from "./factory";
 import { ImportError } from "./importMermaid";
-import { containerInsets, growContainerToFit, suggestConnectionSides } from "./layout";
+import { containerInsets, growContainerToFit, suggestConnectionSides, tidyOverlappingContainers } from "./layout";
+import { MAX_INFLATED_BYTES } from "./limits";
 import type { ConnectionSide, DiagramEdge, DiagramNode, DiagramSection, LegendEntry } from "./types";
 import { decodeEntities, findAll, parseXml, type XmlElement } from "./xml";
 
@@ -34,10 +35,10 @@ interface Cell {
 }
 
 /** The flowchart shape a draw.io cell stands for, if it is one. */
-function drawioShape(cell: { shape?: string; style: Map<string, string> }): "decision" | "terminator" | undefined {
+function drawioShape(cell: { shape?: string; style: Map<string, string> }): "decision" | "terminal" | undefined {
   const name = cell.shape ?? cell.style.get("shape");
   if (name === "rhombus") return "decision";
-  if (name === "ellipse") return "terminator";
+  if (name === "ellipse") return "terminal";
   return undefined;
 }
 
@@ -116,8 +117,21 @@ function readCells(model: XmlElement): Cell[] {
 async function inflatePage(text: string): Promise<string> {
   const bytes = Uint8Array.from(atob(text.trim()), (char) => char.charCodeAt(0));
   const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
-  const inflated = await new Response(stream).text();
-  return decodeURIComponent(inflated);
+  // Read in pieces and stop at the limit: a small file can inflate to gigabytes.
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_INFLATED_BYTES) {
+      await reader.cancel();
+      throw new ImportError("That draw.io file expands to more than the app can open.");
+    }
+    chunks.push(value);
+  }
+  return decodeURIComponent(await new Blob(chunks as BlobPart[]).text());
 }
 
 /** Each page's name and graph model, whether the file is an <mxfile> (compressed or not) or a bare model. */
@@ -134,13 +148,17 @@ async function readPages(root: XmlElement): Promise<{ name: string; model: XmlEl
         if (!page.text.trim()) return null;
         try {
           return { name, model: parseXml(await inflatePage(page.text)) };
-        } catch {
+        } catch (problem) {
+          if (problem instanceof ImportError) throw problem;
           throw new ImportError(`Couldn't read the page "${name}" in that draw.io file.`);
         }
       }),
   );
   return pages.filter((page): page is { name: string; model: XmlElement } => page !== null);
 }
+
+/** How many shapes deep a cell's parents are followed; real diagrams nest a handful. */
+const MAX_NESTING = 50;
 
 const STEP_STYLES = new Set(["orthogonalEdgeStyle", "elbowEdgeStyle", "entityRelationEdgeStyle", "isometricEdgeStyle"]);
 
@@ -168,7 +186,7 @@ function convertPage(
   name: string,
   cells: Cell[],
   categoryFor: (color: string) => string,
-  counts: { text: number; nested: number; edges: number },
+  counts: { text: number; nested: number; edges: number; tidied: number },
 ): DiagramSection {
   const byId = new Map(cells.map((cell) => [cell.id, cell]));
   const rootIds = new Set(cells.filter((cell) => !cell.parent).map((cell) => cell.id));
@@ -181,20 +199,28 @@ function convertPage(
   const isContainer = (cell: Cell) =>
     !isGroup(cell) && (cell.style.has("swimlane") || cell.style.get("container") === "1" || hasChildren.has(cell.id));
 
+  /** The shapes around a cell, nearest first. A broken file can make parents loop, so it stops at a repeat or MAX_NESTING. */
+  const ancestors = (cell: Cell): Cell[] => {
+    const chain: Cell[] = [];
+    const seen = new Set([cell.id]);
+    for (let parent = cell.parent ? byId.get(cell.parent) : undefined; parent?.vertex && !seen.has(parent.id) && chain.length < MAX_NESTING; parent = parent.parent ? byId.get(parent.parent) : undefined) {
+      seen.add(parent.id);
+      chain.push(parent);
+    }
+    return chain;
+  };
   // Canvas position: geometry is relative to the parent shape, if any.
   const absolute = (cell: Cell): { x: number; y: number } => {
-    const parent = cell.parent ? byId.get(cell.parent) : undefined;
-    if (!parent || !parent.vertex || isLayer(parent.id) || rootIds.has(parent.id)) return { x: cell.x, y: cell.y };
-    const origin = absolute(parent);
-    return { x: origin.x + cell.x, y: origin.y + cell.y };
+    let { x, y } = cell;
+    for (const parent of ancestors(cell)) {
+      if (isLayer(parent.id) || rootIds.has(parent.id)) break;
+      x += parent.x;
+      y += parent.y;
+    }
+    return { x, y };
   };
   /** The nearest container around a cell, looking through groups and lifted containers. */
-  const containerOf = (cell: Cell): Cell | undefined => {
-    for (let parent = cell.parent ? byId.get(cell.parent) : undefined; parent && parent.vertex; parent = parent.parent ? byId.get(parent.parent) : undefined) {
-      if (isContainer(parent)) return parent;
-    }
-    return undefined;
-  };
+  const containerOf = (cell: Cell): Cell | undefined => ancestors(cell).find(isContainer);
 
   const ids = new Map<string, string>();
   const containers: DiagramNode[] = [];
@@ -268,6 +294,10 @@ function convertPage(
   });
   nodes = [...nodes, ...placed];
   for (const container of containers) nodes = growContainerToFit(nodes, container.id);
+  // Components piled on top of each other can't be read: lay those containers out in a grid.
+  const tidy = tidyOverlappingContainers(nodes);
+  nodes = tidy.nodes;
+  counts.tidied += tidy.tidied;
 
   const edges: DiagramEdge[] = [];
   for (const cell of cells.filter((candidate) => candidate.edge)) {
@@ -330,7 +360,7 @@ export async function parseDrawio(source: string, legend: LegendEntry[] = []): P
     made.push(entry);
     return entry.key;
   };
-  const counts = { text: 0, nested: 0, edges: 0 };
+  const counts = { text: 0, nested: 0, edges: 0, tidied: 0 };
   const sections = pages
     .map((page) => convertPage(page.name, readCells(page.model), categoryFor, counts))
     .filter((section) => section.nodes.length);
@@ -341,6 +371,7 @@ export async function parseDrawio(source: string, legend: LegendEntry[] = []): P
     fixes.push(`Made ${made.length} legend categor${made.length === 1 ? "y" : "ies"} from the fill colours used, named "${IMPORTED_CATEGORY} #…". Rename them to say what each colour means.`);
   }
   if (counts.nested) fixes.push(`Lifted ${counts.nested} container${counts.nested === 1 ? "" : "s"} out of another: containers here are one level deep.`);
+  if (counts.tidied) fixes.push(`Rearranged the components in ${counts.tidied} container${counts.tidied === 1 ? "" : "s"} into a grid because they overlapped.`);
   if (counts.text) fixes.push(`Left out ${counts.text} free text label${counts.text === 1 ? "" : "s"} that weren't on a shape.`);
   if (counts.edges) fixes.push(`Left out ${counts.edges} arrow${counts.edges === 1 ? "" : "s"} that didn't join two shapes.`);
   return { sections, legend: made, fixes };

@@ -90,7 +90,7 @@ export default function LandingPage() {
   return (
     <div className="flex w-full flex-col">
       <header className="sticky top-0 z-10 border-b border-zinc-200/70 bg-background/85 backdrop-blur dark:border-zinc-800/70">
-        <nav className="mx-auto flex max-w-6xl items-center gap-6 px-4 py-3 sm:px-6">
+        <nav className="mx-auto flex max-w-7xl items-center gap-6 px-4 py-3 sm:px-6">
           <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
             <LogoMark className="h-6 w-6" />
             Building Block
@@ -100,6 +100,7 @@ export default function LandingPage() {
             <a href="#how-it-works" className="hover:text-zinc-900 dark:hover:text-zinc-100">How it works</a>
             <a href="#roadmap" className="hover:text-zinc-900 dark:hover:text-zinc-100">Roadmap</a>
             <Link href="/templates" className="hover:text-zinc-900 dark:hover:text-zinc-100">Templates</Link>
+            <Link href="/pricing" className="hover:text-zinc-900 dark:hover:text-zinc-100">Pricing</Link>
             <Link href="/contact" className="hover:text-zinc-900 dark:hover:text-zinc-100">Contact us</Link>
           </div>
           <div className="ml-auto flex items-center gap-3">
@@ -115,7 +116,7 @@ export default function LandingPage() {
       </header>
 
       <main>
-        <section className="mx-auto flex max-w-6xl flex-col items-center gap-12 px-4 pb-20 pt-16 sm:px-6 sm:pt-24">
+        <section className="mx-auto flex max-w-7xl flex-col items-center gap-12 px-4 pb-20 pt-16 sm:px-6 sm:pt-24">
           <div className="flex max-w-3xl flex-col items-center gap-6 text-center">
             <span className="rounded-full border border-zinc-200 px-3 py-1 text-xs font-medium text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
               For solution architects
@@ -137,13 +138,13 @@ export default function LandingPage() {
             </div>
             <p className="text-sm text-zinc-500">No sign-up · Saved as files on your device · Export to PNG, PDF and CSV</p>
           </div>
-          <div className="w-full max-w-5xl">
+          <div className="w-full max-w-6xl">
             <HeroDiagram />
           </div>
         </section>
 
         <section className="border-y border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950">
-          <div className="mx-auto grid max-w-6xl gap-8 px-4 py-14 sm:px-6 md:grid-cols-3">
+          <div className="mx-auto grid max-w-7xl gap-8 px-4 py-14 sm:px-6 md:grid-cols-3">
             {[
               ["Every architect draws differently", "Colours, shapes and legends change from one diagram to the next, so reviewers relearn each one."],
               ["General tools fight you", "Whiteboard and diagram apps aren't built for architecture levels, so tidying a diagram takes longer than designing it."],
@@ -157,7 +158,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section id="features" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-20 sm:px-6">
+        <section id="features" className="mx-auto max-w-7xl scroll-mt-20 px-4 py-20 sm:px-6">
           <div className="max-w-2xl">
             <h2 className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
               Made for the way architects work
@@ -183,7 +184,7 @@ export default function LandingPage() {
         </section>
 
         <section id="how-it-works" className="scroll-mt-20 bg-zinc-50 dark:bg-zinc-950">
-          <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+          <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
             <h2 className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
               From blank page to review-ready in minutes
             </h2>
@@ -201,7 +202,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section id="roadmap" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-20 sm:px-6">
+        <section id="roadmap" className="mx-auto max-w-7xl scroll-mt-20 px-4 py-20 sm:px-6">
           <div className="max-w-2xl">
             <h2 className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
               {roadmapHeading(LEVELS)}
@@ -240,7 +241,7 @@ export default function LandingPage() {
         </section>
 
         <section className="border-t border-zinc-200 dark:border-zinc-800">
-          <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-20 sm:px-6 md:grid-cols-2">
+          <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-20 sm:px-6 md:grid-cols-2">
             <div>
               <h2 className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
                 Building Block for teams
@@ -257,7 +258,7 @@ export default function LandingPage() {
         </section>
 
         <section className="bg-zinc-950 text-zinc-50 dark:bg-zinc-900">
-          <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 px-4 py-20 text-center sm:px-6">
+          <div className="mx-auto flex max-w-7xl flex-col items-center gap-6 px-4 py-20 text-center sm:px-6">
             <h2 className="text-3xl font-semibold tracking-tight text-balance">Draw your next L0 in minutes</h2>
             <p className="max-w-xl text-zinc-400">Free, no account, and your diagrams are files on your device.</p>
             <Link

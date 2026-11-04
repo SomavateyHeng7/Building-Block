@@ -1,18 +1,22 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { useReactFlow } from "@xyflow/react";
+import { safeWebAddress } from "@/lib/diagram/webAddress";
+import CommentsSection from "./CommentsSection";
+import { useState, type ReactNode } from "react";
 import { getActiveSection, useDiagramStore, type ActiveView } from "@/lib/diagram/store";
 import { suggestConnectionSides, type ArrangeOp } from "@/lib/diagram/layout";
 import { connectionCaption } from "@/lib/diagram/flowAdapter";
 import type {
   BlockColorKey,
-  BlockShape,
   ConnectionDirection,
   ConnectionLineStyle,
   ConnectionShape,
   ContainerNodeData,
   DiagramEdge,
+  DiagramNode,
+  TextAlign,
+  TextNodeData,
   ContainerStyle,
   HeaderAlign,
   HeaderPosition,
@@ -27,6 +31,9 @@ import { ComponentIcon, NOTE_KINDS, NOTES_FIELD_ID, type NoteKind } from "./node
 import ColorPicker from "./ColorPicker";
 import { requestDelete, ungroup } from "./deletePrompt";
 import SequencePanel from "./SequencePanel";
+import { ShapeIcon } from "./Sidebar";
+import { SHAPES, shapeInfo } from "@/lib/diagram/shapes";
+import { DEFAULT_FONT_SIZE } from "./nodes/TextNode";
 
 const DETAIL_FIELDS: {
   key: keyof NodeDetails;
@@ -39,6 +46,7 @@ const DETAIL_FIELDS: {
   { key: "owner", label: "Owner", placeholder: "Team, vendor or contact" },
   { key: "description", label: "Description", placeholder: "What it does and why it's here", multiline: true },
   { key: "notes", label: "Notes", placeholder: "Assumptions, risks, open questions", multiline: true },
+  { key: "link", label: "Link", placeholder: "https://… ticket, decision record or document" },
 ];
 
 const ARRANGE_GROUPS: { title: string; ops: { op: ArrangeOp; label: string; icon: string }[] }[] = [
@@ -62,12 +70,6 @@ const ARRANGE_GROUPS: { title: string; ops: { op: ArrangeOp; label: string; icon
       { op: "same-height", label: "Make same height (tallest)", icon: "M12 3v18M9 6l3-3 3 3M9 18l3 3 3-3" },
     ],
   },
-];
-
-const SHAPE_OPTIONS_BLOCK: { value: BlockShape; label: string }[] = [
-  { value: "process", label: "Box" },
-  { value: "decision", label: "Decision" },
-  { value: "terminator", label: "Start / end" },
 ];
 
 /** A labelled on/off switch. */
@@ -169,6 +171,144 @@ function Segmented<T extends string>({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * A whole-pixel number field. Typing changes the value as soon as it's a number; arrow keys step by 1
+ * (Shift: 10). What's typed is kept while the field has focus, so "-" or a cleared field doesn't jump back.
+ */
+function PixelField({ label, value, onChange, title }: { label: string; value: number; onChange: (value: number) => void; title?: string }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <label className="flex min-w-0 items-center gap-1 rounded-md border border-zinc-300 bg-white pl-2 text-xs font-medium text-zinc-500 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900" title={title}>
+      {label}
+      <input
+        type="number"
+        inputMode="numeric"
+        step={1}
+        className="w-full min-w-0 bg-transparent py-1.5 pr-1 font-mono text-sm font-normal text-zinc-900 outline-none dark:text-zinc-100"
+        value={draft ?? String(Math.round(value))}
+        onFocus={(event) => setDraft(event.currentTarget.value)}
+        onBlur={() => setDraft(null)}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          const parsed = Number(event.target.value);
+          if (event.target.value.trim() && Number.isFinite(parsed)) onChange(parsed);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+          if ((event.key === "ArrowUp" || event.key === "ArrowDown") && event.shiftKey) {
+            event.preventDefault();
+            const next = Math.round(value) + (event.key === "ArrowUp" ? 10 : -10);
+            setDraft(String(next));
+            onChange(next);
+          }
+        }}
+      />
+      <span className="pr-2 text-[10px] text-zinc-400">px</span>
+    </label>
+  );
+}
+
+/** Exact position and size, to the pixel. A component in a container is placed relative to the container. */
+function GeometryFields({ node, parent }: { node: DiagramNode; parent?: DiagramNode }) {
+  const setNodeGeometry = useDiagramStore((state) => state.setNodeGeometry);
+  return (
+    <div className={FIELD_LABEL}>
+      <span>
+        Position &amp; size
+        {parent && <span className="font-normal text-zinc-400"> · relative to {parent.data.label}</span>}
+      </span>
+      <div className="grid grid-cols-2 gap-1.5">
+        <PixelField label="X" title="Distance from the left" value={node.position.x} onChange={(x) => setNodeGeometry(node.id, { x })} />
+        <PixelField label="Y" title="Distance from the top" value={node.position.y} onChange={(y) => setNodeGeometry(node.id, { y })} />
+        <PixelField label="W" title="Width" value={node.size.width} onChange={(width) => setNodeGeometry(node.id, { width })} />
+        <PixelField label="H" title="Height" value={node.size.height} onChange={(height) => setNodeGeometry(node.id, { height })} />
+      </div>
+      <span className="text-[11px] font-normal text-zinc-400">
+        Arrow keys move 1 px (Shift: 10). Hold Alt and point at another box to measure the gap.
+      </span>
+    </div>
+  );
+}
+
+const TEXT_ALIGN_OPTIONS: { value: TextAlign; label: string; icon: string }[] = [
+  { value: "left", label: "Left", icon: "M4 6h16M4 12h10M4 18h13" },
+  { value: "center", label: "Centre", icon: "M4 6h16M7 12h10M5.5 18h13" },
+  { value: "right", label: "Right", icon: "M4 6h16M10 12h10M7 18h13" },
+];
+const FONT_SIZES = [10, 12, 14, 16, 20, 24, 32, 48];
+
+/** A text box: what it says and how it looks. */
+function TextPanel({ node, data, action }: { node: DiagramNode; data: TextNodeData; action?: ReactNode }) {
+  const updateNodeLabel = useDiagramStore((state) => state.updateNodeLabel);
+  const updateTextStyle = useDiagramStore((state) => state.updateTextStyle);
+  const fontSize = data.fontSize ?? DEFAULT_FONT_SIZE;
+  const parent = useDiagramStore((state) =>
+    node.parentId ? getActiveSection(state.diagram).nodes.find((candidate) => candidate.id === node.parentId) : undefined,
+  );
+  return (
+    <div className={PANEL}>
+      <PanelTitle action={action}>Text box</PanelTitle>
+      <label className={FIELD_LABEL}>
+        Text
+        <textarea
+          rows={4}
+          className={`${FIELD} field-sizing-content max-h-80 min-h-20 resize-y`}
+          value={data.label}
+          onChange={(event) => updateNodeLabel(node.id, event.target.value)}
+        />
+      </label>
+      <div className={FIELD_LABEL}>
+        Size
+        <div className="flex items-center gap-1.5">
+          <select
+            aria-label="Font size"
+            className={`${FIELD} flex-1`}
+            value={FONT_SIZES.includes(fontSize) ? fontSize : ""}
+            onChange={(event) => updateTextStyle(node.id, { fontSize: Number(event.target.value) === DEFAULT_FONT_SIZE ? undefined : Number(event.target.value) })}
+          >
+            {!FONT_SIZES.includes(fontSize) && <option value="">{fontSize} px</option>}
+            {FONT_SIZES.map((size) => (
+              <option key={size} value={size}>
+                {size} px{size === DEFAULT_FONT_SIZE ? " (default)" : ""}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            aria-pressed={!!data.bold}
+            title="Bold"
+            onClick={() => updateTextStyle(node.id, { bold: data.bold ? undefined : true })}
+            className={`rounded-md border px-3 py-1.5 text-sm font-bold ${
+              data.bold
+                ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                : "border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+            }`}
+          >
+            B
+          </button>
+        </div>
+      </div>
+      <div className={FIELD_LABEL}>
+        Align
+        <Segmented
+          label="Align"
+          options={TEXT_ALIGN_OPTIONS}
+          value={data.align ?? "left"}
+          onChange={(align) => updateTextStyle(node.id, { align: align === "left" ? undefined : align })}
+        />
+      </div>
+      <GeometryFields node={node} parent={parent} />
+      <CommentsSection targetId={node.id} />
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => requestDelete([node.id])} className={DELETE_BUTTON}>
+          <Icon name="trash" className="h-3.5 w-3.5" />
+          Delete text box
+        </button>
+      </div>
     </div>
   );
 }
@@ -318,6 +458,18 @@ function IconPicker({ value, onPick }: { value?: ComponentIconKey; onPick: (icon
  * Notes, with one-click starters for the kinds of note architects keep. The box grows with the text, and the
  * note badge on the canvas opens it (see NotesMarker).
  */
+/** Under the link field: an Open link when it's a web address, or why it isn't one. */
+function LinkHint({ value }: { value: string | undefined }) {
+  if (!value?.trim()) return null;
+  const href = safeWebAddress(value);
+  if (!href) return <span className="text-xs font-normal text-amber-700 dark:text-amber-400">Use a full web address starting with https://</span>;
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-xs font-normal text-blue-600 hover:underline dark:text-blue-400">
+      Open the link<span className="sr-only"> (opens in a new tab)</span>
+    </a>
+  );
+}
+
 function NotesField({ value, placeholder, onChange }: { value: string; placeholder: string; onChange: (notes: string) => void }) {
   function addLine(kind: NoteKind) {
     const next = `${value.trimEnd()}${value.trim() ? "\n" : ""}${kind}: `;
@@ -636,6 +788,8 @@ function ConnectionPanel({ edge, action }: { edge: DiagramEdge; action?: ReactNo
         <span className="text-[11px] font-normal text-zinc-400">Dashed is the usual way to show asynchronous calls.</span>
       </div>
 
+      <CommentsSection targetId={edge.id} />
+
       <div className="flex gap-2">
         <button type="button" className={ACTION_BUTTON} onClick={() => reverseConnection(edge.id)}>
           Reverse direction
@@ -736,6 +890,7 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
   const groupNodes = useDiagramStore((state) => state.groupNodes);
   const updateNodeDetails = useDiagramStore((state) => state.updateNodeDetails);
   const updateNodeIcon = useDiagramStore((state) => state.updateNodeIcon);
+  const updateNodeShape = useDiagramStore((state) => state.updateNodeShape);
   const fitContainer = useDiagramStore((state) => state.fitContainer);
   const tidyContainer = useDiagramStore((state) => state.tidyContainer);
   const fitAllContainers = useDiagramStore((state) => state.fitAllContainers);
@@ -745,7 +900,6 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
   const setNumberConnections = useDiagramStore((state) => state.setNumberConnections);
   const numberConnectionsInFlowOrder = useDiagramStore((state) => state.numberConnectionsInFlowOrder);
   const tidyDiagram = useDiagramStore((state) => state.tidyDiagram);
-  const updateNodeShape = useDiagramStore((state) => state.updateNodeShape);
   const showTechnology = diagram.showTechnology !== false;
   const { fitView } = useReactFlow();
 
@@ -838,6 +992,8 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
     );
   }
 
+  if (node.data.kind === "text") return <TextPanel node={node} data={node.data} action={headerAction} />;
+
   const childCount = section.nodes.filter((candidate) => candidate.parentId === node.id).length;
 
   const parentContainer = node.parentId
@@ -876,6 +1032,8 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
         />
       </label>
 
+      <GeometryFields node={node} parent={parentContainer} />
+
       {showColor && (
         <div className={FIELD_LABEL}>
           Color
@@ -889,23 +1047,36 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
 
       {node.data.kind === "block" && (
         <div className={FIELD_LABEL}>
-          Icon
-          <IconPicker value={node.data.icon} onPick={(icon) => updateNodeIcon(node.id, icon)} />
+          Shape
+          <div role="radiogroup" aria-label="Shape" className="grid grid-cols-7 gap-0.5 rounded-md border border-zinc-300 p-0.5 dark:border-zinc-700">
+            {SHAPES.map((info) => {
+              const active = (node.data.kind === "block" ? (node.data.shape ?? "process") : "process") === info.shape;
+              return (
+                <button
+                  key={info.shape}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  aria-label={info.label}
+                  title={`${info.label}: ${info.hint}`}
+                  onClick={() => updateNodeShape(node.id, info.shape)}
+                  className={`flex items-center justify-center rounded py-1 ${
+                    active ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  }`}
+                >
+                  <ShapeIcon info={info} className="h-4 w-6" />
+                </button>
+              );
+            })}
+          </div>
+          <span className="text-[11px] font-normal text-zinc-400">{shapeInfo(node.data.kind === "block" ? node.data.shape : undefined).hint}.</span>
         </div>
       )}
 
       {node.data.kind === "block" && (
         <div className={FIELD_LABEL}>
-          Shape
-          <Segmented
-            label="Shape"
-            options={SHAPE_OPTIONS_BLOCK}
-            value={node.data.shape ?? "process"}
-            onChange={(shape) => updateNodeShape(node.id, shape)}
-          />
-          <span className="text-[11px] font-normal text-zinc-400">
-            A diamond for a decision (yes or no), a rounded shape for where a process starts or ends.
-          </span>
+          Icon
+          <IconPicker value={node.data.icon} onPick={(icon) => updateNodeIcon(node.id, icon)} />
         </div>
       )}
 
@@ -931,11 +1102,14 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
               value={node.data[field.key] ?? ""}
               onChange={(event) => updateNodeDetails(node.id, { [field.key]: event.target.value })}
             />
+            {field.key === "link" && <LinkHint value={node.data.link} />}
           </label>
         );
       })}
 
       <ConnectionsSection nodeId={node.id} />
+
+      <CommentsSection targetId={node.id} />
 
       {node.data.kind === "block" && !section.parent && (
         <InternalDesignSection nodeId={node.id} count={node.data.detail?.nodes.length ?? 0} />

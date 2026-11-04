@@ -2,13 +2,14 @@
 
 import { memo, useRef } from "react";
 import { BaseEdge, EdgeLabelRenderer, useReactFlow, type EdgeProps } from "@xyflow/react";
+import { EdgeCommentMarker } from "../nodes/CommentMarker";
 import { connectionPath, type FlowEdge } from "@/lib/diagram/flowAdapter";
 import { useDiagramStore } from "@/lib/diagram/store";
 import type { Position } from "@/lib/diagram/types";
 import { useReadOnly } from "../viewMode";
 
-const SNAP = 8;
-const snap = (value: number) => Math.round(value / SNAP) * SNAP;
+/** Whole pixels, like every other move on the canvas, so a line's middle can be put exactly where it's wanted. */
+const snap = (value: number) => Math.round(value);
 
 /**
  * A connection: right-angled, curved or straight. Selected, it shows a dot to drag the middle of the line
@@ -66,6 +67,7 @@ function ConnectionEdgeComponent({
         style={props.style}
         interactionWidth={props.interactionWidth}
       />
+      <EdgeCommentMarker id={id} x={labelX} y={labelY} />
       {selected && !readOnly && (
         <EdgeLabelRenderer>
           <button

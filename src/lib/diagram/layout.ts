@@ -5,6 +5,12 @@ export const CONTAINER_PADDING = 16;
 export const CONTAINER_HEADER = 40;
 export const LAYOUT_GAP = 12;
 export const CONTAINER_MIN: Size = { width: 200, height: 120 };
+/** The smallest each kind of box can be resized to (a container also fits around what's in it). */
+export const MIN_NODE_SIZE: Record<DiagramNode["type"], Size> = {
+  container: CONTAINER_MIN,
+  block: { width: 80, height: 32 },
+  text: { width: 24, height: 16 },
+};
 
 export interface Insets {
   top: number;
@@ -236,7 +242,8 @@ export function fitContainerToContents(nodes: DiagramNode[], containerId: string
  */
 export function tidyContainer(nodes: DiagramNode[], containerId: string): DiagramNode[] {
   const container = nodes.find((node) => node.id === containerId);
-  const children = childrenOf(nodes, containerId).sort(
+  // Only components are laid out in the grid: a text box (a caption, a note) stays where it was put.
+  const children = childrenOf(nodes, containerId).filter((node) => node.type === "block").sort(
     (a, b) => a.position.y - b.position.y || a.position.x - b.position.x,
   );
   if (!container || !children.length) return nodes;
@@ -278,9 +285,30 @@ export function tidyContainer(nodes: DiagramNode[], containerId: string): Diagra
 }
 
 /**
- * Settles components after a drag. `moved` gives each dragged node's new position (relative to its
- * current container, if any). A component belongs to the top-most container its centre is over, or to
- * none: so it can be dragged into a container, out of one, or into another. Inside, it is kept clear of
+ * Re-arranges, in a grid, every container whose components overlap one another, and reports how many it did.
+ * Imports can pile shapes on top of each other (a draw.io layer, a coarse grid); containers whose components
+ * already sit clear of each other keep their layout.
+ */
+export function tidyOverlappingContainers(nodes: DiagramNode[]): { nodes: DiagramNode[]; tidied: number } {
+  const overlaps = (a: DiagramNode, b: DiagramNode) =>
+    a.position.x < b.position.x + b.size.width &&
+    b.position.x < a.position.x + a.size.width &&
+    a.position.y < b.position.y + b.size.height &&
+    b.position.y < a.position.y + a.size.height;
+  let result = nodes;
+  let tidied = 0;
+  for (const container of nodes.filter((node) => node.type === "container")) {
+    const children = childrenOf(nodes, container.id);
+    if (!children.some((child, index) => children.slice(index + 1).some((other) => overlaps(child, other)))) continue;
+    result = tidyContainer(result, container.id);
+    tidied += 1;
+  }
+  return { nodes: result, tidied };
+}
+
+/**
+ * Settles components and text boxes after a drag. `moved` gives each dragged node's new position (relative to
+ * its current container, if any). One belongs to the top-most container its centre is over, or to none: so it can be dragged into a container, out of one, or into another. Inside, it is kept clear of
  * the header and padding, and the container grows to fit it. Children moving with their container
  * are left alone.
  */
@@ -291,7 +319,8 @@ export function dropIntoContainers(nodes: DiagramNode[], moved: { id: string; po
   let next = nodes;
   for (const { id, position } of moved) {
     const node = nodes.find((candidate) => candidate.id === id);
-    if (!node || node.type !== "block" || (node.parentId && movedIds.has(node.parentId))) continue;
+    // Containers aren't nested; components and text boxes go wherever they're dropped.
+    if (!node || node.type === "container" || (node.parentId && movedIds.has(node.parentId))) continue;
     const oldParent = node.parentId ? containers.find((candidate) => candidate.id === node.parentId) : undefined;
     const absolute = { x: position.x + (oldParent?.position.x ?? 0), y: position.y + (oldParent?.position.y ?? 0) };
     const centre = { x: absolute.x + node.size.width / 2, y: absolute.y + node.size.height / 2 };

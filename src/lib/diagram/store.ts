@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import { createBlankDiagram, createBlankSection, createId, isSequenceSection } from "./factory";
+import { hasBranding } from "./branding";
+import { MAX_CHECKPOINTS, snapshotOf, nextCheckpointName, type Checkpoint } from "./checkpoints";
+import { MAX_COMMENTS, commentTargets, mergeComments, type MergeResult } from "./comments";
 import { nextLegendColor } from "./palette";
+import { shapeInfo } from "./shapes";
 import { syncLinkedParticipants } from "./sequence";
 import {
   absolutePosition,
@@ -8,6 +12,7 @@ import {
   fitContainerToContents,
   groupIntoContainer,
   growContainerToFit,
+  MIN_NODE_SIZE,
   restyleContainer,
   tidyContainer,
   type ArrangeOp,
@@ -17,7 +22,9 @@ import { numberInFlowOrder } from "./flowOrder";
 import type { ComponentIconKey } from "./componentIcons";
 import type {
   BlockColorKey,
+  BlockNodeData,
   BlockShape,
+  Branding,
   ComponentDetail,
   ConnectionSide,
   ContainerStyle,
@@ -28,8 +35,22 @@ import type {
   LegendEntry,
   NodeDetails,
   Position,
+  ReviewComment,
   SequenceDiagram,
+  Size,
+  TextNodeData,
 } from "./types";
+
+/** Legend categories a flowchart shape takes when added, by name (as in the Flowchart template's legend). */
+const SHAPE_CATEGORY: Record<BlockShape, RegExp> = {
+  process: /\b(step|process)\b/i,
+  decision: /decision/i,
+  terminal: /\b(start|end)\b/i,
+  data: /\b(data|input|output)\b/i,
+  document: /document/i,
+  database: /\b(database|store|data)\b/i,
+  subprocess: /\b(subprocess|step|process)\b/i,
+};
 
 function touch(diagram: Diagram): Diagram {
   return { ...diagram, updatedAt: new Date().toISOString() };
@@ -111,12 +132,6 @@ function copyEdges(edges: DiagramEdge[] | undefined, idMap: Map<string, string>)
     .filter((edge) => idMap.has(edge.source) && idMap.has(edge.target))
     .map((edge) => ({ ...edge, id: createId("edge"), source: idMap.get(edge.source)!, target: idMap.get(edge.target)! }));
 }
-
-/** What size a component gets when it is drawn as a decision or a start/end. */
-const SHAPE_SIZES: Record<Exclude<BlockShape, "process">, { width: number; height: number }> = {
-  decision: { width: 160, height: 80 },
-  terminator: { width: 140, height: 48 },
-};
 
 const HISTORY_LIMIT = 100;
 /** Edits sharing a coalesce key within this window collapse into one undo step. */
@@ -287,16 +302,46 @@ interface DiagramState {
   fitAllContainers: () => void;
   tidyContainer: (id: string) => void;
   setShowTechnology: (show: boolean) => void;
+  /** Sets the logo and accent colour added to exports; undefined (or an empty one) removes them. */
+  setBranding: (branding: Branding | undefined) => void;
+  /** Adds a review comment about a node or connection; returns it, or null when there is no text or no such target. */
+  addComment: (targetId: string, text: string, author: string) => ReviewComment | null;
+  setCommentResolved: (id: string, resolved: boolean) => void;
+  deleteComment: (id: string) => void;
+  /** Keeps the diagram as it is now under a name; returns it, or null at the limit (MAX_CHECKPOINTS). */
+  saveCheckpoint: (name: string) => Checkpoint | null;
+  /** Puts a checkpoint's name, legend, tabs and branding back as the diagram, as one undo step. */
+  restoreCheckpoint: (id: string) => void;
+  /** Adds a checkpoint's architecture tabs as new tabs (named "Checkpoint — Tab"), to compare with Compare tabs. */
+  addCheckpointAsTabs: (id: string) => void;
+  deleteCheckpoint: (id: string) => void;
+  /** Brings in the comments from another copy of this diagram (see `mergeComments`). */
+  mergeComments: (incoming: ReviewComment[]) => MergeResult;
   setActiveSectionNodes: (nodes: DiagramNode[], options?: NodesChangeOptions) => void;
   addContainer: (position: Position) => void;
+  /** With `shape`, a flowchart shape at its usual size, coloured by the legend category named for it if there is one. */
   addBlock: (position: Position, parentId?: string | null, colorKey?: BlockColorKey, shape?: BlockShape) => void;
+  /**
+   * draw.io's quick add: a new shape off one side of a component (the same kind, or `shape`), lined up with it,
+   * clear of other boxes and connected from it, as one undo step. The new one is selected.
+   */
+  addConnectedBlock: (sourceId: string, side: ConnectionSide, shape?: BlockShape) => void;
+  /** Adds a text box (a heading, caption or note), in a container if given (growing it to fit), and selects it. */
+  addText: (position: Position, text?: string, parentId?: string | null) => void;
+  /** Sets a text box's look; undefined values go back to the defaults. */
+  updateTextStyle: (id: string, patch: Pick<TextNodeData, "fontSize" | "align" | "bold">) => void;
+  /**
+   * Moves or resizes one node to exact pixel values (position is relative to its container, if in one). A
+   * component's container grows to keep it inside.
+   */
+  setNodeGeometry: (id: string, patch: Partial<Position & Size>) => void;
   updateNodeLabel: (id: string, label: string) => void;
   updateNodeColor: (id: string, colorKey: BlockColorKey) => void;
   updateNodesColor: (ids: string[], colorKey: BlockColorKey) => void;
   updateNodeDetails: (id: string, patch: NodeDetails) => void;
   /** Sets or (with undefined) removes a component's icon. */
   updateNodeIcon: (id: string, icon: ComponentIconKey | undefined) => void;
-  /** A box, a diamond for a decision, or a rounded start/end. A diamond is made big enough to hold its name. */
+  /** Draws a component as a box, a start/end pill or a decision diamond. */
   updateNodeShape: (id: string, shape: BlockShape) => void;
   /** Lays the tab out again: containers in columns (or rows) following the connections. One undo step. */
   tidyDiagram: (direction: TidyDirection) => void;
@@ -322,12 +367,14 @@ interface DiagramState {
   updateSequence: (fn: (sequence: SequenceDiagram) => SequenceDiagram, coalesceKey?: string) => void;
   /** Adds imported tabs (and the legend entries they use) after the others, and opens the first. */
   addImportedSections: (sections: DiagramSection[], legend: LegendEntry[]) => void;
+  /** Adds categories (e.g. from a preset) whose names the legend doesn't have yet, and returns how many were added. */
+  addLegendEntries: (entries: { label: string; color: string }[]) => number;
   renameSection: (id: string, name: string) => void;
   deleteSection: (id: string) => void;
   duplicateSection: (id: string) => void;
 }
 
-export const useDiagramStore = create<DiagramState>((set) => ({
+export const useDiagramStore = create<DiagramState>((set, get) => ({
   diagram: createBlankDiagram(),
   selectedNodeIds: [],
   selectedEdgeId: null,
@@ -372,7 +419,7 @@ export const useDiagramStore = create<DiagramState>((set) => ({
   addConnection: ({ source, target, sourceSide, targetSide }) => {
     const { diagram } = useDiagramStore.getState();
     const section = getActiveSection(diagram);
-    const known = (id: string) => section.nodes.some((node) => node.id === id);
+    const known = (id: string) => section.nodes.some((node) => node.id === id && node.type !== "text");
     if (source === target || !known(source) || !known(target)) return null;
     const exists = (section.edges ?? []).some(
       (edge) =>
@@ -414,7 +461,7 @@ export const useDiagramStore = create<DiagramState>((set) => ({
   // A moved end attaches to the side it was dropped on, and any bend is dropped since it was placed for the old route.
   reconnectConnection: (id, { source, target, sourceSide, targetSide }) => {
     const section = getActiveSection(useDiagramStore.getState().diagram);
-    const known = (nodeId: string) => section.nodes.some((node) => node.id === nodeId);
+    const known = (nodeId: string) => section.nodes.some((node) => node.id === nodeId && node.type !== "text");
     if (source === target || !known(source) || !known(target)) return false;
     if (!(section.edges ?? []).some((edge) => edge.id === id)) return false;
     set((state) =>
@@ -609,6 +656,156 @@ export const useDiagramStore = create<DiagramState>((set) => ({
   tidyContainer: (id) =>
     set((state) => commit(state, mapActiveSection(state.diagram, (nodes) => tidyContainer(nodes, id)))),
 
+  addComment: (targetId, text, author) => {
+    const body = text.trim();
+    const current = get().diagram;
+    if (!body || (current.comments?.length ?? 0) >= MAX_COMMENTS || !commentTargets(current).has(targetId)) return null;
+    const comment: ReviewComment = {
+      id: createId("comment"),
+      targetId,
+      author: author.trim() || "Reviewer",
+      text: body,
+      createdAt: new Date().toISOString(),
+    };
+    set((state) => commit(state, touch({ ...state.diagram, comments: [...(state.diagram.comments ?? []), comment] })));
+    return comment;
+  },
+
+  setCommentResolved: (id, resolved) =>
+    set((state) => {
+      const comments = state.diagram.comments;
+      if (!comments?.some((comment) => comment.id === id && !!comment.resolved !== resolved)) return state;
+      return commit(
+        state,
+        touch({
+          ...state.diagram,
+          comments: comments.map((comment) => {
+            if (comment.id !== id) return comment;
+            const next = { ...comment };
+            delete next.resolved;
+            return resolved ? { ...next, resolved: true } : next;
+          }),
+        }),
+      );
+    }),
+
+  deleteComment: (id) =>
+    set((state) => {
+      const comments = state.diagram.comments;
+      if (!comments?.some((comment) => comment.id === id)) return state;
+      const rest = comments.filter((comment) => comment.id !== id);
+      const diagram = { ...state.diagram };
+      delete diagram.comments;
+      return commit(state, touch(rest.length ? { ...diagram, comments: rest } : diagram));
+    }),
+
+  saveCheckpoint: (name) => {
+    const current = get().diagram;
+    if ((current.checkpoints?.length ?? 0) >= MAX_CHECKPOINTS) return null;
+    const checkpoint: Checkpoint = {
+      id: createId("checkpoint"),
+      name: name.trim().slice(0, 80) || nextCheckpointName(current.checkpoints),
+      createdAt: new Date().toISOString(),
+      snapshot: snapshotOf(current),
+    };
+    set((state) => commit(state, touch({ ...state.diagram, checkpoints: [...(state.diagram.checkpoints ?? []), checkpoint] })));
+    return checkpoint;
+  },
+
+  restoreCheckpoint: (id) =>
+    set((state) => {
+      const checkpoint = state.diagram.checkpoints?.find((candidate) => candidate.id === id);
+      if (!checkpoint) return state;
+      const { snapshot } = checkpoint;
+      const diagram = { ...state.diagram, name: snapshot.name, legend: snapshot.legend, sections: snapshot.sections };
+      delete diagram.branding;
+      if (snapshot.branding) diagram.branding = snapshot.branding;
+      const keepsTab = snapshot.sections.some((section) => section.id === state.diagram.activeSectionId);
+      return {
+        ...commit(
+          state,
+          touch({ ...diagram, activeSectionId: keepsTab ? state.diagram.activeSectionId : snapshot.sections[0].id, activeDetailId: undefined }),
+        ),
+        selectedNodeIds: [],
+        selectedEdgeId: null,
+      };
+    }),
+
+  addCheckpointAsTabs: (id) =>
+    set((state) => {
+      const checkpoint = state.diagram.checkpoints?.find((candidate) => candidate.id === id);
+      const sections = checkpoint?.snapshot.sections.filter((section) => !isSequenceSection(section) && section.nodes.length) ?? [];
+      if (!checkpoint || !sections.length) return state;
+      // Fresh ids, so the copies don't clash with the tabs they came from.
+      const copies = sections.map((source): DiagramSection => {
+        const idMap = new Map(source.nodes.map((node) => [node.id, createId(node.type)]));
+        return {
+          id: createId("section"),
+          name: `${checkpoint.name} — ${source.name}`,
+          nodes: source.nodes.map((node) => ({
+            ...node,
+            id: idMap.get(node.id)!,
+            parentId: node.parentId ? idMap.get(node.parentId) : undefined,
+            data:
+              node.data.kind === "block"
+                ? { ...node.data, containerId: node.data.containerId ? (idMap.get(node.data.containerId) ?? null) : null }
+                : { ...node.data },
+          })),
+          ...(source.edges?.length ? { edges: copyEdges(source.edges, idMap) } : {}),
+        };
+      });
+      // Categories the checkpoint used that have since been removed come back, so the copies keep their colours.
+      const known = new Set(state.diagram.legend.map((entry) => entry.key));
+      const missing = checkpoint.snapshot.legend.filter((entry) => !known.has(entry.key));
+      return {
+        ...commit(
+          state,
+          touch({
+            ...state.diagram,
+            legend: [...state.diagram.legend, ...missing],
+            sections: [...state.diagram.sections, ...copies],
+            activeSectionId: copies[0].id,
+            activeDetailId: undefined,
+          }),
+        ),
+        selectedNodeIds: [],
+        selectedEdgeId: null,
+      };
+    }),
+
+  deleteCheckpoint: (id) =>
+    set((state) => {
+      const checkpoints = state.diagram.checkpoints;
+      if (!checkpoints?.some((checkpoint) => checkpoint.id === id)) return state;
+      const rest = checkpoints.filter((checkpoint) => checkpoint.id !== id);
+      const diagram = { ...state.diagram };
+      delete diagram.checkpoints;
+      return commit(state, touch(rest.length ? { ...diagram, checkpoints: rest } : diagram));
+    }),
+
+  mergeComments: (incoming) => {
+    const current = get().diagram;
+    const result = mergeComments(current.comments, incoming, commentTargets(current));
+    if (result.added || result.resolved) {
+      set((state) => commit(state, touch({ ...state.diagram, comments: result.comments })));
+    }
+    return result;
+  },
+
+  setBranding: (branding) =>
+    set((state) => {
+      const next = hasBranding(branding) ? branding : undefined;
+      if (next === state.diagram.branding) return state;
+      const diagram = { ...state.diagram };
+      delete diagram.branding;
+      return commit(
+        state,
+        touch(next ? { ...diagram, branding: next } : diagram),
+        // Dragging the colour picker undoes as one step; changing the logo is a step of its own.
+        next?.logo !== state.diagram.branding?.logo ? "branding:logo" : "branding:color",
+      );
+    }),
+
   setShowTechnology: (show) =>
     set((state) => commit(state, touch({ ...state.diagram, showTechnology: show }))),
 
@@ -648,6 +845,12 @@ export const useDiagramStore = create<DiagramState>((set) => ({
     set((state) => {
       if (onSequenceTab(state.diagram)) return state;
       const id = createId("block");
+      const info = shape ? shapeInfo(shape) : undefined;
+      // The category named for the shape, else the one for steps, else the first.
+      const named = info
+        ? (state.diagram.legend.find((entry) => SHAPE_CATEGORY[info.shape].test(entry.label)) ??
+            state.diagram.legend.find((entry) => SHAPE_CATEGORY.process.test(entry.label)))?.key
+        : undefined;
       return {
         ...commit(
           state,
@@ -658,14 +861,14 @@ export const useDiagramStore = create<DiagramState>((set) => ({
                 id,
                 type: "block",
                 position,
-                size: shape && shape !== "process" ? SHAPE_SIZES[shape] : { width: 140, height: 56 },
+                size: info ? { ...info.size } : { width: 140, height: 56 },
                 parentId: parentId ?? undefined,
                 data: {
                   kind: "block",
-                  label: shape === "decision" ? "Decision?" : shape === "terminator" ? "Start" : "New Block",
-                  colorKey: colorKey ?? state.diagram.legend[0]?.key,
+                  label: info?.defaultName ?? "New Block",
+                  colorKey: colorKey ?? named ?? state.diagram.legend[0]?.key,
                   containerId: parentId ?? null,
-                  ...(shape && shape !== "process" ? { shape } : {}),
+                  ...(info && info.shape !== "process" ? { shape: info.shape } : {}),
                 },
               },
             ];
@@ -674,6 +877,159 @@ export const useDiagramStore = create<DiagramState>((set) => ({
         ),
         selectedNodeIds: [id],
       };
+    }),
+
+  addConnectedBlock: (sourceId, side, shape) =>
+    set((state) => {
+      const view = getActiveSection(state.diagram);
+      const source = view.nodes.find((node) => node.id === sourceId);
+      if (!source || source.data.kind !== "block") return state;
+      const sourceData = source.data;
+      const kind = shape ?? sourceData.shape ?? "process";
+      const info = shapeInfo(kind);
+      const size = kind === (sourceData.shape ?? "process") ? source.size : info.size;
+      const GAP = side === "left" || side === "right" ? 80 : 60;
+      const place = (from: Position & Size): Position => {
+        if (side === "right") return { x: from.x + from.width + GAP, y: from.y + from.height / 2 - size.height / 2 };
+        if (side === "left") return { x: from.x - GAP - size.width, y: from.y + from.height / 2 - size.height / 2 };
+        if (side === "bottom") return { x: from.x + from.width / 2 - size.width / 2, y: from.y + from.height + GAP };
+        return { x: from.x + from.width / 2 - size.width / 2, y: from.y - GAP - size.height };
+      };
+      // Siblings share coordinates (all on the canvas, or all in one container): step past any in the way.
+      const siblings = view.nodes.filter((node) => node.parentId === source.parentId && node.id !== source.id && node.type !== "container");
+      const overlaps = (at: Position) =>
+        siblings.some(
+          (node) =>
+            at.x < node.position.x + node.size.width + 8 &&
+            at.x + size.width + 8 > node.position.x &&
+            at.y < node.position.y + node.size.height + 8 &&
+            at.y + size.height + 8 > node.position.y,
+        );
+      let from = { ...source.position, ...source.size };
+      let position = place(from);
+      for (let tries = 0; tries < 20 && overlaps(position); tries++) {
+        from = { ...position, ...size };
+        position = place(from);
+      }
+      position = { x: Math.round(position.x), y: Math.round(position.y) };
+      // A new decision takes a "decision" category if the legend has one (as the flowchart template does).
+      const decisionKey =
+        shape === "decision" ? state.diagram.legend.find((entry) => /decision/i.test(entry.label))?.key : undefined;
+      const id = createId("block");
+      const node: DiagramNode = {
+        id,
+        type: "block",
+        position,
+        size: { ...size },
+        ...(source.parentId ? { parentId: source.parentId } : {}),
+        data: {
+          kind: "block",
+          // A pill after a pill is where the flow ends.
+          label: kind === "terminal" && sourceData.shape === "terminal" ? "End" : info.defaultName,
+          colorKey: decisionKey ?? sourceData.colorKey,
+          containerId: source.parentId ?? null,
+          ...(kind !== "process" ? { shape: kind } : {}),
+        },
+      };
+      const opposite: Record<ConnectionSide, ConnectionSide> = { top: "bottom", bottom: "top", left: "right", right: "left" };
+      const edges = view.edges ?? [];
+      // Out of a decision, the first way is "Yes" and the next "No".
+      const fromDecision = sourceData.shape === "decision";
+      const label = fromDecision ? (edges.some((edge) => edge.source === sourceId && edge.label === "Yes") ? "No" : "Yes") : undefined;
+      const edge: DiagramEdge = {
+        id: createId("edge"),
+        source: sourceId,
+        target: id,
+        sourceSide: side,
+        targetSide: opposite[side],
+        ...(label ? { label } : {}),
+      };
+      return {
+        ...commit(
+          state,
+          mapActiveSectionFull(state.diagram, (section) => {
+            const nodes = [...section.nodes, node];
+            return {
+              ...section,
+              nodes: source.parentId ? growContainerToFit(nodes, source.parentId) : nodes,
+              edges: [...(section.edges ?? []), edge],
+            };
+          }),
+        ),
+        selectedNodeIds: [id],
+        selectedEdgeId: null,
+      };
+    }),
+
+  addText: (position, text = "Text", parentId = null) =>
+    set((state) => {
+      if (onSequenceTab(state.diagram)) return state;
+      const id = createId("text");
+      return {
+        ...commit(
+          state,
+          mapActiveSection(state.diagram, (nodes) => {
+            const added: DiagramNode[] = [
+              ...nodes,
+              {
+                id,
+                type: "text",
+                position,
+                size: { width: 160, height: 32 },
+                ...(parentId ? { parentId } : {}),
+                data: { kind: "text", label: text },
+              },
+            ];
+            return parentId ? growContainerToFit(added, parentId) : added;
+          }),
+        ),
+        selectedNodeIds: [id],
+      };
+    }),
+
+  updateTextStyle: (id, patch) =>
+    set((state) =>
+      commit(
+        state,
+        mapActiveSection(state.diagram, (nodes) =>
+          nodes.map((node) => {
+            if (node.id !== id || node.data.kind !== "text") return node;
+            const data = { ...node.data, ...patch };
+            for (const key of Object.keys(patch) as (keyof typeof patch)[]) if (patch[key] === undefined) delete data[key];
+            return { ...node, data };
+          }),
+        ),
+        `text-style:${id}:${Object.keys(patch).sort().join(",")}`,
+      ),
+    ),
+
+  setNodeGeometry: (id, patch) =>
+    set((state) => {
+      const current = getActiveSection(state.diagram).nodes.find((node) => node.id === id);
+      if (!current) return state;
+      const round = (value: number | undefined, fallback: number, min = -Infinity) =>
+        value === undefined || !Number.isFinite(value) ? fallback : Math.max(min, Math.round(value));
+      const position = { x: round(patch.x, current.position.x), y: round(patch.y, current.position.y) };
+      const size = {
+        width: round(patch.width, current.size.width, MIN_NODE_SIZE[current.type].width),
+        height: round(patch.height, current.size.height, MIN_NODE_SIZE[current.type].height),
+      };
+      if (
+        position.x === current.position.x &&
+        position.y === current.position.y &&
+        size.width === current.size.width &&
+        size.height === current.size.height
+      ) {
+        return state;
+      }
+      return commit(
+        state,
+        mapActiveSection(state.diagram, (nodes) => {
+          const next = nodes.map((node) => (node.id === id ? { ...node, position, size } : node));
+          return current.parentId ? growContainerToFit(next, current.parentId) : next;
+        }),
+        `geometry:${id}:${Object.keys(patch).sort().join(",")}`,
+      );
     }),
 
   updateNodeLabel: (id, label) =>
@@ -694,7 +1050,7 @@ export const useDiagramStore = create<DiagramState>((set) => ({
       commit(
         state,
         mapActiveSection(state.diagram, (nodes) =>
-          nodes.map((node) => (node.id === id ? { ...node, data: { ...node.data, colorKey } } : node)),
+          nodes.map((node) => (node.id === id && node.data.kind !== "text" ? { ...node, data: { ...node.data, colorKey } } : node)),
         ),
       ),
     ),
@@ -704,7 +1060,9 @@ export const useDiagramStore = create<DiagramState>((set) => ({
       commit(
         state,
         mapActiveSection(state.diagram, (nodes) =>
-          nodes.map((node) => (ids.includes(node.id) ? { ...node, data: { ...node.data, colorKey } } : node)),
+          nodes.map((node) =>
+            ids.includes(node.id) && node.data.kind !== "text" ? { ...node, data: { ...node.data, colorKey } } : node,
+          ),
         ),
       ),
     ),
@@ -724,6 +1082,21 @@ export const useDiagramStore = create<DiagramState>((set) => ({
       );
     }),
 
+  updateNodeShape: (id, shape) =>
+    set((state) =>
+      commit(
+        state,
+        mapActiveSection(state.diagram, (nodes) =>
+          nodes.map((node) => {
+            if (node.id !== id || node.data.kind !== "block" || (node.data.shape ?? "process") === shape) return node;
+            const data: BlockNodeData = { ...node.data, shape };
+            if (shape === "process") delete data.shape;
+            return { ...node, data };
+          }),
+        ),
+      ),
+    ),
+
   updateNodeIcon: (id, icon) =>
     set((state) => {
       const node = getActiveSection(state.diagram).nodes.find((candidate) => candidate.id === id);
@@ -737,33 +1110,6 @@ export const useDiagramStore = create<DiagramState>((set) => ({
               : candidate,
           ),
         ),
-      );
-    }),
-
-  updateNodeShape: (id, shape) =>
-    set((state) => {
-      const node = getActiveSection(state.diagram).nodes.find((candidate) => candidate.id === id);
-      if (node?.data.kind !== "block" || (node.data.shape ?? "process") === shape) return state;
-      return commit(
-        state,
-        mapActiveSection(state.diagram, (nodes) => {
-          const changed = nodes.map((candidate) => {
-            if (candidate.id !== id || candidate.data.kind !== "block") return candidate;
-            // "process" is the default and isn't kept in the file.
-            const { shape: _previous, ...rest } = candidate.data;
-            void _previous;
-            const minimum = shape === "process" ? candidate.size : SHAPE_SIZES[shape];
-            return {
-              ...candidate,
-              size:
-                shape === "decision"
-                  ? { width: Math.max(candidate.size.width, minimum.width), height: Math.max(candidate.size.height, minimum.height) }
-                  : candidate.size,
-              data: { ...rest, ...(shape === "process" ? {} : { shape }) },
-            };
-          });
-          return node.parentId ? growContainerToFit(changed, node.parentId) : changed;
-        }),
       );
     }),
 
@@ -982,6 +1328,22 @@ export const useDiagramStore = create<DiagramState>((set) => ({
         `legend:${key}:${Object.keys(patch).join(",")}`,
       ),
     ),
+
+  addLegendEntries: (entries) => {
+    const known = new Set(get().diagram.legend.map((entry) => entry.label.trim().toLowerCase()));
+    const fresh = entries
+      .filter((entry) => {
+        const name = entry.label.trim().toLowerCase();
+        if (known.has(name)) return false;
+        known.add(name);
+        return true;
+      })
+      .map((entry) => ({ key: createId("legend"), label: entry.label, color: entry.color }));
+    if (fresh.length) {
+      set((state) => commit(state, touch({ ...state.diagram, legend: [...state.diagram.legend, ...fresh] })));
+    }
+    return fresh.length;
+  },
 
   addLegendEntry: () => {
     const key = createId("legend");

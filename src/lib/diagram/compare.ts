@@ -99,7 +99,7 @@ function detailSignature(node: DiagramNode): string {
   return JSON.stringify([nodes.sort(), edges.sort()]);
 }
 
-const SHAPE_LABELS: Record<string, string> = { process: "Process", decision: "Decision", terminator: "Start / end" };
+const SHAPE_LABELS: Record<string, string> = { process: "Process", decision: "Decision", terminal: "Start / end", data: "Data", document: "Document", database: "Database", subprocess: "Subprocess" };
 
 const DIRECTIONS = { forward: "One way", both: "Both ways", none: "No arrow" };
 

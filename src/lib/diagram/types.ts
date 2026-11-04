@@ -1,3 +1,4 @@
+import type { Checkpoint } from "./checkpoints";
 import type { ComponentIconKey } from "./componentIcons";
 
 /** Key of a LegendEntry. Legends are user-defined, so any string is valid. */
@@ -25,6 +26,8 @@ export interface NodeDetails {
   owner?: string;
   description?: string;
   notes?: string;
+  /** An http(s) address for the ticket, decision record or document this relates to. */
+  link?: string;
 }
 
 export type HeaderPosition = "top" | "bottom" | "left" | "right";
@@ -52,10 +55,11 @@ export interface ContainerNodeData extends NodeDetails, ContainerStyle {
 }
 
 /**
- * How a component is drawn: a box (the default), a diamond for a decision, or a rounded start/end. Process
- * diagrams read the same way as flowcharts that way.
+ * How a component is drawn, after the flowchart shapes draw.io offers: a box (the default), a pill for a start or
+ * end, a diamond for a decision, a parallelogram for data in or out, a document with a wavy foot, a database
+ * cylinder, and a subprocess (a box with double sides).
  */
-export type BlockShape = "process" | "decision" | "terminator";
+export type BlockShape = "process" | "terminal" | "decision" | "data" | "document" | "database" | "subprocess";
 
 export interface BlockNodeData extends NodeDetails {
   [key: string]: unknown;
@@ -66,7 +70,7 @@ export interface BlockNodeData extends NodeDetails {
   containerId: string | null;
   /** A built-in icon shown beside the name; absent means none. */
   icon?: ComponentIconKey;
-  /** Absent means a plain box ("process"). */
+  /** Defaults to "process" (a box). */
   shape?: BlockShape;
   /** The component's internal design (L2). Absent until something is drawn in it. */
   detail?: ComponentDetail;
@@ -82,11 +86,30 @@ export interface ComponentDetail {
   edges?: DiagramEdge[];
 }
 
-export type DiagramNodeData = ContainerNodeData | BlockNodeData;
+export type TextAlign = "left" | "center" | "right";
+
+/**
+ * A free text box: a heading, a caption or a note written straight on the canvas. Not a component, so it
+ * has no connections, category or internal design. `label` holds the text, so search and compare read it.
+ */
+export interface TextNodeData extends NodeDetails {
+  [key: string]: unknown;
+  kind: "text";
+  label: string;
+  /** Text boxes have no category; present so every node's `colorKey` can be read. */
+  colorKey?: undefined;
+  /** In canvas pixels; defaults to 14. */
+  fontSize?: number;
+  /** Defaults to "left". */
+  align?: TextAlign;
+  bold?: boolean;
+}
+
+export type DiagramNodeData = ContainerNodeData | BlockNodeData | TextNodeData;
 
 export interface DiagramNode {
   id: string;
-  type: "container" | "block";
+  type: "container" | "block" | "text";
   position: Position;
   size: Size;
   parentId?: string;
@@ -151,7 +174,14 @@ export interface SequenceParticipant {
 /** How a message is sent: a call (solid, filled arrow), asynchronous (solid, open arrow) or a reply (dashed). */
 export type SequenceMessageKind = "call" | "async" | "reply";
 
-/** One step down a sequence: a message between participants (or to itself), or a note over some of them. */
+/** Mermaid's frames around steps: repeated, alternatives, optional, in parallel, must-succeed, or a way out. */
+export type SequenceBlockKind = "loop" | "alt" | "opt" | "par" | "critical" | "break";
+
+/**
+ * One step down a sequence: a message between participants (or to itself), a note over some of them, or the
+ * start, divider or end of a frame around steps (Mermaid's `loop` … `else` … `end`). Frames are markers in the
+ * list, as Mermaid writes them, so steps keep one order; `balanceSteps` repairs markers that don't pair up.
+ */
 export type SequenceStep =
   | {
       id: string;
@@ -163,6 +193,10 @@ export type SequenceStep =
       protocol?: string;
       /** Defaults to "call". */
       kind?: SequenceMessageKind;
+      /** Starts an activation bar on the receiver (Mermaid's `->>+`). */
+      activate?: boolean;
+      /** Ends the sender's activation bar (Mermaid's `-->>-`). */
+      deactivate?: boolean;
     }
   | {
       id: string;
@@ -170,10 +204,25 @@ export type SequenceStep =
       /** One participant, or the first and last of a span. */
       over: string[];
       text: string;
-    };
+    }
+  | {
+      id: string;
+      type: "block";
+      kind: SequenceBlockKind;
+      /** The condition or description, e.g. "Every minute", "Payment approved". */
+      label?: string;
+    }
+  | {
+      /** The next part of the open frame: `else` in alt, `and` in par, `option` in critical. */
+      id: string;
+      type: "else";
+      label?: string;
+    }
+  | { id: string; type: "end" };
 
 export type SequenceMessage = Extract<SequenceStep, { type: "message" }>;
 export type SequenceNote = Extract<SequenceStep, { type: "note" }>;
+export type SequenceBlock = Extract<SequenceStep, { type: "block" }>;
 
 /** A sequence diagram: participants left to right, and what happens between them top to bottom. */
 export interface SequenceDiagram {
@@ -198,6 +247,27 @@ export interface DiagramSection {
   sequence?: SequenceDiagram;
 }
 
+/** A reviewer's note on a component, container or connection. */
+export interface ReviewComment {
+  id: string;
+  /** The id of what it is about: a node or a connection, on any tab or internal design. */
+  targetId: string;
+  /** The name typed when it was written; there are no accounts. */
+  author: string;
+  text: string;
+  /** ISO time. */
+  createdAt: string;
+  resolved?: boolean;
+}
+
+/** A logo and an accent colour for exports. */
+export interface Branding {
+  /** A small PNG, JPEG or WebP as a data address. */
+  logo?: string;
+  /** #rrggbb. */
+  color?: string;
+}
+
 export interface Diagram {
   schemaVersion: 1;
   id: string;
@@ -211,6 +281,12 @@ export interface Diagram {
   showTechnology?: boolean;
   /** Show each connection's step number (see `DiagramEdge.step`) on the line. Defaults to false. */
   numberConnections?: boolean;
+  /** Added to exports: a logo and an accent colour. */
+  branding?: Branding;
+  /** Review comments, newest last. */
+  comments?: ReviewComment[];
+  /** Named snapshots of the diagram, oldest first (see checkpoints.ts). */
+  checkpoints?: Checkpoint[];
   createdAt: string;
   updatedAt: string;
 }

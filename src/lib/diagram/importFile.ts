@@ -2,6 +2,7 @@ import { createBlankDiagram, createBlankSection } from "./factory";
 import { parseDrawio } from "./importDrawio";
 import { ImportError, parseMermaidSequence } from "./importMermaid";
 import type { Diagram, DiagramSection, LegendEntry } from "./types";
+import { fileSizeProblem } from "./limits";
 import { parseDiagram } from "./validate";
 
 export { ImportError };
@@ -25,6 +26,13 @@ export function isImportable(fileName: string): boolean {
 
 function baseName(fileName: string): string {
   return fileName.replace(/(\.drawio)?\.(drawio|xml|mmd|mermaid|md|txt)$/i, "").trim();
+}
+
+/** The text of a file to import, refusing one that is too large before reading it. */
+export async function readImportText(file: File): Promise<string> {
+  const problem = fileSizeProblem(file);
+  if (problem) throw new ImportError(problem);
+  return file.text();
 }
 
 /**

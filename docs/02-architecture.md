@@ -2,9 +2,9 @@
 
 ## The big picture
 
-Building Block is a **static web app**. Every page is pre-rendered at build time except `/maintenance`, and all
-diagram logic runs in the browser. The only server-side code is the `proxy` (maintenance mode) and the
-maintenance page, which read environment variables per request.
+Building Block is a **browser app with a thin server**. All diagram logic runs in the browser. The server only
+renders the pages, per request so each carries a fresh Content-Security-Policy nonce, and runs the `proxy`
+(maintenance mode and the policy), which reads environment variables per request.
 
 ```mermaid
 flowchart TB

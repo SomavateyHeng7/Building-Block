@@ -1,7 +1,12 @@
 import { COMPONENT_ICON_KEYS } from "./componentIcons";
 import { DEFAULT_LEGEND } from "./defaultLegend";
 import { createBlankSection, createId } from "./factory";
-import { syncLinkedParticipants } from "./sequence";
+import { MAX_EDGES, MAX_NAME_LENGTH, MAX_NODES, MAX_PARTICIPANTS, MAX_SECTIONS, MAX_STEPS, MAX_TEXT_LENGTH } from "./limits";
+import { parseBranding } from "./branding";
+import { MAX_CHECKPOINTS, snapshotOf, type Checkpoint } from "./checkpoints";
+import { MAX_COMMENTS, commentTargets } from "./comments";
+import { safeWebAddress } from "./webAddress";
+import { balanceSteps, syncLinkedParticipants } from "./sequence";
 import type {
   ConnectionSide,
   ContainerStyle,
@@ -11,9 +16,11 @@ import type {
   DiagramSection,
   LegendEntry,
   NodeDetails,
+  ReviewComment,
   SequenceDiagram,
   SequenceParticipant,
   SequenceStep,
+  TextNodeData,
 } from "./types";
 
 /** A file that can't be turned into a diagram at all; the message is shown to the user. */
@@ -28,7 +35,13 @@ export interface ParsedDiagram {
 const DEFAULT_SIZE = {
   container: { width: 320, height: 220 },
   block: { width: 160, height: 56 },
+  text: { width: 160, height: 32 },
 };
+const TEXT_ALIGNS = ["left", "center", "right"] as const;
+const SEQUENCE_BLOCK_KINDS = ["loop", "alt", "opt", "par", "critical", "break"] as const;
+const BLOCK_SHAPES = ["terminal", "decision", "data", "document", "database", "subprocess"] as const;
+const MIN_FONT_SIZE = 8;
+const MAX_FONT_SIZE = 96;
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const SHORT_HEX_COLOR = /^#[0-9a-f]{3}$/i;
 /** Bigger than any real diagram; larger values would stall rendering and export. */
@@ -42,8 +55,19 @@ function isObject(value: unknown): value is Raw {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function text(value: unknown): string | undefined {
-  return typeof value === "string" ? value : typeof value === "number" ? String(value) : undefined;
+/** How many strings were cut to a limit during the current parse (parsing is synchronous, so one counter is enough). */
+let cutTexts = 0;
+
+function text(value: unknown, limit = MAX_TEXT_LENGTH): string | undefined {
+  const raw = typeof value === "string" ? value : typeof value === "number" ? String(value) : undefined;
+  if (raw === undefined || raw.length <= limit) return raw;
+  cutTexts += 1;
+  return raw.slice(0, limit);
+}
+
+/** A name or label: text cut to a shorter limit. */
+function nameText(value: unknown): string | undefined {
+  return text(value, MAX_NAME_LENGTH);
 }
 
 function finite(value: unknown): number | undefined {
@@ -86,7 +110,7 @@ function parseLegend(raw: unknown, fixes: string[]): LegendEntry[] {
       continue;
     }
     seen.add(key);
-    legend.push({ key, label: text(item.label) ?? key, color });
+    legend.push({ key, label: nameText(item.label) ?? key, color });
   }
   if (dropped) fixes.push(`Skipped ${dropped} invalid legend ${dropped === 1 ? "entry" : "entries"}.`);
   return legend;
@@ -115,7 +139,7 @@ function parseNode(
 ): { node: DiagramNode; repaired: boolean; unknownIcon: boolean } | null {
   if (!isObject(raw)) return null;
   const id = text(raw.id);
-  const type = oneOf(raw.type, ["container", "block"] as const);
+  const type = oneOf(raw.type, ["container", "block", "text"] as const);
   if (!id || !type) return null;
 
   const data = isObject(raw.data) ? raw.data : {};
@@ -131,12 +155,19 @@ function parseNode(
     const value = text(data[key])?.trim();
     if (value) details[key] = value;
   }
+  // A link is only kept if it is a plain web address, so a file can't carry a javascript: or data: link into the app.
+  const link = safeWebAddress(text(data.link));
+  if (link) details.link = link;
   const colorKey = text(data.colorKey);
   const icon = type === "block" ? oneOf(data.icon, COMPONENT_ICON_KEYS) : undefined;
   // "process" is the default, so it isn't kept.
-  const shape = type === "block" ? oneOf(data.shape, ["decision", "terminator"] as const) : undefined;
+  // Files saved before the shape names settled call a start/end shape "terminator".
+  const shape = type === "block" ? oneOf(data.shape === "terminator" ? "terminal" : data.shape, BLOCK_SHAPES) : undefined;
   const unknownIcon = type === "block" && data.icon !== undefined && !icon;
-  const label = text(data.label) ?? (type === "container" ? "Untitled Container" : "Untitled");
+  const label =
+    type === "text"
+      ? (text(data.label) ?? "Text")
+      : (nameText(data.label) ?? (type === "container" ? "Untitled Container" : "Untitled"));
   const repaired =
     typeof data.label !== "string" ||
     x === undefined ||
@@ -157,7 +188,9 @@ function parseNode(
     parentId: text(raw.parentId),
     zIndex: finite(raw.zIndex),
     data:
-      type === "container"
+      type === "text"
+        ? parseTextData(data, label)
+        : type === "container"
         ? {
             kind: "container",
             label,
@@ -181,6 +214,19 @@ function parseNode(
 /** The most a connection can be numbered. */
 export const MAX_STEP = 9999;
 
+/** A text box keeps its text as written (line breaks too) and only a font size, alignment and weight. */
+function parseTextData(data: Record<string, unknown>, label: string): TextNodeData {
+  const fontSize = finite(data.fontSize);
+  const align = oneOf(data.align, TEXT_ALIGNS);
+  return {
+    kind: "text",
+    label,
+    ...(fontSize !== undefined ? { fontSize: Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(fontSize))) } : {}),
+    ...(align && align !== "left" ? { align } : {}),
+    ...(data.bold === true ? { bold: true } : {}),
+  };
+}
+
 const SIDES = ["top", "right", "bottom", "left"] as const satisfies readonly ConnectionSide[];
 
 /** Keeps connections between two different components or containers that exist; reports what was dropped. */
@@ -190,7 +236,8 @@ function parseEdges(raw: unknown, nodes: DiagramNode[], name: string, fixes: str
     fixes.push(`"${name}": skipped connections that couldn't be read.`);
     return [];
   }
-  const nodeIds = new Set(nodes.map((node) => node.id));
+  // Text boxes are notes on the canvas, not things that talk to each other.
+  const nodeIds = new Set(nodes.filter((node) => node.type !== "text").map((node) => node.id));
   const ids = new Set<string>();
   const edges: DiagramEdge[] = [];
   let dropped = 0;
@@ -247,7 +294,7 @@ function parseSequence(raw: unknown, name: string, legendKeys: Set<string>, fixe
     const description = text(item.description)?.trim();
     participants.push({
       id,
-      label: text(item.label)?.trim() || "Participant",
+      label: nameText(item.label)?.trim() || "Participant",
       ...(item.shape === "actor" ? { shape: "actor" as const } : {}),
       ...(colorKey && legendKeys.has(colorKey) ? { colorKey } : {}),
       ...(description ? { description } : {}),
@@ -275,7 +322,7 @@ function parseSequence(raw: unknown, name: string, legendKeys: Set<string>, fixe
         droppedSteps += 1;
         continue;
       }
-      const label = text(item.label)?.trim();
+      const label = nameText(item.label)?.trim();
       const protocol = text(item.protocol)?.trim();
       const kind = oneOf(item.kind, ["call", "async", "reply"] as const);
       stepIds.add(id);
@@ -287,9 +334,27 @@ function parseSequence(raw: unknown, name: string, legendKeys: Set<string>, fixe
         ...(label ? { label } : {}),
         ...(protocol ? { protocol } : {}),
         ...(kind && kind !== "call" ? { kind } : {}),
+        ...(item.activate === true ? { activate: true } : {}),
+        ...(item.deactivate === true ? { deactivate: true } : {}),
       });
+    } else if (item.type === "block") {
+      const kind = oneOf(item.kind, SEQUENCE_BLOCK_KINDS);
+      if (!kind) {
+        droppedSteps += 1;
+        continue;
+      }
+      const label = nameText(item.label)?.trim();
+      stepIds.add(id);
+      steps.push({ id, type: "block", kind, ...(label ? { label } : {}) });
+    } else if (item.type === "else") {
+      const label = nameText(item.label)?.trim();
+      stepIds.add(id);
+      steps.push({ id, type: "else", ...(label ? { label } : {}) });
+    } else if (item.type === "end") {
+      stepIds.add(id);
+      steps.push({ id, type: "end" });
     } else if (item.type === "note") {
-      const over = (Array.isArray(item.over) ? item.over : []).map(text).filter((value): value is string => !!value && ids.has(value)).slice(0, 2);
+      const over = (Array.isArray(item.over) ? item.over : []).map((value) => text(value)).filter((value): value is string => !!value && ids.has(value)).slice(0, 2);
       if (!over.length) {
         droppedSteps += 1;
         continue;
@@ -301,12 +366,14 @@ function parseSequence(raw: unknown, name: string, legendKeys: Set<string>, fixe
     }
   }
   if (droppedSteps) fixes.push(`"${name}": skipped ${plural(droppedSteps, "step")} that couldn't be read or named a missing participant.`);
-  return { participants, steps, ...(sequence.numbered === false ? { numbered: false } : {}) };
+  const balanced = balanceSteps(steps);
+  if (balanced !== steps) fixes.push(`"${name}": paired up the starts and ends of loop/alt/opt frames.`);
+  return { participants, steps: balanced, ...(sequence.numbered === false ? { numbered: false } : {}) };
 }
 
 function parseSection(raw: unknown, index: number, legendKeys: Set<string>, fixes: string[]): DiagramSection {
   const section = isObject(raw) ? raw : {};
-  const name = text(section.name) || `Section ${index + 1}`;
+  const name = nameText(section.name) || `Section ${index + 1}`;
   if (section.kind === "sequence") {
     return {
       id: text(section.id) || createId("section"),
@@ -317,7 +384,12 @@ function parseSection(raw: unknown, index: number, legendKeys: Set<string>, fixe
     };
   }
   const { nodes, edges } = parseView(section.nodes, section.edges, name, legendKeys, fixes, 0);
-  return { id: text(section.id) || createId("section"), name, nodes, ...(edges.length ? { edges } : {}) };
+  return {
+    id: text(section.id) || createId("section"),
+    name,
+    nodes,
+    ...(edges.length ? { edges } : {}),
+  };
 }
 
 /**
@@ -365,7 +437,8 @@ function parseView(
   let detached = 0;
   const linked = nodes.map((node) => {
     if (!node.parentId) return node;
-    const parent = node.type === "block" ? containers.get(node.parentId) : undefined;
+    // Components and text boxes can be in a container; containers can't.
+    const parent = node.type !== "container" ? containers.get(node.parentId) : undefined;
     if (!parent) {
       detached += 1;
       // Keep it where it was on screen when the parent is known but not allowed.
@@ -404,10 +477,92 @@ function parseView(
   return { nodes: withDetails, edges };
 }
 
+const count = (value: unknown) => (Array.isArray(value) ? value.length : 0);
+
+/** Refuses a file with more content than the editor can handle, before any of it is read. */
+function checkSize(sections: unknown[]): void {
+  const tooBig = () => new DiagramFileError("That diagram is too large to open.");
+  if (sections.length > MAX_SECTIONS) throw tooBig();
+  const view = (raw: unknown) => {
+    if (!isObject(raw) || count(raw.nodes) > MAX_NODES || count(raw.edges) > MAX_EDGES) return false;
+    return (Array.isArray(raw.nodes) ? raw.nodes : []).every((node) => {
+      const detail = isObject(node) && isObject(node.data) ? node.data.detail : undefined;
+      return detail === undefined || (isObject(detail) && count(detail.nodes) <= MAX_NODES && count(detail.edges) <= MAX_EDGES);
+    });
+  };
+  for (const section of sections) {
+    if (!isObject(section)) continue;
+    const sequence = isObject(section.sequence) ? section.sequence : {};
+    if (!view(section) || count(sequence.participants) > MAX_PARTICIPANTS || count(sequence.steps) > MAX_STEPS) throw tooBig();
+  }
+}
+
 /**
  * Turns anything read from a file or storage into a diagram the editor can safely render.
  * Throws DiagramFileError only when the input isn't a diagram at all.
  */
+/** Each checkpoint's snapshot is read like a diagram of its own, so it gets every check and repair an opened file does. */
+function parseCheckpoints(raw: unknown, fixes: string[]): Checkpoint[] {
+  if (!Array.isArray(raw)) return [];
+  // Reading a snapshot restarts the count of cut texts, which belongs to the file being read.
+  const outerCut = cutTexts;
+  const seen = new Set<string>();
+  const checkpoints: Checkpoint[] = [];
+  let dropped = Math.max(0, raw.length - MAX_CHECKPOINTS);
+  for (const item of raw.slice(0, MAX_CHECKPOINTS)) {
+    const id = isObject(item) ? text(item.id) : undefined;
+    const snapshot = isObject(item) && isObject(item.snapshot) ? item.snapshot : undefined;
+    if (!isObject(item) || !id || !snapshot || seen.has(id)) {
+      dropped += 1;
+      continue;
+    }
+    try {
+      const { diagram } = parseDiagram({ ...snapshot, schemaVersion: 1, activeSectionId: undefined, checkpoints: undefined, comments: undefined });
+      const createdAt = text(item.createdAt);
+      seen.add(id);
+      checkpoints.push({
+        id,
+        name: nameText(item.name)?.trim() || `Checkpoint ${checkpoints.length + 1}`,
+        createdAt: createdAt && !Number.isNaN(Date.parse(createdAt)) ? createdAt : new Date(0).toISOString(),
+        snapshot: snapshotOf(diagram),
+      });
+    } catch {
+      dropped += 1;
+    }
+  }
+  cutTexts = outerCut;
+  if (dropped) fixes.push(`Left out ${dropped} checkpoint${dropped === 1 ? "" : "s"} that couldn't be read.`);
+  return checkpoints;
+}
+
+function parseComments(raw: unknown, targets: Set<string>, fixes: string[]): ReviewComment[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const comments: ReviewComment[] = [];
+  let dropped = 0;
+  for (const item of raw) {
+    const id = isObject(item) ? text(item.id) : undefined;
+    const targetId = isObject(item) ? text(item.targetId) : undefined;
+    const body = isObject(item) ? text(item.text)?.trim() : undefined;
+    if (!isObject(item) || !id || !targetId || !body || seen.has(id) || !targets.has(targetId) || comments.length >= MAX_COMMENTS) {
+      dropped += 1;
+      continue;
+    }
+    seen.add(id);
+    const createdAt = text(item.createdAt);
+    comments.push({
+      id,
+      targetId,
+      author: nameText(item.author)?.trim() || "Reviewer",
+      text: body,
+      createdAt: createdAt && !Number.isNaN(Date.parse(createdAt)) ? createdAt : new Date(0).toISOString(),
+      ...(item.resolved === true ? { resolved: true } : {}),
+    });
+  }
+  if (dropped) fixes.push(`Left out ${dropped} review comment${dropped === 1 ? "" : "s"} that were empty, repeated or about something no longer in the diagram.`);
+  return comments;
+}
+
 export function parseDiagram(input: unknown): ParsedDiagram {
   if (!isObject(input)) throw new DiagramFileError("That file isn't a Building Block diagram.");
   if (typeof input.schemaVersion === "number" && input.schemaVersion > 1) {
@@ -417,6 +572,8 @@ export function parseDiagram(input: unknown): ParsedDiagram {
     throw new DiagramFileError("That file isn't a Building Block diagram.");
   }
 
+  checkSize(input.sections);
+  cutTexts = 0;
   const fixes: string[] = [];
   const legend = parseLegend(input.legend, fixes);
   const legendKeys = new Set(legend.map((entry) => entry.key));
@@ -444,7 +601,7 @@ export function parseDiagram(input: unknown): ParsedDiagram {
   const diagram: Diagram = {
     schemaVersion: 1,
     id: text(input.id) || createId("diagram"),
-    name: text(input.name)?.trim() || "Imported diagram",
+    name: nameText(input.name)?.trim() || "Imported diagram",
     legend,
     sections,
     activeSectionId: sections.some((section) => section.id === activeSectionId) ? activeSectionId! : sections[0].id,
@@ -453,11 +610,19 @@ export function parseDiagram(input: unknown): ParsedDiagram {
   };
   if (typeof input.showTechnology === "boolean") diagram.showTechnology = input.showTechnology;
   if (input.numberConnections === true) diagram.numberConnections = true;
+  const checkpoints = parseCheckpoints(input.checkpoints, fixes);
+  if (checkpoints.length) diagram.checkpoints = checkpoints;
+  const comments = parseComments(input.comments, commentTargets({ sections }), fixes);
+  if (comments.length) diagram.comments = comments;
+  const branding = parseBranding(input.branding);
+  if (branding) diagram.branding = branding;
+  else if (input.branding !== undefined) fixes.push("Left out the export logo and colour: they weren't a valid picture and colour.");
   // Reopen the internal design that was open when the file was saved, if that component is still there.
   const activeDetailId = text(input.activeDetailId);
   const activeSection = sections.find((section) => section.id === diagram.activeSectionId)!;
   if (activeDetailId && activeSection.nodes.some((node) => node.id === activeDetailId && node.type === "block")) {
     diagram.activeDetailId = activeDetailId;
   }
+  if (cutTexts) fixes.push(`Shortened ${plural(cutTexts, "very long name or text")}.`);
   return { diagram, fixes };
 }

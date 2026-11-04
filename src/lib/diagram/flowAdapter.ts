@@ -58,6 +58,11 @@ export function toFlowNodes(nodes: DiagramNode[], selectedIds: ReadonlySet<strin
       zIndex: node.zIndex,
       selected,
       className,
+      // The name a screen reader gives the box when focus lands on it (the live region says the rest).
+      ariaLabel:
+        node.type === "text"
+          ? `Text: ${node.data.label.slice(0, 80) || "empty"}`
+          : `${node.data.label || "Untitled"}, ${node.type === "container" ? "container" : "component"}`,
       data: node.data,
     };
     flowNodeCache.set(node, { selected, className, flow });
@@ -89,7 +94,7 @@ export function fromFlowNodes(flowNodes: FlowNode[], previous: readonly DiagramN
     }
     return {
       id: node.id,
-      type: node.type as "container" | "block",
+      type: node.type as DiagramNode["type"],
       position: node.position,
       size: { width, height },
       parentId: node.parentId,
@@ -129,12 +134,15 @@ export function toFlowEdges(
   dark: boolean,
   marks?: ChangeMarks | null,
   numbered = false,
+  /** Node id → name, so a connection can be named by its ends. */
+  names?: ReadonlyMap<string, string>,
 ): FlowEdge[] {
   const shifts = parallelShifts(edges);
   return edges.map((edge) => {
     const change = marks?.edges.get(edge.id);
     const color = change ? CHANGE_COLORS[change] : dark ? "#a1a1aa" : "#52525b";
     const direction = edge.direction ?? "forward";
+    const width = edge.id === selectedId || change ? 2.5 : 1.75;
     const marker = { type: MarkerType.ArrowClosed, color, width: 16, height: 16 };
     const caption = numberedCaption(edge, numbered);
     const shift = shifts.get(edge.id);
@@ -145,6 +153,7 @@ export function toFlowEdges(
       sourceHandle: edge.sourceSide ?? null,
       targetHandle: edge.targetSide ?? null,
       type: "connection",
+      ariaLabel: `Connection from ${names?.get(edge.source) ?? "a component"} to ${names?.get(edge.target) ?? "a component"}${caption ? `: ${caption}` : ""}`,
       data: { shape: edge.shape ?? "step", ...(edge.bend ? { bend: edge.bend } : {}), ...(shift ? { shift } : {}) },
       selected: edge.id === selectedId,
       interactionWidth: 24,
@@ -158,7 +167,7 @@ export function toFlowEdges(
       markerStart: direction === "both" ? marker : undefined,
       style: {
         stroke: edge.id === selectedId ? "#2563eb" : color,
-        strokeWidth: edge.id === selectedId || change ? 2.5 : 1.75,
+        strokeWidth: width,
         strokeDasharray: edge.style === "dashed" ? "7 5" : undefined,
       },
     };
@@ -180,10 +189,11 @@ export interface LineEnds {
  * and the curved and straight lines pass through it.
  */
 export function connectionPath(ends: LineEnds, shape: ConnectionEdgeData["shape"], bend?: Position) {
+  const borderRadius = 5;
   const draw = (): [string, number, number] => {
     if (shape === "curved") return getBezierPath(ends).slice(0, 3) as [string, number, number];
     if (shape === "straight") return getStraightPath(ends).slice(0, 3) as [string, number, number];
-    return getSmoothStepPath({ ...ends, borderRadius: 5 }).slice(0, 3) as [string, number, number];
+    return getSmoothStepPath({ ...ends, borderRadius }).slice(0, 3) as [string, number, number];
   };
   const [path, labelX, labelY] = draw();
   if (!bend || (!bend.x && !bend.y)) return { path, labelX, labelY };
@@ -192,7 +202,7 @@ export function connectionPath(ends: LineEnds, shape: ConnectionEdgeData["shape"
   const y = labelY + bend.y;
   const { sourceX, sourceY, targetX, targetY } = ends;
   if (shape === "step") {
-    const [bent, bentX, bentY] = getSmoothStepPath({ ...ends, borderRadius: 5, centerX: x, centerY: y });
+    const [bent, bentX, bentY] = getSmoothStepPath({ ...ends, borderRadius, centerX: x, centerY: y });
     return { path: bent, labelX: bentX, labelY: bentY };
   }
   if (shape === "straight") return { path: `M ${sourceX},${sourceY} L ${x},${y} L ${targetX},${targetY}`, labelX: x, labelY: y };

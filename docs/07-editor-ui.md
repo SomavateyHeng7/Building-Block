@@ -9,10 +9,11 @@ flowchart TB
   RFP --> SectionTabs
   RFP --> DetailBar
   RFP --> Body[canvas row]
-  Body --> Sidebar["Sidebar (palette)"]
-  Body --> Canvas
-  Body --> Aside["aside: PropertiesPanel + LegendPanel"]
-  Canvas --> ContainerNode & BlockNode
+  Body --> Sidebar["Sidebar (palette), or SequenceCode on a sequence tab"]
+  Body --> Canvas["Canvas, or SequenceCanvas on a sequence tab"]
+  Body --> Aside["aside: PropertiesPanel (SequencePanel on a sequence tab) + LegendPanel"]
+  Canvas --> ContainerNode & BlockNode & TextNode
+  Canvas --> PixelGuides
   Toolbar --> FileMenu & SaveStatus & ExportDialog & UnsavedChangesDialog
   Aside --> ColorPicker
   RFP --> ShortcutsHelp
@@ -30,7 +31,9 @@ Responsibilities, top to bottom:
 2. **Keyboard shortcuts** (a `window` keydown listener; list below).
 3. **Autosave** (see [files](06-files-saving-and-unsaved-changes.md#autosave--in-editorapptsx)).
 4. **`beforeunload` warning** while dirty. `event.preventDefault()` plus `returnValue = ""` is what browsers need to
-   show their own "Leave site?" prompt (custom text isn't allowed any more).
+   show their own "Leave site?" prompt (custom text isn't allowed any more). If the person leaves anyway,
+   `pagehide` writes the recovery copy (when on) or marks the changes as lost for the start page to mention (see
+   [files](06-files-saving-and-unsaved-changes.md#warnings-before-losing-work)).
 5. **Layout:** toolbar, tabs, the L2 bar, then the row of palette / canvas / details. See [responsive layout](#responsive-layout).
 6. **Collapsed panels** on wide screens, remembered in `localStorage["bb:panels"]` (`{ palette, properties }`).
 
@@ -43,7 +46,9 @@ Responsibilities, top to bottom:
 | Ctrl/⌘+F | Find (`SearchDialog`); works in view mode too | EditorApp |
 | B | Add a component (inside the selected container, or the selected component's container) | EditorApp |
 | C | Add a container | EditorApp |
-| Arrow keys / Shift+arrows | Nudge selection 8 px / 32 px (`nudgeNodes`) | EditorApp |
+| Arrow keys / Shift+arrows | Nudge selection 1 px / 10 px (`nudgeNodes`); on a focused box Canvas's `onKeyDownCapture` does it instead of React Flow's 5 px move | EditorApp, Canvas |
+| T | Add a text box (Enter on a selected one starts writing) | EditorApp |
+| Alt + hover | With one box selected, measure the px distances to the hovered box (`PixelGuides`) | PixelGuides |
 | Delete / Backspace | Delete selected nodes or connection; a container holding components asks first (`requestDelete`) | React Flow (`deleteKeyCode`) |
 | Esc | Close a drawer (not while typing in a field or in a dialog); clear the selection; with nothing selected, leave an internal design | EditorApp |
 | Ctrl/⌘+A | Select everything in the view | EditorApp |
@@ -155,11 +160,34 @@ and every change React Flow reports is turned into a store action.
 | `onBeforeDelete` | When nodes are deleted, React Flow also reports their connections as deleted. The store already removes those, so they're filtered out here to keep it **one** undo step. Goes through `requestDelete` (`deletePrompt.ts`): when a container that holds components is among the nodes, `DeleteContainerDialog` asks **Keep components** (the default) or **Delete everything** first. Nodes and selected connections are deleted in one undo step (`deleteNodes` with `edgeIds`). A box selection or Select all picks up a container's components with it, so deleting them silently was easy to do by accident. |
 | `onPaneClick` | Clears the selection. |
 | `onDragOver` / `onDrop` | Palette drag-and-drop: drops a container centred on the cursor, or a component into the top-most container under the cursor (`findContainerAtPoint`), kept clear of its header. |
-| `snapToGrid`, `snapGrid={[8, 8]}` | Tidy positions; matches the 8 px nudge step. |
+| No grid snap | Drags move to whole pixels and snap to other boxes' edges and middles within 6 screen px (`snapDrag` + `guides.ts`), drawing pink alignment guides, orange px gaps and an x/y readout; Alt moves freely. Resizes snap the same way (`snapResizeChanges` + `snapResize`) and show W × H. |
 | `minZoom 0.2`, `maxZoom 2`, `fitView` | Sensible zoom range; open fitted to content. |
 | `selectionMode={Partial}` | Box selection includes nodes it only partly covers (easier on dense diagrams). |
 | `colorMode` | Follows the app theme once mounted (avoids a hydration flash). |
 | `<MiniMap>` | Only at ≥768px wide (`useIsWide` via `matchMedia`): on a phone it would cover the canvas. |
+
+### Pixel precision — `guides.ts` and `PixelGuides.tsx`
+
+- **Whole pixels:** every drag, nudge, resize, drop and X/Y/W/H entry is rounded, so positions stay comparable.
+- **Snapping while dragging** (`snapDrag` in `Canvas.tsx`): the dragged boxes (together, by their bounding box) snap
+  so an edge or middle meets another box's edge or middle within 6 screen pixels (`snapToBoxes`). Children of a
+  dragged container are left out. Alt held: no snapping, but the guides still show exact matches.
+- **Snapping while resizing** (`snapResizeChanges` in `Canvas.tsx`, `snapResize` in `guides.ts`): the edges the
+  handle moves (worked out against where the box started) snap within 6 screen pixels to another box's edge or
+  middle, **or to the same width or height as another box**. Pink markers then show the size on the resized box and
+  on up to three of the nearest boxes that match it; guides and px gaps show as for a drag. Snaps never go below the
+  minimum size, a container is never snapped smaller than its contents, and when a container's left or top edge
+  snaps, its children are shifted back so they stay put. The node's own containers and contents aren't snap targets.
+  Alt held: no snapping. User testing found resizing gave no sense of size relative to other blocks.
+- **What's drawn** (`PixelGuides`, in a `ViewportPortal` so it's in canvas coordinates, with line widths divided by
+  the zoom): pink lines through every edge or middle shared to the pixel (`alignmentLines`), orange measures with the
+  gap in px to the nearest box on each side that faces it (`nearestGaps`), and a readout under the box: `x · y`
+  while moving, `W × H` while resizing. Guide state is a small zustand store (`useGuides`), not the diagram.
+- **Alt + hover:** with one box selected, pointing at another shows the space between them, or each edge's inset when
+  one is inside the other (`distancesBetween`).
+- **Arrow keys** move 1 px (Shift: 10). React Flow moves a focused node 5 px by itself, so the canvas's
+  `onKeyDownCapture` stops that and nudges instead (stopping a React event also stops it reaching the window, so the
+  editor's own handler wouldn't run).
 
 **Empty state:** an empty view shows a card with **Container** and **Component** buttons (adding at the centre of
 what's on screen), a hint about C/B/? on devices with a mouse, and, inside an internal design, "What is *X* made of?".
@@ -176,29 +204,160 @@ what's on screen), a hint about C/B/? on devices with a mouse, and, inside an in
   because image export renders the DOM outside the canvas, where those variables are undefined.
 - `historyKey(kind, ids)`: see [undo](05-diagram-store-and-undo.md#committing-changes-and-undo).
 
+## Flowcharts
+
+Flowcharts are drawn in the app's own look, like every architecture tab; draw.io is the inspiration for how they're
+**edited**, not for how they look.
+
+- **Quick add**, as in draw.io: on a **flowchart tab** (one with at least one flowchart shape on it: `isFlowchart` in
+  `shapes.ts`, worked out once per nodes array; `useIsFlowchart` in `flowchartView.ts` reads it for the view on screen), a hovered or selected component shows a blue arrow off each
+  side. Clicking one adds the same kind of shape that way (Shift-click: a decision), 60 px below or 80 px beside it,
+  stepping past anything in the way, connected from that side (`addConnectedBlock`), as one undo step. Ways out of a
+  decision are labelled "Yes", then "No"; a pill after a pill is called "End". Tabs without flowchart shapes (L0
+  architecture) don't show the arrows, so editing them is unchanged.
+
+### Flowchart shapes
+
+The left panel's **Flowchart** section is draw.io's Flowchart palette: process, decision, start/end (pill), data
+(parallelogram), document, database (cylinder) and subprocess (`shapes.ts`: each shape's meaning, usual size and
+outline as an SVG path). Drag one in or click it. It comes in at its usual size, coloured by the legend category named
+for it ("Decision", "Start / end"…), else the one for steps, else the first. **Shape** in the details panel switches
+any component between them. Mermaid code exports draw them as Mermaid's nearest shapes.
+
 ## `SequenceCanvas.tsx` — sequence tabs
 
 Shown instead of `Canvas` when the open tab has `kind: "sequence"`. An SVG at 1:1, laid out by `layoutSequence`:
-participant boxes (or a stick figure for an actor) across the top, dashed lifelines, then one row per step.
+drawn in Mermaid's own look (its default theme, or its dark theme): lavender participant boxes (or a stick figure for
+an actor) across the top and repeated at the bottom, solid lifelines, then one row per step; numbers sit in a dot
+where each arrow starts, notes are yellow. A participant with a legend colour is filled with it.
 
-- **Adding a message:** press on a lifeline and drag to another (or back onto the same one for a call to itself);
-  a dashed preview follows the pointer. It goes in between the rows around where you pressed, is selected, and the
-  panel's "What's sent" field gets the cursor. Without a drag, "Add message" in the panel does the same at the end.
-- **Selecting:** click a participant, message or note (selection is `sequenceSelection.ts`, separate from the
-  canvas selection). Double-click puts the cursor in its main field. ←/→ move a selected participant, ↑/↓ a
-  selected step; Delete removes it (a participant with its messages); Esc clears.
+- **Frames** (`loop`, `alt`/`else`, `opt`, `par`/`and`, `critical`/`option`, `break`) are boxes round their steps
+  with Mermaid's name tab and the condition in brackets; each further part starts at a dashed line. A frame spans
+  the participants its steps touch; nested frames sit inside. Tabs and conditions are drawn over arrows and bars.
+- **Activation bars** (Mermaid's `+`/`-`) are narrow bars on a lifeline; a bar inside a bar sits half a bar to the
+  right, and arrows start and end at a bar's edge. A bar never ended runs to the bottom.
+- **Toolbar** above the sheet: **Participant**, **Actor** (after the selected one), **Message** (from the selected
+  participant, or on from the selected message, to the next participant), **Note**, **Frame** (a menu with what each
+  kind is for: wraps the selected message or note, or adds an empty frame after the selection), **Number**, and zoom
+  (50–200%; the zoom is on wrappers, so exports still picture the sheet at 1:1). Whatever is added is selected and its
+  name field opens on the sheet.
+- **Adding a message by dragging:** press on a lifeline and drag to another (or back onto the same one for a call to
+  itself); a dashed preview follows the pointer. It goes in between the rows around where you pressed (inside a frame
+  if you let go inside one) and opens its label for typing.
+- **Editing in place:** double-click (or F2 on) a participant, message, note, frame tab or divider to write its name,
+  caption ("Place order (REST)" sets the protocol too), text or condition in a field over it. Enter keeps it
+  (Ctrl/⌘+Enter in a note), Esc doesn't. A participant linked to a component is renamed on the component.
+- **Selecting:** click a participant, message, note, frame tab or divider (selection is `sequenceSelection.ts`,
+  separate from the canvas selection); its line in the code is highlighted. ←/→ move a selected participant, ↑/↓ a
+  selected step (a frame's start can't pass its end); Delete removes it (a participant with its messages; a frame
+  with its dividers and end, keeping what was inside); Esc clears.
 - **Colours are SVG attributes**, chosen from the theme, not Tailwind classes: the picture export copies
   `.bb-sequence-sheet`, and classes on SVG elements don't survive the copy.
-- The sidebar becomes a list of participants to add (Actor, Participant, one per legend category) and Note; the
-  details panel is `SequencePanel`. Box shortcuts (B, C, paste, duplicate) do nothing on a sequence tab.
+- The left panel is the Mermaid code (below) instead of the palette. The right panel is the details panel
+  (`SequencePanel.tsx`: a participant, message with its activation marks, note, frame or divider) and the legend, as
+  on architecture tabs, for people who'd rather not write Mermaid; View hides it. Box shortcuts (B, C, paste,
+  duplicate) do nothing on a sequence tab.
 - "Sequence" beside "Add tab" adds one; sequence tabs have a small icon and aren't offered in Compare tabs.
+- The sheet is an SVG with `role="group"` (not `img`: it holds controls), and a note's lines are `tspan`s of one
+  `text`, so it's read, and named, as one sentence.
+
+### Mermaid code — `SequenceCode.tsx`
+
+On a sequence tab the left panel (where the palette is on architecture tabs) is the tab as Mermaid
+`sequenceDiagram` code. It collapses and expands like the palette, and its right edge drags to resize it (arrow keys
+on the focused edge too; double-click resets; the width is remembered in `localStorage["bb:sequence-code-width"]`); on narrow screens **Code** opens it as a drawer,
+in view mode too. *Write Mermaid code* on an empty tab shows it and puts the cursor in it.
+
+- **Live, like Mermaid's editor:** 300 ms after typing pauses the sheet redraws from the code (Ctrl/⌘+Enter does it at
+  once); a burst of typing is one undo step (coalesce key `code:<tab>`). Code that can't be read (not a sequence
+  diagram, over the line limit) leaves the sheet as it was, says why, and offers *Back to what the sheet shows*.
+  Leaving the field puts the code back to following the sheet, except that **lines it couldn't read stay** (red,
+  wavy, their number in red) until fixed; if the sheet changes meanwhile, the code follows it and those lines are
+  kept at the end, so typing later can't undo the sheet's changes. Tab indents two spaces.
+- **Highlighted** as Mermaid's editor does (`tokenizeMermaidLine` in `importMermaid.ts`, the same patterns the reader
+  uses): keywords, participant names, arrows with their `+`/`-`, the protocol, comments, and unreadable lines. The
+  colours are a `pre` under a see-through field. The cursor's line selects what's written there on the sheet
+  (`mermaidIdAtLine`), and the sheet's selection highlights its line.
+- **What the code says** (`exportMermaid.ts`): `actor`/`participant` with an `as` alias when the name isn't a
+  Mermaid id; `->>` call, `-)` async, `-->>` reply; the protocol in brackets after the text ("Place order (REST)");
+  `Note over A,B:` with `<br>` for line breaks; frames indented with their `else`/`and`/`option` and `end`; `+`/`-`
+  after the arrow for activations (a message with both writes a `deactivate` line after it); `autonumber` when
+  messages are numbered; `;` and `#` written as `#59;`/`#35;`. Reading it back gives the same sequence (tested).
+  Reading also takes `activate X`/`deactivate X` lines (as marks on the message before), closes a frame with no
+  `end`, and leaves out `rect`/`box` colour boxes, keeping what's inside.
+- **What Mermaid can't say is kept:** a participant whose name is unchanged keeps its id, colour, description and
+  link to a component (`applySequenceCode`). A renamed one is a new participant, so a linked one loses its link.
+- What was skipped or fixed (unreadable lines, an unclosed frame, undeclared names) is listed under the code.
+- **Names:** writing a participant's display name ("Web Shop" for `participant WebShop as Web Shop`) means that
+  participant, not a new one. In code that declares its participants, one that's only mentioned (usually a typo) is
+  still added, as Mermaid does, and named under the code.
+- **Line numbers** in a gutter beside the code. Adding a participant or message on the sheet, or double-clicking
+  one, puts the cursor at the end of its line (`mermaidLineOf`), so a new message can be named straight away.
+- **Mermaid cheat sheet** under the code: the lines a sequence needs, open at first on a tab with no steps yet.
+- **Copy**, and **.mmd** downloads the code with the tab's name as `title` (the import reads it back).
+- In view mode the code is read-only.
 
 ## Import — `ImportDialog.tsx`
 
 From **Import from draw.io or Mermaid** on the start page (opens a new diagram; dropping a `.drawio`, `.xml`,
 `.mmd` or `.md` file there does the same) or **File › Import draw.io or Mermaid…** in the editor (adds tabs to the
 open diagram, one undo step). Choose a file or paste text. A toast says what came in and lists anything simplified.
+After a draw.io import, containers whose components overlap are re-arranged in a grid (`tidyOverlappingContainers` in
+`layout.ts`) and the import notes say how many; containers that are already tidy keep draw.io's positions.
 See the [decision log](17-decision-log.md#import-drawio-for-architecture-mermaid-for-sequences).
+
+## Screen readers and keyboard focus on the canvas
+
+- **Live region** (`Announcer.tsx`, sentences in `src/lib/diagram/describe.ts`): out of sight, `role="status"`, polite. It says
+  what a selection is ("Orders, component in Back office. Category: New. Technology: Java. 2 connections. 1 open
+  comment."), what a connection joins and carries, what was added or removed with the new count, and which tab or
+  internal design you arrived on. Moving a box and typing say nothing. Changes within 250 ms are said once.
+- **Names:** React Flow gives each box and connection `aria-label` (`flowAdapter.ts`): "Orders, component",
+  "Connection from Web to Orders: Place order (REST)". A component also holds a hidden "Category: New" so colour isn't the only
+  signal.
+- **Landmarks:** the editor row is a `<main aria-label="Diagram editor">`.
+- **Focus** is outlined on boxes and connections (`globals.css`), so Tab through the canvas is visible.
+- **Dialogs:** every modal dialog uses `useDialogFocus` (see below).
+- **Still to check by hand:** moving a box with the arrow keys is announced as nothing; drawing a connection is done in
+  the details panel (**Connect to…**), which a screen-reader user should try on a real reader. Not yet tested with
+  VoiceOver, NVDA or JAWS.
+
+## Keyboard and focus in dialogs and menus
+
+- Modal dialogs that use `useDialogFocus` (all of them: Check, Export, History, Compare, Import, Find, Shortcuts, Unsaved changes, Delete container) keep Tab and Shift+Tab inside, and return focus to the button
+  that opened them when they close. New dialogs should use it too.
+- The legend's **Reuse** menu is a real menu: it takes focus when opened, ↑ ↓ Home End move between items, Escape closes
+  it and returns focus to its button, and a click elsewhere or Tab closes it.
+
+## Comments, history and links
+
+- **Comments** (details panel, for a component, container or connection): add, resolve or reopen, delete. Saved in the
+  diagram (`comments`). **File → Merge comments from a file…** (`mergeCommentsFromDevice`) takes only the comments from
+  another copy: new ones are added, ones resolved there become resolved, nothing is deleted or reopened, and
+  comments about things not in this diagram are skipped and counted. Open comments are listed in **Check**.
+- **Comment badges** (`nodes/CommentMarker.tsx`): a blue badge with the open-comment count at a component or container's
+  top-left, and beside the middle of a connection. Clicking selects it and puts the cursor in the new-comment field. The
+  badges carry the class `bb-comment-marker`, which `keepInPicture` leaves out of exported pictures.
+- **File → Version history…** (`HistoryDialog`): save a named checkpoint, **Restore…** (asks, undoable), **Open as tabs to
+  compare** (adds the checkpoint's architecture tabs as new tabs for **Compare tabs**), **What changed since** (the same comparison dialog, checkpoint tab on the left and the current tab on the right, with nothing added to the diagram; removed items are listed but can't be jumped to), or delete. Limit 20.
+- **Link** field: shown with an *Open the link* anchor only if it is a plain http(s) address (`safeWebAddress`).
+
+## Check before you share, and legend presets
+
+- **Check** (tab bar, with a count): `HintsDialog` lists, from `diagramHints` (`src/lib/diagram/hints.ts`), components
+  nothing connects to (only on a canvas that has connections at all), connections with no protocol, and L0 components
+  with no owner, across every tab and internal design. A **flowchart** canvas (one with flowchart shapes,
+  `isFlowchart` in `shapes.ts`) is a process, not a system, so it's only checked for steps nothing connects to and
+  open comments: no owners, and no protocols on its Yes/No lines. The Flowchart template has nothing to flag. Picking one opens it. Hints never block saving or exporting.
+- **Legend → Reuse:** adds the categories of **C4** or **ArchiMate** (`LEGEND_PRESETS` in `defaultLegend.ts`), or of a
+  legend file (**Add from a file…**), that the legend doesn't already have by name, as one undo step
+  (`addLegendEntries`). **Save this legend to a file** downloads names and colours only (`legendFile.ts`); a whole
+  diagram file works as a legend file too.
+- **Templates → Start from a file…:** opens a diagram file as a *copy* (`openDiagramFromDevice({ asCopy: true })`): new
+  id, no file handle, so Save asks where to put it and the original is never written over. This is how people reuse
+  their own layout and legend without the app keeping templates in the browser.
+- **Export → Branding:** a logo (scaled to a small PNG) and an accent colour, saved in the diagram (`branding`) and
+  drawn in the title bar of PNG, SVG, PDF and the viewer.
 
 ## Node components — `nodes/`
 
@@ -206,7 +365,16 @@ See the [decision log](17-decision-log.md#import-drawio-for-architecture-mermaid
 
 - Filled with its category colour; **dashed border and white when unassigned** (tooltip says so); text colour
   chosen for contrast (`readableTextOn`).
-- `NodeResizer` when selected (minimum 80×32).
+- `NodeResizer` when selected (minimum 80×32). Resize controls are styled in `globals.css` to look nothing like
+  connection dots: white squares at the corners and a 9 px grab strip (drawn as a 1 px line) along each edge, under
+  the round blue connection dot in the middle of the side (`z-index`, crosshair cursor, "Drag to draw a connection").
+  React Flow's default 1 px edge line meant users grabbed the dot and drew an arrow when they meant to resize.
+  While resizing (`bb-resizing` on the canvas), connection dots and quick-add arrows hide; while drawing a
+  connection, resize controls hide.
+- **Shape** (`data.shape`): a box or pill in CSS; the other flowchart shapes are an SVG outline from `shapes.ts`
+  behind the label, stretched to the box, with the label kept inside by the shape's `inset` (a diamond's corners are
+  where its connection dots are).
+- On a flowchart tab, the quick-add arrows (`QuickAdd`): see [flowcharts](#flowcharts).
 - Four `Handle`s (`bb-handle` class), hidden until hover, selection, or while a connection is being dragged (CSS in
   `globals.css`); always visible on touch screens.
 - Double-click to rename inline. Enter or blur saves (blank → "Untitled"); Escape cancels.
@@ -231,9 +399,23 @@ See the [decision log](17-decision-log.md#import-drawio-for-architecture-mermaid
 - When selected and not empty: a floating `NodeToolbar` with **Fit to contents** and **Tidy layout**.
 - Double-click the header to rename; Escape cancels.
 
+### `TextNode.tsx` (a text box)
+
+- Text as written, line breaks kept, in its font size, alignment and weight; no fill or border (a dashed outline on
+  hover, blue when selected). An empty one says "Double-click to write" (nothing in view mode).
+- Double-click, or Enter when selected, opens a textarea: Enter adds a line, Ctrl/⌘+Enter, Esc (cancels) or
+  clicking away finishes. Keys typed there don't reach the canvas shortcuts.
+- **Grows to fit:** when the text needs more height than the box has (typing, a bigger font, an edit in the panel),
+  the box grows (`setNodeGeometry`); it never shrinks by itself.
+- No handles: a text box can't be connected (the store and `isValidConnection` refuse it too).
+- **In a container:** dropped on a container (or added with T, or from the palette, while a container or one of its
+  components is selected) it goes inside and moves with it; dragged off, it leaves (`dropIntoContainers`). Its X/Y
+  are then relative to the container.
+
 ## `Sidebar.tsx` — the palette
 
-One "Container" item and one "component" item per legend entry. Each item is draggable (`dataTransfer` type
+Sections: **Containers**, **Text** (a text box, T), **Components** (one per legend entry) and **Flowchart** (the
+shapes from `shapes.ts`, drawn by `ShapeIcon`, see [flowchart shapes](#flowchart-shapes)). Each item is draggable (`dataTransfer` type
 `application/building-block-node`, JSON payload) **and** clickable/Enter/Space to add. **Why both:** touch screens
 can't drag from a list into React Flow reliably, so a tap adds at the centre of what's on screen (or into the
 selected container, below its lowest component via `nextSlotInContainer`). On small screens adding closes the
@@ -251,8 +433,9 @@ panel is showing (`PanelTitle`'s `action`).
 | A connection | **Connection** | From → To (click to select either end), What flows, Protocol, Description, Arrows (one way / both / none), Line (solid / dashed), Reverse, Delete |
 | Several nodes | **N items selected** | Align (6), Distribute & size (4), Color all, Grouping (Group in container; Ungroup when a container is involved), Duplicate, Delete all |
 | Nothing (on a tab) | **Diagram** | Show technology switch, Fit all containers (if any are nested), a how-to hint |
+| A text box | **Text box** | Text (a textarea), Size (10–48 px), Bold, Align, Position & size, Comments, Delete |
 | Nothing (in an internal design) | **Internal design** | The component it belongs to, its technology and description, **its connections at L1**, Back |
-| One node | **Component** / **Container** | "In *container*" link, Label (blank → default on blur), Color (legend swatches), Icon (components only: None plus the built-in set), Technology (components only), Owner, Description, Notes (grows with the text; + Assumption / Risk / Open question / Decision starters), then: Connections (list + "Connect to…" picker, with Components and Containers groups; containers have it too) and **Internal design (L2)** for components on a tab; Header, Outline and Layout (Tidy, Fit, Ungroup) for containers; Group in container (components not in one); Delete |
+| One node | **Component** / **Container** | "In *container*" link, Label (blank → default on blur), **Position & size** (X, Y, W, H in whole px, relative to the container for a component in one; arrow keys step 1, Shift 10; `setNodeGeometry` grows the container to keep it inside), Color (legend swatches), **Shape** (components: the seven flowchart shapes), Icon (components only: None plus the built-in set), Technology (components only), Owner, Description, Notes (grows with the text; + Assumption / Risk / Open question / Decision starters), then: Connections (list + "Connect to…" picker, with Components and Containers groups; containers have it too) and **Internal design (L2)** for components on a tab; Header, Outline and Layout (Tidy, Fit, Ungroup) for containers; Group in container (components not in one); Delete |
 
 **Why "Connect to…" exists as well as dragging:** dragging between small handles is hard on touch screens and for
 keyboard users. The picker suggests sensible sides with `suggestConnectionSides` (the sides facing each other).

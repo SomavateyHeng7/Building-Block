@@ -7,6 +7,7 @@ import { LogoMark } from "@/components/Logo";
 import Footer from "@/components/landing/Footer";
 import { ThemeToggle, useMounted } from "@/components/theme-toggle";
 import { createBlankDiagram } from "@/lib/diagram/factory";
+import type { Diagram } from "@/lib/diagram/types";
 import { useUnsavedGuard } from "@/components/editor/useUnsavedGuard";
 import {
   openDiagramFromDevice,
@@ -17,12 +18,20 @@ import {
   takeDroppedFile,
 } from "@/lib/diagram/file";
 import { recordRecentTemplate, useRecentTemplates } from "@/lib/recentTemplates";
-import { clearRecoveryCopy, setRecoveryEnabled, useRecoveryCopy, useRecoveryEnabled, type RecoveryCopy } from "@/lib/diagram/recovery";
+import {
+  clearRecoveryCopy,
+  setRecoveryEnabled,
+  takeLostUnsaved,
+  useRecoveryCopy,
+  useRecoveryEnabled,
+  type RecoveryCopy,
+} from "@/lib/diagram/recovery";
 import { downloadLegacyItem, readLegacyItems, removeLegacyItems, type LegacyItem } from "@/lib/diagram/legacy";
 import { toast } from "@/lib/toast";
 import { templates } from "@/templates";
 import ImportDialog, { describeImport } from "@/components/editor/ImportDialog";
-import { ImportError, diagramFromImport, importDiagramText, isImportable, type ImportResult } from "@/lib/diagram/importFile";
+import TemplatePreview from "@/components/TemplatePreview";
+import { ImportError, diagramFromImport, importDiagramText, isImportable, readImportText, type ImportResult } from "@/lib/diagram/importFile";
 
 const noopSubscribe = () => () => {};
 const NO_ITEMS: LegacyItem[] = [];
@@ -102,48 +111,12 @@ function ActionCard({
   );
 }
 
-/** A small picture of what a template looks like: columns of coloured components with a few connections. */
-function TemplatePreview() {
-  const columns = [
-    { x: 8, colors: ["#8fd19e", "#8fd19e", "#7c3aed"] },
-    { x: 68, colors: ["#1f7a4f", "#e0556f", "#f4d35e"] },
-    { x: 128, colors: ["#b8860b", "#b8860b", "#ffffff"] },
-    { x: 188, colors: ["#8fd19e", "#d4d4d8", "#1f7a4f"] },
-  ];
+/** A template to start from, with a picture of what it actually holds (drawn from the template itself). */
+function TemplateCard({ name, body, build, onClick }: { name: string; body: string; build: () => Diagram; onClick: () => void }) {
   return (
-    <svg viewBox="0 0 244 112" className="h-full w-full text-zinc-400" aria-hidden>
-      <defs>
-        <marker id="preview-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
-          <path d="M0 0l8 4-8 4z" fill="currentColor" />
-        </marker>
-      </defs>
-      {columns.map((column) => (
-        <g key={column.x}>
-          <rect x={column.x} y={8} width={48} height={96} rx={4} fill="none" stroke="currentColor" strokeWidth={1.25} />
-          <rect x={column.x} y={8} width={48} height={10} rx={4} fill="currentColor" opacity={0.18} />
-          {column.colors.map((color, row) => (
-            <rect key={row} x={column.x + 6} y={24 + row * 26} width={36} height={19} rx={2.5} fill={color} stroke="rgba(0,0,0,0.2)" strokeWidth={0.75} />
-          ))}
-        </g>
-      ))}
-      <g fill="none" stroke="currentColor" strokeWidth={1.5} markerEnd="url(#preview-arrow)">
-        <path d="M48 33.5H74" />
-        <path d="M48 59.5H58V85.5H74" />
-        <path d="M108 85.5H118V59.5H134" strokeDasharray="4 3" />
-      </g>
-    </svg>
-  );
-}
-
-function TemplateCard({ name, body, wide, onClick }: { name: string; body: string; wide: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`${CARD_PLAIN} ${wide ? "sm:col-span-2 sm:flex-row sm:items-center sm:gap-6" : ""}`}
-    >
-      <span className={`block shrink-0 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900 ${wide ? "h-32 sm:w-64" : "h-32 w-full"}`}>
-        <TemplatePreview />
+    <button type="button" onClick={onClick} className={CARD_PLAIN}>
+      <span className="block w-full shrink-0 overflow-hidden rounded-xl">
+        <TemplatePreview build={build} name={name} />
       </span>
       <span className="flex flex-col gap-1.5">
         <span className="flex items-center gap-1.5 font-semibold">
@@ -177,6 +150,13 @@ export default function StartPage() {
   const recovered = useRecoveryCopy();
   const recoveryOn = useRecoveryEnabled();
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+  // Came here after leaving a diagram with unsaved changes that nothing kept (read once, after mounting).
+  const [lostUnsaved, setLostUnsaved] = useState(false);
+  useEffect(() => {
+    // sessionStorage is only on the client, so this is read after the first render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (takeLostUnsaved()) setLostUnsaved(true);
+  }, []);
 
   // Installed in Chrome or Edge, double-clicking a diagram file opens a window here with that file.
   useEffect(() => {
@@ -238,7 +218,7 @@ export default function StartPage() {
         // draw.io and Mermaid files are imported into a new diagram; anything else is opened as a diagram file.
         if (file && isImportable(file.file.name)) {
           try {
-            return startImported(await importDiagramText(await file.file.text(), file.file.name));
+            return startImported(await importDiagramText(await readImportText(file.file), file.file.name));
           } catch (problem) {
             toast.error(`Couldn't import "${file.file.name}"`, {
               description: problem instanceof ImportError ? problem.message : "Check it's a draw.io file or a Mermaid sequence diagram.",
@@ -273,7 +253,7 @@ export default function StartPage() {
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-96 bg-[radial-gradient(circle,rgb(113_113_122/0.28)_1px,transparent_1px)] bg-[length:22px_22px] [mask-image:linear-gradient(to_bottom,black,transparent)]"
       />
       <header className="border-b border-zinc-200/70 dark:border-zinc-800/70">
-        <nav className="mx-auto flex max-w-4xl items-center gap-6 px-4 py-3 sm:px-6">
+        <nav className="mx-auto flex max-w-7xl items-center gap-6 px-4 py-3 sm:px-6">
           <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
             <LogoMark className="h-6 w-6" />
             Building Block
@@ -284,7 +264,7 @@ export default function StartPage() {
         </nav>
       </header>
 
-      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-12 px-4 pb-16 pt-10 sm:px-6 sm:pt-14">
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-12 px-4 pb-16 pt-10 sm:px-6 sm:pt-14">
         <section className="flex flex-col gap-8">
           <div className="flex max-w-2xl flex-col gap-3">
             <span className="w-fit rounded-full border border-zinc-200 bg-white/70 px-3 py-1 text-xs font-medium text-zinc-600 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/70 dark:text-zinc-400">
@@ -293,6 +273,39 @@ export default function StartPage() {
             <h1 className="text-4xl font-semibold tracking-tight text-balance text-zinc-950 sm:text-5xl dark:text-zinc-50">Start a diagram</h1>
             <p className="text-lg text-pretty text-zinc-600 dark:text-zinc-400">Begin with an empty canvas, or pick up where you left off.</p>
           </div>
+          {lostUnsaved && !recovered && (
+            <div
+              role="alert"
+              className="flex flex-col gap-4 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-950 sm:flex-row sm:items-center dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100"
+            >
+              <div className="min-w-0 flex-1">
+                <h2 className="font-semibold">Your last diagram wasn&apos;t saved, so it couldn&apos;t be brought back</h2>
+                <p className="mt-1 text-amber-900/80 dark:text-amber-100/80">
+                  Diagrams live only in this page until you save them to a file. {recoveryOn
+                    ? "Recovery copies are on now: next time, unsaved changes are kept here after a reload."
+                    : "Turn on recovery copies to keep unsaved changes in this browser across reloads and crashes, until you save them."}
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                {!recoveryOn && (
+                  <button
+                    type="button"
+                    className="rounded-lg bg-amber-900 px-3 py-2 text-sm font-medium text-white hover:bg-amber-800 dark:bg-amber-200 dark:text-amber-950 dark:hover:bg-amber-100"
+                    onClick={() => setRecoveryEnabled(true)}
+                  >
+                    Turn on recovery copies
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="rounded-lg border border-amber-300 px-3 py-2 text-sm font-medium hover:bg-amber-100 dark:border-amber-800 dark:hover:bg-amber-900"
+                  onClick={() => setLostUnsaved(false)}
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
           {recovered && (
             <div
               role="region"
@@ -339,7 +352,7 @@ export default function StartPage() {
               </div>
             </div>
           )}
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <ActionCard primary icon={ICONS.plus} title="New blank diagram" body="An empty canvas with the default colour legend." onClick={startBlank} />
             <ActionCard
               icon={ICONS.folder}
@@ -354,7 +367,7 @@ export default function StartPage() {
               icon={ICONS.import}
               title="Import from draw.io or Mermaid"
               body="Bring in a .drawio file as architecture tabs, or a Mermaid sequence diagram as a sequence tab. You can drop those here too."
-              className="sm:col-span-2"
+              className="sm:col-span-2 lg:col-span-1"
               onClick={() => guard(() => setImporting(true))}
             />
           </div>
@@ -383,14 +396,13 @@ export default function StartPage() {
                 ))}
               </div>
             )}
-            <div className="grid gap-4 sm:grid-cols-2">
-              {starterTemplates.map((template, index) => (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {starterTemplates.map((template) => (
                 <TemplateCard
                   key={template.id}
                   name={template.name}
                   body={template.description}
-                  // A lone last card fills the row instead of leaving a gap.
-                  wide={index === starterTemplates.length - 1 && starterTemplates.length % 2 === 1}
+                  build={template.build}
                   onClick={() => startTemplate(template.id)}
                 />
               ))}

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { resolveDelete, useDeletePrompt } from "./deletePrompt";
+import { useDialogFocus } from "./useDialogFocus";
 
 const SECONDARY =
   "rounded border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800";
@@ -21,13 +22,20 @@ export default function DeleteContainerDialog() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [pending]);
 
-  if (!pending) return null;
+  return pending ? <Prompt pending={pending} /> : null;
+}
+
+/** Mounted only while asking, so focus returns to what was focused when it closes. */
+function Prompt({ pending }: { pending: NonNullable<ReturnType<typeof useDeletePrompt.getState>["pending"]> }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   const { containers, contents } = pending;
   const components = `${contents} component${contents === 1 ? "" : "s"}`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => resolveDelete("cancel")}>
       <div
+        ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="delete-container-title"

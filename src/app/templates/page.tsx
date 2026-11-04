@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { TEMPLATE_CATEGORIES, filterTemplates, templates, type Orientation, type TemplateCategory } from "@/templates";
-import { startDiagram } from "@/lib/diagram/file";
+import { openDiagramFromDevice, startDiagram } from "@/lib/diagram/file";
 import { recordRecentTemplate, useRecentTemplates } from "@/lib/recentTemplates";
 import { ThemeToggle } from "@/components/theme-toggle";
 import BackLink from "@/components/BackLink";
@@ -54,8 +54,17 @@ export default function TemplatesPage() {
     setCategory("All");
   }
 
+  function startFromFile() {
+    guard(
+      async () => {
+        if (await openDiagramFromDevice({ asCopy: true })) router.push("/editor");
+      },
+      { picker: { continueLabel: "Choose a file…", next: "Now choose the file to start from." } },
+    );
+  }
+
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-12 sm:px-6 sm:py-16">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-12 sm:px-6 sm:py-16">
       <div className="flex items-center justify-between">
         <BackLink href="/diagrams">Start</BackLink>
         <ThemeToggle />
@@ -109,7 +118,7 @@ export default function TemplatesPage() {
           </button>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {shown.map((template) => {
             const orientation = orientationOf(template.id);
             return (
@@ -147,9 +156,20 @@ export default function TemplatesPage() {
         </div>
       )}
 
-      <p className="text-sm text-zinc-500">
-        To reuse your own layout and legend, save a diagram as a file, then use <strong>Open file</strong> on the start page next time.
-      </p>
+      <div className="flex flex-col items-start gap-2 rounded-lg border border-dashed border-zinc-300 p-4 dark:border-zinc-700">
+        <h2 className="font-medium text-zinc-900 dark:text-zinc-100">Your own template</h2>
+        <p className="text-sm text-zinc-500">
+          Save a diagram with your layout and legend as a file. Start from it here to get a copy: the file itself is never
+          changed, and Save asks where to put the new diagram.
+        </p>
+        <button
+          type="button"
+          onClick={startFromFile}
+          className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+        >
+          Start from a file…
+        </button>
+      </div>
       {unsavedDialog}
     </div>
   );

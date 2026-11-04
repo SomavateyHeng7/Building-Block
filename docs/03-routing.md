@@ -7,14 +7,20 @@ renders it, and every rule that sends a visitor somewhere else.
 
 | URL | File | Rendering | Purpose | Consent needed |
 | --- | --- | --- | --- | --- |
-| `/` | `src/app/page.tsx` | Static | Landing page: product pitch, features, roadmap, waitlist | No |
-| `/diagrams` | `src/app/diagrams/page.tsx` | Static, client | Start page: new diagram, open a file (or drop one), templates, old-version leftovers | **Yes** |
-| `/templates` | `src/app/templates/page.tsx` | Static, client | All templates with previews | **Yes** |
-| `/editor` | `src/app/editor/page.tsx` → `EditorApp` | Static, client | The editor. Only works when a diagram is open in memory | **Yes** |
-| `/privacy` | `src/app/privacy/page.tsx` | Static | Privacy notice, acceptance status, withdraw button | No |
-| `/contact` | `src/app/contact/page.tsx` | Static | Contact form | No |
+| `/` | `src/app/page.tsx` | Per request | Landing page: product pitch, features, roadmap, waitlist | No |
+| `/diagrams` | `src/app/diagrams/page.tsx` | Per request, client | Start page: new diagram, open a file (or drop one), templates, old-version leftovers | **Yes** |
+| `/changelog` | `src/app/changelog/page.tsx` | Per request | What's new: `CHANGELOG` from `src/lib/changelog.ts`, newest first | No |
+| `/templates` | `src/app/templates/page.tsx` | Per request, client | All templates with previews | **Yes** |
+| `/editor` | `src/app/editor/page.tsx` → `EditorApp` | Per request, client | The editor. Only works when a diagram is open in memory | **Yes** |
+| `/privacy` | `src/app/privacy/page.tsx` | Per request | Privacy notice, acceptance status, withdraw button | No |
+| `/contact` | `src/app/contact/page.tsx` | Per request | The address to email, self-help cards, the address to email | No |
+| `/pricing` | `src/app/pricing/page.tsx` | Per request | Plans: Free today, paid plans to come (from `src/lib/plans.ts`) | No |
 | `/maintenance` | `src/app/maintenance/page.tsx` | **Dynamic** (per request) | "We're updating" page, shown by the proxy | No |
-| anything else | `src/app/not-found.tsx` | Static | 404 page | No |
+| anything else | `src/app/not-found.tsx` | Per request | 404 page | No |
+
+Every page renders per request so its scripts can carry the Content-Security-Policy's nonce (the root layout reads
+the request headers; see [Security](14-security.md#content-security-policy)). "Client" pages do their work in the
+browser either way.
 
 Icons are file-convention routes: `src/app/favicon.ico`, `src/app/icon.svg`, `src/app/apple-icon.png`.
 
@@ -33,7 +39,9 @@ flowchart LR
   Editor -->|Back button in toolbar| Start
   Editor -.->|reload with nothing open| Start
   Start & Templates & Editor -.->|consent: Not now| Landing
-  Any["any page"] -->|footer| Privacy["/privacy"] & Contact["/contact"]
+  Landing -->|Pricing| Pricing["/pricing"]
+  Pricing -->|Start drawing| Start
+  Any["any page"] -->|footer| Privacy["/privacy"] & Contact["/contact"] & Pricing
 ```
 
 ## Rules that redirect or block
@@ -100,6 +108,9 @@ Behaviour, in order:
 | The bypass cookie matches the token | Pass through (the team can check a release before reopening) |
 | Otherwise | **Rewrite** to `/maintenance` with status **503**, `Retry-After`, `Cache-Control: no-store` |
 
+Every page it passes through or rewrites also gets the Content-Security-Policy and its nonce (`withCsp()`; see
+[Security](14-security.md#content-security-policy)). Redirects don't need one.
+
 Design details and why:
 
 - **Rewrite, not redirect.** The address bar keeps the page the visitor asked for, so the maintenance page can
@@ -134,7 +145,8 @@ Set in `next.config.ts` for `/:path*` (see [Security](14-security.md#http-header
 
 `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY`,
 `Content-Security-Policy: frame-ancestors 'none'`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`,
-and `poweredByHeader: false` removes `X-Powered-By`.
+and `poweredByHeader: false` removes `X-Powered-By`. Pages get a full Content-Security-Policy with a per-request
+nonce from the proxy instead (see [Security](14-security.md#content-security-policy)).
 
 ## Root layout — `src/app/layout.tsx`
 
@@ -149,3 +161,5 @@ Wraps every page:
 - `ThemeProvider` (`attribute="class"`, `defaultTheme="system"`, `disableTransitionOnChange` so switching themes
   doesn't animate every colour).
 - `ToastViewport` and `ConsentGate`, once for the whole app.
+- `ServiceWorker` (offline) and `Analytics` (visit counts, when `NEXT_PUBLIC_CF_ANALYTICS_TOKEN` is set; see
+  [operations](16-operations.md#monitoring-visits)).

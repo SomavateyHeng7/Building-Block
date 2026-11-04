@@ -22,7 +22,7 @@ describe("template search and categories", () => {
 
   it("limits to a category, together with the search", () => {
     const planning = filterTemplates(templates, "", "Planning");
-    expect(ids(planning).sort()).toEqual(["current-vs-target", "migration-roadmap"]);
+    expect(ids(planning).sort()).toEqual(["migration-roadmap"]);
     expect(ids(filterTemplates(templates, "roadmap", "Architecture"))).toEqual([]);
   });
 

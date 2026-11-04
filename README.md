@@ -8,7 +8,16 @@ device, like draw.io's device storage. The app holds the diagram in memory only 
 
 ## Features
 
-- Containers and components with drag-in nesting, resize, snap-to-grid and a minimap
+- Containers and components with drag-in nesting, resize and a minimap
+- **Pixel-exact layout:** drags snap to other boxes' edges and middles with alignment guides and the gaps shown in px;
+  arrow keys move 1 px (Shift 10); X / Y / W / H fields; hold Alt and point at another box to measure the distance
+- **Text boxes** (press `T`): headings, captions and notes written straight on the canvas
+- **Flowcharts:** draw.io's flowchart shapes (process, decision, start/end, data, document, database, subprocess), its
+  blue quick-add arrows that add a connected shape in one click
+- **Sequence diagrams** as tabs, drawn the way Mermaid draws them: participants and actors, calls, replies, async
+  messages, notes, `loop` / `alt` / `opt` / `par` / `critical` / `break` frames and activation bars. Edit them in
+  **live Mermaid code** (the sheet follows as you type, highlighted, bad lines marked), from a toolbar, by
+  double-clicking to rename in place, or in the details panel; participants can stand for components on another tab
 - A user-defined legend with a named colour palette (it marks colours another category already uses) and
   custom colours; exports include only the categories used
 - Connections between components (L1): drag from the dot on a component's edge to another, or pick one in
@@ -19,7 +28,14 @@ device, like draw.io's device storage. The app holds the diagram in memory only 
   its own containers, components and connections. The details panel shows the component's L1 connections
   alongside, a bar above the canvas leads back, and an **L2** badge marks components that have one. It is
   saved inside the same `.json` file, one level deep
-- Details per component: technology, owner, description, notes
+- Details per component: technology, owner, description, notes, and a link to a ticket, decision record or document
+- **Review comments** on components and connections, saved in the file. A reviewer adds theirs to a copy and sends it
+  back; **File → Merge comments from a file** brings them in. Open comments show in **Check**
+- **Version history:** *File → Version history* saves named checkpoints inside the file (up to 20), restores one
+  (undoable) or opens its tabs beside the current ones so **Compare tabs** shows what changed
+- **Solution document:** a Markdown write-up of every tab (components, connections, internal designs), the legend, open
+  comments and version history, linking the PNGs exported with it
+- Export as code: a **Mermaid** flowchart (or sequence code) or **C4-PlantUML** per tab, for documentation kept in git
 - **Find (Ctrl/⌘+F):** search names, technology, owner, category, notes and connections across every tab and
   internal design; picking a result opens its tab, selects it and zooms to it
 - A built-in icon per component (service, API, web, mobile, database, cache, storage, queue, event stream,
@@ -32,11 +48,19 @@ device, like draw.io's device storage. The app holds the diagram in memory only 
   changed (on the newer tab) and removed (on the older one); exports taken while it's shown include the marks and
   a legend for them
 - Built-in templates (L0 architecture, three-tier web application, event-driven microservices with an internal
-  design, current vs target state); to reuse your own layout, save it as a file and open that
+  design, serverless API, data platform, a draw.io-style flowchart and a sequence diagram); to reuse your own layout and legend, save it as a file and use **Start from a
+  file** on the templates page, which opens a copy and leaves the file alone
 - Export dialog: pick any mix of PNG, SVG, PDF, component list (CSV), connection list (CSV) and the diagram
   file (JSON), and which tabs and internal designs to picture. Download it all as **one file** (a `.zip`,
   or a single PDF with a page per view) or as **separate files**. The dialog shows exactly what you'll get;
   the CSVs say which component each internal item is part of
+- **Check before you share:** lists components nothing connects to, connections with no protocol and components with
+  no owner, and jumps to each
+- Legend presets for **C4** and **ArchiMate** colours, and legends saved to a file and added to another diagram
+- **Branding:** a logo and accent colour in the export dialog, saved in the diagram file and used by PNG, SVG, PDF and
+  the viewer
+- An **interactive viewer** export: one offline `.html` file with a tab per view, pan and zoom, for reviewers who
+  don't have Building Block
 - Works on desktop, tablet and phone (see [Devices](#devices))
 - Keyboard shortcuts (press `?` in the editor)
 
@@ -66,10 +90,12 @@ Unsaved work exists only in memory:
 
 - Closing or reloading the tab warns first while there are unsaved changes.
 - **New**, **Open** and **Start** ask Save / Don't save / Cancel.
-- A reload with nothing saved returns you to the start page.
+- A reload with nothing saved returns you to the start page, which says the diagram couldn't be brought back and
+  offers to turn on **recovery copies** (off unless you turn them on), which keep unsaved changes in this browser
+  across reloads until you save.
 
-Only your theme, collapsed panels, last export choices and privacy-notice acceptance use `localStorage`,
-never diagram data.
+Only your theme, collapsed panels, last export choices, the code panel's width, the name you last used on a review
+comment and privacy-notice acceptance use `localStorage`, never diagram data, unless you turn on recovery copies.
 
 ### Privacy notice
 
@@ -114,6 +140,7 @@ leave the browser:
 | --- | --- |
 | `NEXT_PUBLIC_WAITLIST_URL` | The landing-page waitlist form (`{ email, consent }`) |
 | `NEXT_PUBLIC_CONTACT_EMAIL` | The address shown on `/contact` for people to write to (there's no contact form) |
+| `NEXT_PUBLIC_CF_ANALYTICS_TOKEN` | Cookieless visit counts with Cloudflare Web Analytics; the numbers are on the Cloudflare dashboard |
 
 ### Project layout
 

@@ -1,14 +1,19 @@
 "use client";
 
+import { useRef } from "react";
+import { useDialogFocus } from "./useDialogFocus";
+
 const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: "Ctrl/⌘ + S", action: "Save to the open file (asks where the first time)" },
   { keys: "Ctrl/⌘ + Shift + S", action: "Save as a new file" },
   { keys: "Ctrl/⌘ + F", action: "Find a component, container, connection or sequence step on any tab" },
   { keys: "B", action: "Add a component (inside the selected container)" },
   { keys: "C", action: "Add a container" },
+  { keys: "T", action: "Add a text box; double-click it (or press Enter) to write, Ctrl/⌘ + Enter or Esc to finish" },
   { keys: "Drag from a dot", action: "Connect a component to another (dots appear on hover, selection or touch)" },
-  { keys: "Hold Alt / Option while dragging", action: "Turn off the alignment guides and snapping for that drag" },
-  { keys: "Arrow keys", action: "Nudge the selection by 8 px (hold Shift for 32 px)" },
+  { keys: "Arrow keys", action: "Nudge the selection by 1 px (hold Shift for 10 px)" },
+  { keys: "Drag a box", action: "Snaps to other boxes' edges and middles, showing guides and gaps in px (hold Alt to move freely)" },
+  { keys: "Alt + hover", action: "With one box selected, point at another to measure the distance between them in px" },
   { keys: "Delete / Backspace", action: "Delete the selection, including a selected connection (asks before deleting a container's components)" },
   { keys: "Ctrl/⌘ + G", action: "Group the selected components in a new container" },
   { keys: "Ctrl/⌘ + Shift + G", action: "Ungroup: remove the container, keeping its components" },
@@ -22,6 +27,8 @@ const SHORTCUTS: { keys: string; action: string }[] = [
 ];
 
 export default function ShortcutsHelp({ onClose }: { onClose: () => void }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -29,6 +36,7 @@ export default function ShortcutsHelp({ onClose }: { onClose: () => void }) {
       onKeyDown={(event) => event.key === "Escape" && onClose()}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Keyboard shortcuts"

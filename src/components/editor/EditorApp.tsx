@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ReactFlowProvider } from "@xyflow/react";
 import Canvas from "./Canvas";
 import SequenceCanvas from "./SequenceCanvas";
+import SequenceCode, { useSequenceCode } from "./SequenceCode";
 import { findSequenceItem, selectSequenceItem, useSequenceSelection } from "./sequenceSelection";
 import { moveParticipant, moveStep, removeParticipant, removeStep } from "@/lib/diagram/sequence";
 import { isSequenceSection } from "@/lib/diagram/factory";
@@ -18,6 +19,7 @@ import DetailBar from "./DetailBar";
 import CompareBar from "./CompareBar";
 import SearchDialog from "./SearchDialog";
 import ShortcutsHelp from "./ShortcutsHelp";
+import Announcer from "./Announcer";
 import DeleteContainerDialog from "./DeleteContainerDialog";
 import { ungroup } from "./deletePrompt";
 import { useDetailsRequest } from "./detailsPanel";
@@ -27,12 +29,14 @@ import ViewSheet from "./ViewSheet";
 import { ReadOnlyContext, useMediaQuery } from "./viewMode";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { nextSlotInContainer, nudgeNodes } from "@/lib/diagram/layout";
-import { saveDiagramToFile, useFileStore, useIsDirty } from "@/lib/diagram/file";
-import { clearRecoveryCopy, useRecoveryEnabled, writeRecoveryCopy } from "@/lib/diagram/recovery";
+import { saveDiagramToFile, supportsFilePicker, useFileStore, useIsDirty } from "@/lib/diagram/file";
+import { clearRecoveryCopy, isRecoveryEnabled, markLostUnsaved, useRecoveryEnabled, writeRecoveryCopy } from "@/lib/diagram/recovery";
 import { toast } from "@/lib/toast";
 
 /** Wait this long after the last edit before writing to the open file. */
 const AUTOSAVE_DELAY_MS = 1000;
+/** How long changes can sit unsaved, in a browser that can't autosave, before we remind people to download. */
+const DOWNLOAD_REMINDER_MS = 5 * 60_000;
 /** Wait this long after the last edit before updating the recovery copy (when it's turned on). */
 const RECOVERY_DELAY_MS = 500;
 
@@ -122,6 +126,16 @@ export default function EditorApp() {
     [],
   );
 
+  // Something on a sequence sheet asked for the code: show the panel (SequenceCode puts the cursor in it).
+  useEffect(
+    () =>
+      useSequenceCode.subscribe(() => {
+        if (wideRef.current) togglePanel("palette", false);
+        else setDrawer("palette");
+      }),
+    [],
+  );
+
   // The diagram lives only in memory, so a fresh load (or a direct link) has nothing to edit yet.
   useEffect(() => {
     if (!opened) router.replace("/diagrams");
@@ -187,7 +201,8 @@ export default function EditorApp() {
         const section = getActiveSection(store.diagram);
         const nudge = NUDGE[event.key];
         if (nudge && hasSelection) {
-          const step = event.shiftKey ? 32 : 8;
+          // One pixel at a time; Shift for 10.
+          const step = event.shiftKey ? 10 : 1;
           const nodes = nudgeNodes(section.nodes, store.selectedNodeIds, nudge[0] * step, nudge[1] * step);
           store.setActiveSectionNodes(nodes, { coalesceKey: `nudge:${store.selectedNodeIds.join(",")}` });
         } else if (event.key === "Escape") {
@@ -197,7 +212,22 @@ export default function EditorApp() {
           store.setSelectedEdge(null);
         }
         else if (event.key === "?") setHelpOpen((open) => !open);
-        else if (event.key.toLowerCase() === "c" && !event.shiftKey) {
+        else if (event.key.toLowerCase() === "t" && !event.shiftKey) {
+          // Like B: into the selected container, or the selected box's container.
+          const selected =
+            store.selectedNodeIds.length === 1 ? section.nodes.find((node) => node.id === store.selectedNodeIds[0]) : undefined;
+          const containerId = selected?.type === "container" ? selected.id : selected?.parentId;
+          const count = section.nodes.length;
+          if (containerId) store.addText(nextSlotInContainer(section.nodes, containerId), undefined, containerId);
+          else store.addText({ x: 80 + (count % 5) * 48, y: 80 + Math.floor(count / 5) * 48 });
+        } else if (event.key === "Enter" && store.selectedNodeIds.length === 1) {
+          // Enter on a selected text box starts writing in it, like double-clicking.
+          const node = section.nodes.find((candidate) => candidate.id === store.selectedNodeIds[0]);
+          if (node?.type !== "text") return;
+          document
+            .querySelector(`.react-flow__node[data-id="${CSS.escape(node.id)}"] .bb-text-node`)
+            ?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+        } else if (event.key.toLowerCase() === "c" && !event.shiftKey) {
           const count = section.nodes.length;
           store.addContainer({ x: 80 + (count % 5) * 48, y: 80 + Math.floor(count / 5) * 48 });
         } else if (event.key.toLowerCase() === "b" && !event.shiftKey) {
@@ -243,6 +273,18 @@ export default function EditorApp() {
     return () => clearTimeout(timeout);
   }, [opened, handle, dirty, diagram, saving, saveFailed]);
 
+  // Browsers that can't write to a file never autosave, so remind people every few minutes while changes are unsaved.
+  useEffect(() => {
+    if (!opened || !dirty || supportsFilePicker()) return;
+    const interval = setInterval(() => {
+      toast.warning("You have unsaved changes", {
+        description: "This browser can't autosave. Download the diagram to keep them.",
+        action: { label: "Download", onClick: () => void saveDiagramToFile() },
+      });
+    }, DOWNLOAD_REMINDER_MS);
+    return () => clearInterval(interval);
+  }, [opened, dirty]);
+
   // With recovery copies on, unsaved changes are kept in the browser until saved; a clean diagram needs none.
   const recoveryOn = useRecoveryEnabled();
   useEffect(() => {
@@ -261,15 +303,25 @@ export default function EditorApp() {
     return () => clearTimeout(timeout);
   }, [opened, recoveryOn, dirty, diagram]);
 
-  // Closing or reloading the tab would lose whatever isn't in a file yet.
+  // Closing or reloading the tab would lose whatever isn't in a file yet: the browser asks first. If the person
+  // goes ahead, the recovery copy (when on) is brought up to date that moment; without one, the start page is told
+  // the changes are gone, so it can say so.
   useEffect(() => {
     if (!dirty) return;
     function handleBeforeUnload(event: BeforeUnloadEvent) {
       event.preventDefault();
       event.returnValue = "";
     }
+    function handlePageHide() {
+      const kept = isRecoveryEnabled() && writeRecoveryCopy(useDiagramStore.getState().diagram, useFileStore.getState().fileName);
+      if (!kept) markLostUnsaved();
+    }
     window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("pagehide", handlePageHide);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pagehide", handlePageHide);
+    };
   }, [dirty]);
 
   if (!opened) {
@@ -290,7 +342,8 @@ export default function EditorApp() {
         <SectionTabs />
         <DetailBar />
         <CompareBar />
-        <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        <Announcer />
+        <main aria-label="Diagram editor" className="relative flex min-h-0 flex-1 overflow-hidden">
           {drawer && (
             <button
               type="button"
@@ -302,17 +355,43 @@ export default function EditorApp() {
           )}
           {hidden.palette && (
             <div className={`${RAIL} border-r border-zinc-200 dark:border-zinc-800`}>
-              <PanelToggle side="left" expanded={false} label="the components panel" onClick={() => togglePanel("palette")} />
+              <PanelToggle
+                side="left"
+                expanded={false}
+                label={sequenceTab ? "the Mermaid code" : "the components panel"}
+                onClick={() => togglePanel("palette")}
+              />
             </div>
           )}
-          <Sidebar
-            onAdded={() => setDrawer(null)}
-            onCollapse={() => togglePanel("palette")}
-            className={`${drawer === "palette" ? "flex" : "hidden"} absolute inset-y-0 left-0 z-30 w-72 max-w-[85%] shadow-xl lg:static lg:z-auto ${hidden.palette ? "lg:hidden" : "lg:flex"} lg:w-60 lg:shrink-0 lg:shadow-none`}
-          />
+          {/* Sequence tabs are written as Mermaid code, so the code takes the palette's place. */}
+          {sequenceTab ? (
+            <SequenceCode
+              onCollapse={() => togglePanel("palette")}
+              className={`${drawer === "palette" ? "flex" : "hidden"} absolute inset-y-0 left-0 z-30 w-80 max-w-[85%] shadow-xl lg:relative lg:z-auto ${hidden.palette ? "lg:hidden" : "lg:flex"} lg:max-w-[calc(100%-320px)] lg:shrink-0 lg:shadow-none`}
+            />
+          ) : (
+            <Sidebar
+              onAdded={() => setDrawer(null)}
+              onCollapse={() => togglePanel("palette")}
+              className={`${drawer === "palette" ? "flex" : "hidden"} absolute inset-y-0 left-0 z-30 w-72 max-w-[85%] shadow-xl lg:static lg:z-auto ${hidden.palette ? "lg:hidden" : "lg:flex"} lg:w-60 lg:shrink-0 lg:shadow-none`}
+            />
+          )}
           <div className={`relative min-w-0 flex-1 ${readOnly ? "bb-readonly" : ""}`}>
             {sequenceTab ? <SequenceCanvas /> : <Canvas />}
-            <div className="absolute left-3 top-3 z-10 flex gap-2 lg:hidden">
+            {/* On a sequence tab these sit below its toolbar. */}
+            <div className={`absolute left-3 z-10 flex gap-2 lg:hidden ${sequenceTab && !readOnly ? "top-14" : "top-3"}`}>
+              {sequenceTab && (
+                // The code panel, which reads in View too.
+                <button
+                  type="button"
+                  aria-expanded={drawer === "palette"}
+                  className={CANVAS_BUTTON}
+                  onClick={() => setDrawer(drawer === "palette" ? null : "palette")}
+                >
+                  <Icon name="code" />
+                  Code
+                </button>
+              )}
               {readOnly ? (
                 <button type="button" className={CANVAS_BUTTON} onClick={() => switchMode("edit")}>
                   <Icon name="pencil" />
@@ -320,15 +399,17 @@ export default function EditorApp() {
                 </button>
               ) : (
                 <>
-                  <button
-                    type="button"
-                    aria-expanded={drawer === "palette"}
-                    className={CANVAS_BUTTON}
-                    onClick={() => setDrawer(drawer === "palette" ? null : "palette")}
-                  >
-                    <Icon name="plus" />
-                    Add
-                  </button>
+                  {!sequenceTab && (
+                      <button
+                        type="button"
+                        aria-expanded={drawer === "palette"}
+                        className={CANVAS_BUTTON}
+                        onClick={() => setDrawer(drawer === "palette" ? null : "palette")}
+                      >
+                        <Icon name="plus" />
+                        Add
+                      </button>
+                  )}
                   <button type="button" title="View only: look around without moving anything" className={CANVAS_BUTTON} onClick={() => switchMode("view")}>
                     <Icon name="eye" />
                     <span className="sr-only sm:not-sr-only">View</span>
@@ -336,41 +417,46 @@ export default function EditorApp() {
                 </>
               )}
             </div>
-            <div className="absolute right-3 top-3 z-10 lg:hidden">
-              {readOnly ? (
-                <button type="button" aria-expanded={legendOpen} className={CANVAS_BUTTON} onClick={() => setLegendOpen((open) => !open)}>
-                  <Icon name="layers" />
-                  Legend
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  aria-expanded={drawer === "properties"}
-                  className={CANVAS_BUTTON}
-                  onClick={() => setDrawer(drawer === "properties" ? null : "properties")}
-                >
-                  <Icon name="panel" />
-                  <span className="hidden min-[380px]:inline">Details &amp; legend</span>
-                  <span className="min-[380px]:hidden">Details</span>
-                </button>
-              )}
-            </div>
+            {/* A sequence tab is edited in its code, on the sheet or in the details panel; View has no panel there. */}
+            {!(sequenceTab && readOnly) && (
+              <div className={`absolute right-3 z-10 flex gap-2 lg:hidden ${sequenceTab ? "top-14" : "top-3"}`}>
+                {readOnly ? (
+                  <button type="button" aria-expanded={legendOpen} className={CANVAS_BUTTON} onClick={() => setLegendOpen((open) => !open)}>
+                    <Icon name="layers" />
+                    Legend
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    aria-expanded={drawer === "properties"}
+                    className={CANVAS_BUTTON}
+                    onClick={() => setDrawer(drawer === "properties" ? null : "properties")}
+                  >
+                    <Icon name="panel" />
+                    <span className="hidden min-[380px]:inline">Details &amp; legend</span>
+                    <span className="min-[380px]:hidden">Details</span>
+                  </button>
+                )}
+              </div>
+            )}
             {readOnly && <ViewSheet legendOpen={legendOpen} onCloseLegend={() => setLegendOpen(false)} />}
           </div>
-          <aside
-            className={`${drawer === "properties" ? "flex" : "hidden"} absolute inset-y-0 right-0 z-30 w-80 max-w-[85%] flex-col overflow-y-auto border-l border-zinc-200 bg-white pr-safe shadow-xl lg:static lg:z-auto ${hidden.properties ? "lg:hidden" : "lg:flex"} lg:w-72 lg:shrink-0 lg:shadow-none dark:border-zinc-800 dark:bg-zinc-950`}
-          >
-            <PropertiesPanel
-              headerAction={<PanelToggle side="right" expanded label="details and legend" onClick={() => togglePanel("properties")} />}
-            />
-            <LegendPanel />
-          </aside>
-          {hidden.properties && (
+          {!(sequenceTab && readOnly) && (
+            <aside
+              className={`${drawer === "properties" ? "flex" : "hidden"} absolute inset-y-0 right-0 z-30 w-80 max-w-[85%] flex-col overflow-y-auto border-l border-zinc-200 bg-white pr-safe shadow-xl lg:static lg:z-auto ${hidden.properties ? "lg:hidden" : "lg:flex"} lg:w-72 lg:shrink-0 lg:shadow-none dark:border-zinc-800 dark:bg-zinc-950`}
+            >
+              <PropertiesPanel
+                headerAction={<PanelToggle side="right" expanded label="details and legend" onClick={() => togglePanel("properties")} />}
+              />
+              <LegendPanel />
+            </aside>
+          )}
+          {!(sequenceTab && readOnly) && hidden.properties && (
             <div className={`${RAIL} border-l border-zinc-200 dark:border-zinc-800`}>
               <PanelToggle side="right" expanded={false} label="details and legend" onClick={() => togglePanel("properties")} />
             </div>
           )}
-        </div>
+        </main>
       </div>
       {helpOpen && <ShortcutsHelp onClose={() => setHelpOpen(false)} />}
       {searchOpen && <SearchDialog onClose={() => setSearchOpen(false)} />}

@@ -3,9 +3,11 @@ import { componentsWithDetail } from "./store";
 import type { Diagram } from "./types";
 
 /** Pictures of views, and lists or files that cover the whole diagram. */
-export type ExportFormat = "png" | "svg" | "pdf" | "components-csv" | "connections-csv" | "json";
-export const IMAGE_FORMATS: ExportFormat[] = ["png", "svg", "pdf"];
-export const DATA_FORMATS: ExportFormat[] = ["components-csv", "connections-csv", "json"];
+export type ExportFormat = "png" | "svg" | "pdf" | "html" | "mermaid" | "plantuml" | "components-csv" | "connections-csv" | "json" | "document";
+export const IMAGE_FORMATS: ExportFormat[] = ["png", "svg", "pdf", "html"];
+/** A view written as diagram code: one file per view, nothing to draw. */
+export const CODE_FORMATS: ExportFormat[] = ["mermaid", "plantuml"];
+export const DATA_FORMATS: ExportFormat[] = ["document", "components-csv", "connections-csv", "json"];
 
 /** One file, or one download per file. */
 export type Bundle = "one" | "separate";
@@ -21,6 +23,8 @@ export interface ExportView {
   /** The tab an internal design belongs to. */
   tabLabel?: string;
   nodeCount: number;
+  /** A sequence tab: Mermaid can write it, PlantUML (C4) can't. */
+  sequence?: boolean;
   /** File name without extension. */
   stem: string;
 }
@@ -51,6 +55,7 @@ export function exportViews(diagram: Diagram): ExportView[] {
         label: section.name,
         // A sequence tab has something to picture once it has a participant.
         nodeCount: section.sequence ? section.sequence.participants.length : section.nodes.length,
+        ...(section.sequence ? { sequence: true } : {}),
         stem: tabStem,
       },
       ...componentsWithDetail(section).map((component) => ({
@@ -70,9 +75,13 @@ const EXTENSION: Record<ExportFormat, string> = {
   png: "png",
   svg: "svg",
   pdf: "pdf",
+  html: "html",
+  mermaid: "mmd",
+  plantuml: "puml",
   "components-csv": "csv",
   "connections-csv": "csv",
   json: "json",
+  document: "md",
 };
 
 /**
@@ -88,12 +97,17 @@ export function planExport(
   const pictured = views.filter((view) => view.nodeCount > 0);
   const files: PlannedFile[] = [];
   for (const format of formats) {
-    if (format === "pdf" && (bundle === "one" || pictured.length === 1)) {
-      if (pictured.length) files.push({ name: `${pictured.length === 1 ? pictured[0].stem : base}.pdf`, format, views: pictured });
+    if ((format === "pdf" || format === "html") && (bundle === "one" || pictured.length === 1)) {
+      if (pictured.length) files.push({ name: `${pictured.length === 1 ? pictured[0].stem : base}.${EXTENSION[format]}`, format, views: pictured });
+    } else if (CODE_FORMATS.includes(format)) {
+      for (const view of pictured) {
+        if (format === "plantuml" && view.sequence) continue;
+        files.push({ name: `${view.stem}.${EXTENSION[format]}`, format, views: [view] });
+      }
     } else if (IMAGE_FORMATS.includes(format)) {
       for (const view of pictured) files.push({ name: `${view.stem}.${EXTENSION[format]}`, format, views: [view] });
     } else {
-      const suffix = format === "components-csv" ? "-components" : format === "connections-csv" ? "-connections" : "";
+      const suffix = format === "components-csv" ? "-components" : format === "connections-csv" ? "-connections" : format === "document" ? "-document" : "";
       files.push({ name: `${base}${suffix}.${EXTENSION[format]}`, format, views: [] });
     }
   }
@@ -115,11 +129,15 @@ export function describeFiles(files: PlannedFile[]): string {
     ["png", "PNG image"],
     ["svg", "SVG image"],
     ["pdf", "PDF"],
+    ["html", "interactive viewer"],
+    ["mermaid", "Mermaid file"],
+    ["plantuml", "PlantUML file"],
   ];
   for (const [format, word] of images) {
     const n = count(format);
     if (n) parts.push(`${n} ${word}${n === 1 ? "" : "s"}`);
   }
+  if (count("document")) parts.push("the solution document");
   if (count("components-csv")) parts.push("the component list");
   if (count("connections-csv")) parts.push("the connection list");
   if (count("json")) parts.push("the diagram file");

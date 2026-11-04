@@ -15,11 +15,15 @@ export interface XmlElement {
 // nbsp isn't an XML entity, but draw.io's HTML labels use it once the attribute is decoded.
 const ENTITIES: Record<string, string> = { lt: "<", gt: ">", amp: "&", quot: '"', apos: "'", nbsp: "\u00a0" };
 
+/** The highest Unicode code point; String.fromCodePoint throws above it. */
+export const MAX_CODE_POINT = 0x10ffff;
+
 export function decodeEntities(text: string): string {
   return text.replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, (match, entity: string) => {
     if (entity[0] === "#") {
       const code = entity[1].toLowerCase() === "x" ? parseInt(entity.slice(2), 16) : parseInt(entity.slice(1), 10);
-      return Number.isFinite(code) ? String.fromCodePoint(code) : match;
+      // A code past Unicode would throw; it's kept as written.
+      return code <= MAX_CODE_POINT ? String.fromCodePoint(code) : match;
     }
     return ENTITIES[entity.toLowerCase()] ?? match;
   });
@@ -85,7 +89,14 @@ export function parseXml(source: string): XmlElement {
   return element;
 }
 
-/** Every descendant element with this name, in document order. */
+/** Every descendant element with this name, in document order. A loop, not recursion: a hostile file can nest deeper than the stack. */
 export function findAll(element: XmlElement, name: string): XmlElement[] {
-  return element.children.flatMap((child) => [...(child.name === name ? [child] : []), ...findAll(child, name)]);
+  const found: XmlElement[] = [];
+  const stack = [...element.children].reverse();
+  while (stack.length) {
+    const child = stack.pop()!;
+    if (child.name === name) found.push(child);
+    for (let index = child.children.length - 1; index >= 0; index--) stack.push(child.children[index]);
+  }
+  return found;
 }

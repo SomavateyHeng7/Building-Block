@@ -5,7 +5,9 @@ Pure functions that take a node list and return a new one. The store and the can
 
 ## Nesting rules
 
-- Only **components** sit inside containers, and only **one level** deep (no containers in containers).
+- Only **components and text boxes** sit inside containers, and only **one level** deep (no containers in
+  containers). A text box goes in and out the same way a component does (dropped on one, dragged off it), so a
+  caption moves with its container. **Tidy layout** arranges only the components; text boxes stay where they were put.
 - A nested component's `position` is **relative to its container**; `absolutePosition(node, nodes)` adds the
   container's position to get canvas coordinates.
 - Inside a container, components stay clear of the **header** and **padding**. `containerInsets(style)` gives
@@ -26,6 +28,7 @@ designs) is for. It also keeps every algorithm here simple: a node's canvas posi
 | `CONTAINER_HEADER` | 40 | Space on the header's side |
 | `LAYOUT_GAP` | 12 | Gap between components in Tidy and below the lowest one for new components |
 | `CONTAINER_MIN` | 200 × 120 | Smallest size Fit/Tidy/restyle will produce |
+| `MIN_NODE_SIZE` | container 200 × 120, component 80 × 32, text box 24 × 16 | Smallest size the W/H fields (`setNodeGeometry`) allow |
 
 ## Functions
 
@@ -65,7 +68,8 @@ Two rules keep containers consistent:
 
 ### `nudgeNodes(nodes, ids, dx, dy)`
 
-Arrow-key moves. A container carries its children (a child only moves if its container isn't also moving). Nested
+Arrow-key moves: 1 px, or 10 px with Shift (whole pixels, so boxes can be lined up exactly; see
+[pixel precision](07-editor-ui.md#pixel-precision--guidests-and-pixelguidestsx)). A container carries its children (a child only moves if its container isn't also moving). Nested
 components can't be nudged into the header or padding on the top/left; their container grows on the bottom/right.
 **Why nudging can't take a component out of its container:** arrow keys make small precise moves; leaving a
 container is a deliberate drag.

@@ -1,6 +1,8 @@
 import { createId } from "./factory";
 import type {
   Diagram,
+  SequenceBlock,
+  SequenceBlockKind,
   DiagramNode,
   DiagramSection,
   SequenceDiagram,
@@ -62,6 +64,7 @@ export function removeParticipant(sequence: SequenceDiagram, id: string): Sequen
     participants: sequence.participants.filter((participant) => participant.id !== id),
     steps: sequence.steps.flatMap((step): SequenceStep[] => {
       if (step.type === "message") return step.from === id || step.to === id ? [] : [step];
+      if (step.type !== "note") return [step];
       const over = step.over.filter((participantId) => participantId !== id);
       return over.length ? [{ ...step, over }] : [];
     }),
@@ -97,13 +100,108 @@ export function updateStep(
   };
 }
 
-export function moveStep(sequence: SequenceDiagram, id: string, index: number): SequenceDiagram {
-  const steps = moveItem(sequence.steps, id, index);
-  return steps === sequence.steps ? sequence : { ...sequence, steps };
+export function newBlock(kind: SequenceBlockKind, label?: string): SequenceBlock {
+  return { id: createId("block"), type: "block", kind, ...(label ? { label } : {}) };
 }
 
+export function newElse(label?: string): SequenceStep {
+  return { id: createId("else"), type: "else", ...(label ? { label } : {}) };
+}
+
+export function newEnd(): SequenceStep {
+  return { id: createId("end"), type: "end" };
+}
+
+/** What Mermaid calls the next part of each kind of frame, where it has one. */
+export const BLOCK_DIVIDER: Partial<Record<SequenceBlockKind, string>> = { alt: "else", par: "and", critical: "option" };
+
+/**
+ * Where a frame's markers are: the start, its own dividers and its end (indexes into `steps`), for a frame picked
+ * by any of its markers. Undefined when `id` isn't a frame marker or the frame isn't closed.
+ */
+export function frameOf(steps: SequenceStep[], id: string): { start: number; dividers: number[]; end: number } | undefined {
+  const open: { start: number; dividers: number[] }[] = [];
+  for (let index = 0; index < steps.length; index++) {
+    const step = steps[index];
+    if (step.type === "block") open.push({ start: index, dividers: [] });
+    else if (step.type === "else") open.at(-1)?.dividers.push(index);
+    else if (step.type === "end") {
+      const frame = open.pop();
+      if (!frame) continue;
+      const ids = [frame.start, ...frame.dividers, index].map((at) => steps[at].id);
+      if (ids.includes(id)) return { ...frame, end: index };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Pairs frame markers up: drops an `else` or `end` with no frame open, and closes frames left open at the bottom.
+ * Returns the same list when nothing needed fixing.
+ */
+export function balanceSteps(steps: SequenceStep[]): SequenceStep[] {
+  let depth = 0;
+  let changed = false;
+  const kept = steps.filter((step) => {
+    if (step.type === "block") depth += 1;
+    else if (step.type === "else" || step.type === "end") {
+      if (!depth) {
+        changed = true;
+        return false;
+      }
+      if (step.type === "end") depth -= 1;
+    }
+    return true;
+  });
+  if (!depth && !changed) return steps;
+  for (; depth > 0; depth--) kept.push(newEnd());
+  return kept;
+}
+
+/** Frame markers stay in order: a frame's start can't pass its own end (or a divider leave its frame). */
+export function moveStep(sequence: SequenceDiagram, id: string, index: number): SequenceDiagram {
+  const frame = frameOf(sequence.steps, id);
+  const from = sequence.steps.findIndex((step) => step.id === id);
+  let to = index;
+  if (frame) {
+    const markers = [frame.start, ...frame.dividers, frame.end];
+    const position = markers.indexOf(from);
+    const before = markers[position - 1];
+    const after = markers[position + 1];
+    if (before !== undefined) to = Math.max(to, before + 1);
+    if (after !== undefined) to = Math.min(to, after - 1);
+  }
+  const steps = moveItem(sequence.steps, id, to);
+  return steps === sequence.steps ? sequence : { ...sequence, steps: balanceSteps(steps) };
+}
+
+/** Removing any marker of a frame removes the whole frame (start, dividers and end); what was inside stays. */
 export function removeStep(sequence: SequenceDiagram, id: string): SequenceDiagram {
-  return { ...sequence, steps: sequence.steps.filter((step) => step.id !== id) };
+  const frame = frameOf(sequence.steps, id);
+  const gone = frame ? new Set([frame.start, ...frame.dividers, frame.end].map((at) => sequence.steps[at].id)) : new Set([id]);
+  return { ...sequence, steps: balanceSteps(sequence.steps.filter((step) => !gone.has(step.id))) };
+}
+
+/**
+ * Puts a frame around steps `from` to `to` (indexes, inclusive), or an empty one at `from` when `to` is before
+ * it. An alt, par or critical frame gets its second part straight away, as it needs one to mean anything.
+ */
+export function wrapSteps(sequence: SequenceDiagram, block: SequenceBlock, from: number, to = from - 1): SequenceDiagram {
+  const steps = [...sequence.steps];
+  const start = clampIndex(from, steps.length);
+  const end = clampIndex(to + 1, steps.length);
+  const divider = BLOCK_DIVIDER[block.kind] ? [newElse()] : [];
+  steps.splice(end, 0, ...divider, newEnd());
+  steps.splice(start, 0, block);
+  return { ...sequence, steps: balanceSteps(steps) };
+}
+
+/** "Place order (REST)" → what's sent and its protocol, the way captions are written on the sheet and in code. */
+export function splitCaption(text: string): { label?: string; protocol?: string } {
+  const trimmed = text.trim();
+  const match = /^(.*?)\s*\(([^()]+)\)$/.exec(trimmed);
+  if (!match) return trimmed ? { label: trimmed } : {};
+  return { ...(match[1] ? { label: match[1] } : {}), protocol: match[2].trim() };
 }
 
 /** The number shown beside each message (notes aren't numbered). */
@@ -174,25 +272,72 @@ export interface SequenceRow {
   step: SequenceStep;
   top: number;
   height: number;
-  /** Where a message's arrow runs, or a note's top. */
+  /** Where a message's arrow runs, a note's top, a frame's top or bottom edge, or a divider's line. */
   y: number;
   /** A note's lines, already wrapped. */
   lines?: string[];
+  /** Where a message's arrow starts and ends: at the lifeline, or at the edge of an activation bar on it. */
+  fromX?: number;
+  toX?: number;
+}
+
+/** A frame around steps (`loop`, `alt`…), with the lines between its parts. */
+export interface SequenceFrame {
+  block: SequenceBlock;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  /** How many frames it's inside. */
+  depth: number;
+  dividers: { id: string; label?: string; y: number }[];
+}
+
+/** A participant being busy (Mermaid's activation): a narrow bar on its lifeline. */
+export interface SequenceActivation {
+  participantId: string;
+  /** Left edge; bars inside bars sit a little to the right, as Mermaid draws them. */
+  x: number;
+  top: number;
+  bottom: number;
 }
 
 export interface SequenceLayout {
   columns: SequenceColumn[];
   rows: SequenceRow[];
-  /** Below the boxes, where the lifelines start; and where they end. */
+  frames: SequenceFrame[];
+  activations: SequenceActivation[];
+  /** Below the boxes, where the lifelines start; and where they end (the boxes repeat below, as Mermaid draws). */
   lifelineTop: number;
   lifelineBottom: number;
   width: number;
   height: number;
 }
 
+/** Activation bars are this wide; one inside another is moved right by half that. */
+export const ACTIVATION_WIDTH = 10;
+const FRAME_PAD = 14;
+/** Room for the frame's name tab ("loop") before its label. */
+export const FRAME_TAB = { height: 20, padding: 8 } as const;
+const ROW = { block: 40, else: 32, end: 18 } as const;
+
+/** How wide a frame's tab and label are, so the frame is at least that wide. */
+export function frameLabelWidth(block: SequenceBlock): number {
+  return estimateTextWidth(block.kind) + FRAME_TAB.padding * 2 + (block.label ? estimateTextWidth(`[${block.label}]`) + 12 : 0);
+}
+
 export function layoutSequence(sequence: SequenceDiagram): SequenceLayout {
+  const first = layoutFrom(sequence, 0);
+  // A frame round the first participant can reach past the margin: move everything right to make room.
+  const margin = SEQUENCE_LAYOUT.margin;
+  const left = Math.min(margin, ...first.frames.map((frame) => frame.left));
+  return left < margin / 2 ? layoutFrom(sequence, margin / 2 - left) : first;
+}
+
+function layoutFrom(sequence: SequenceDiagram, shift: number): SequenceLayout {
   const L = SEQUENCE_LAYOUT;
-  const { participants, steps } = sequence;
+  const { participants } = sequence;
+  const steps = balanceSteps(sequence.steps);
   const index = new Map(participants.map((participant, position) => [participant.id, position]));
   const widths = participants.map((participant) =>
     Math.max(L.minBox, Math.min(L.maxBox, estimateTextWidth(participant.label) + 32)),
@@ -220,27 +365,113 @@ export function layoutSequence(sequence: SequenceDiagram): SequenceLayout {
   }
 
   const columns: SequenceColumn[] = [];
-  let x = L.margin + (widths[0] ?? 0) / 2;
+  let x = L.margin + shift + (widths[0] ?? 0) / 2;
   participants.forEach((participant, position) => {
     columns.push({ participant, x, width: widths[position] });
     x += gaps[position] ?? 0;
   });
+  const columnX = new Map(columns.map((column) => [column.participant.id, column.x]));
+
+  // Activation bars: each participant has a stack of bars that are open.
+  const open = new Map<string, number[]>();
+  const activations: SequenceActivation[] = [];
+  const barEdge = (id: string, depth: number, side: 1 | -1) => {
+    const center = columnX.get(id) ?? 0;
+    if (!depth) return center;
+    const left = center - ACTIVATION_WIDTH / 2 + ((depth - 1) * ACTIVATION_WIDTH) / 2;
+    return side > 0 ? left + ACTIVATION_WIDTH : left;
+  };
+  const closeBar = (id: string, bottom: number) => {
+    const stack = open.get(id);
+    const top = stack?.pop();
+    if (top === undefined) return;
+    const center = columnX.get(id) ?? 0;
+    activations.push({ participantId: id, x: center - ACTIVATION_WIDTH / 2 + (stack!.length * ACTIVATION_WIDTH) / 2, top, bottom });
+  };
+
+  // Frames: each open one collects how far across its contents reach.
+  interface OpenFrame { block: SequenceBlock; top: number; depth: number; dividers: SequenceFrame["dividers"]; minX: number; maxX: number }
+  const frameStack: OpenFrame[] = [];
+  const frames: SequenceFrame[] = [];
+  const reach = (minX: number, maxX: number) => {
+    for (const frame of frameStack) {
+      frame.minX = Math.min(frame.minX, minX);
+      frame.maxX = Math.max(frame.maxX, maxX);
+    }
+  };
 
   const lifelineTop = L.margin + L.headerHeight;
   let cursor = lifelineTop + L.firstGap;
-  const rows: SequenceRow[] = steps.map((step) => {
+  const rows: SequenceRow[] = [];
+  for (const step of steps) {
+    if (step.type === "block") {
+      frameStack.push({ block: step, top: cursor + 6, depth: frameStack.length, dividers: [], minX: Infinity, maxX: -Infinity });
+      rows.push({ step, top: cursor, height: ROW.block, y: cursor + 6 });
+      cursor += ROW.block;
+      continue;
+    }
+    if (step.type === "else") {
+      const y = cursor + 8;
+      frameStack.at(-1)?.dividers.push({ id: step.id, label: step.label, y });
+      rows.push({ step, top: cursor, height: ROW.else, y });
+      cursor += ROW.else;
+      continue;
+    }
+    if (step.type === "end") {
+      const frame = frameStack.pop();
+      const y = cursor + 8;
+      rows.push({ step, top: cursor, height: ROW.end, y });
+      cursor += ROW.end;
+      if (!frame) continue;
+      // An empty frame sits under the first participant.
+      const fallback = columns[0] ? [columns[0].x - 60, columns[0].x + 60] : [L.margin, L.margin + 120];
+      const minX = Number.isFinite(frame.minX) ? frame.minX : fallback[0];
+      const maxX = Number.isFinite(frame.maxX) ? frame.maxX : fallback[1];
+      const left = minX - FRAME_PAD;
+      const right = Math.max(maxX + FRAME_PAD, left + frameLabelWidth(frame.block));
+      frames.push({ block: frame.block, left, right, top: frame.top, bottom: y, depth: frame.depth, dividers: frame.dividers });
+      // The frame itself counts as content of the frames around it, so they wrap it with room to spare.
+      reach(left, right);
+      continue;
+    }
     if (step.type === "note") {
       const lines = wrapText(step.text, L.noteWidth - L.notePadding * 2);
       const height = lines.length * L.noteLine + L.notePadding * 2 + 16;
-      const row = { step, top: cursor, height, y: cursor + 8, lines };
+      const xs = step.over.flatMap((id) => columnX.get(id) ?? []);
+      if (xs.length) {
+        const [left, right] = xs.length > 1 ? [Math.min(...xs) - 60, Math.max(...xs) + 60] : [xs[0] - L.noteWidth / 2, xs[0] + L.noteWidth / 2];
+        reach(left, right);
+      }
+      rows.push({ step, top: cursor, height, y: cursor + 8, lines });
       cursor += height;
-      return row;
+      continue;
     }
-    const height = step.from === step.to ? L.selfHeight : L.rowHeight;
-    const row = { step, top: cursor, height, y: cursor + (step.from === step.to ? 24 : height - 14) };
+    const self = step.from === step.to;
+    const height = self ? L.selfHeight : L.rowHeight;
+    const y = cursor + (self ? 24 : height - 14);
+    const fromX0 = columnX.get(step.from);
+    const toX0 = columnX.get(step.to);
+    let fromX: number | undefined;
+    let toX: number | undefined;
+    if (fromX0 !== undefined && toX0 !== undefined) {
+      const direction: 1 | -1 = self || toX0 > fromX0 ? 1 : -1;
+      fromX = barEdge(step.from, open.get(step.from)?.length ?? 0, direction);
+      if (step.deactivate) closeBar(step.from, y);
+      if (step.activate) {
+        if (!open.has(step.to)) open.set(step.to, []);
+        open.get(step.to)!.push(self ? y + 24 : y);
+      }
+      toX = barEdge(step.to, open.get(step.to)?.length ?? 0, self ? 1 : (-direction as 1 | -1));
+      if (self) reach(fromX0, fromX0 + L.selfLoop + captionWidth(step));
+      else reach(Math.min(fromX0, toX0), Math.max(fromX0, toX0));
+    }
+    rows.push({ step, top: cursor, height, y, fromX, toX });
     cursor += height;
-    return row;
-  });
+  }
+
+  const lifelineBottom = cursor + L.bottomGap;
+  // Bars still open run to the end of the lifeline.
+  for (const id of open.keys()) while (open.get(id)!.length) closeBar(id, lifelineBottom - 8);
 
   const last = columns.at(-1);
   // Calls to itself on the last participant loop out past its box.
@@ -252,16 +483,19 @@ export function layoutSequence(sequence: SequenceDiagram): SequenceLayout {
         last.x + last.width / 2,
         last.x + L.noteWidth / 2,
         lastSelf.length ? last.x + L.selfLoop + Math.max(...lastSelf.map(captionWidth)) : 0,
+        ...frames.map((frame) => frame.right),
       )
     : L.margin;
-  const lifelineBottom = cursor + L.bottomGap;
   return {
     columns,
     rows,
+    // Outer frames first, so inner ones draw over them.
+    frames: frames.sort((a, b) => a.depth - b.depth),
+    activations,
     lifelineTop,
     lifelineBottom,
     width: Math.ceil(right + L.margin),
-    height: Math.ceil(lifelineBottom + L.margin),
+    height: Math.ceil(lifelineBottom + L.headerHeight + L.margin),
   };
 }
 

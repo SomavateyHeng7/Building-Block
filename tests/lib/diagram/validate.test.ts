@@ -19,6 +19,13 @@ const diagramWith = (nodes: unknown[], extra: Record<string, unknown> = {}) => (
 });
 
 describe("parseDiagram", () => {
+  it("reads the old \"terminator\" shape as \"terminal\"", () => {
+    const input = diagramWith([node({ data: { kind: "block", label: "Start", shape: "terminator" } })]);
+    const { diagram, fixes } = parseDiagram(JSON.parse(JSON.stringify(input)));
+    expect(fixes).toEqual([]);
+    expect(diagram.sections[0].nodes[0].data).toMatchObject({ shape: "terminal" });
+  });
+
   it("round-trips a valid diagram without repairs", () => {
     const input = diagramWith([node()]);
     const { diagram, fixes } = parseDiagram(JSON.parse(JSON.stringify(input)));

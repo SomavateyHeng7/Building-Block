@@ -53,3 +53,4 @@ describe("readable text", () => {
     expect(readableTextOn("not a colour")).toBe("#111827");
   });
 });
+

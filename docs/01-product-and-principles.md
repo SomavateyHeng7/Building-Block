@@ -37,11 +37,15 @@ to choose this product over a SaaS whiteboard.
 - Earlier versions *did* store diagrams in `localStorage`. The start page now only offers to download and
   remove them ([files](06-files-saving-and-unsaved-changes.md#leftovers-from-earlier-versions)).
 
-### 2. The only data that can leave the browser is what a user types into a form
+### 2. Diagrams never leave the browser; little else does
 
 One optional form sends data to a form provider: the **waitlist** (an email address). It's switched off unless its
 environment variable is set, and it requires an explicit agreement checkbox. To contact us, people email the address
 on the contact page from their own email; the app sends nothing ([forms](11-privacy-consent-and-forms.md)).
+
+Visits are counted, if turned on, with Cloudflare Web Analytics: cookieless, no profile, page addresses only, never
+diagram content, and not at all for browsers that send Global Privacy Control or Do Not Track
+([operations](16-operations.md#monitoring-visits)).
 
 ### 3. Never lose work silently
 

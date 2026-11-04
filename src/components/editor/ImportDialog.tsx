@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { IMPORT_EXTENSIONS, ImportError, importDiagramText, type ImportResult } from "@/lib/diagram/importFile";
+import { useDialogFocus } from "./useDialogFocus";
+import { IMPORT_EXTENSIONS, ImportError, importDiagramText, readImportText, type ImportResult } from "@/lib/diagram/importFile";
 import type { LegendEntry } from "@/lib/diagram/types";
 
 const SECONDARY =
@@ -31,6 +32,8 @@ export default function ImportDialog({
   onImport: (result: ImportResult) => void;
   onClose: () => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -44,11 +47,11 @@ export default function ImportDialog({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  async function run(source: string, fileName?: string) {
+  async function run(source: string | Promise<string>, fileName?: string) {
     setBusy(true);
     setError(null);
     try {
-      onImport(await importDiagramText(source, fileName, legend));
+      onImport(await importDiagramText(await source, fileName, legend));
     } catch (problem) {
       setError(problem instanceof ImportError ? problem.message : "That couldn't be imported. Check it's a draw.io file or Mermaid sequence diagram.");
     } finally {
@@ -59,6 +62,7 @@ export default function ImportDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="import-title"
@@ -86,7 +90,7 @@ export default function ImportDialog({
             onChange={async (event) => {
               const file = event.target.files?.[0];
               event.target.value = "";
-              if (file) await run(await file.text(), file.name);
+              if (file) await run(readImportText(file), file.name);
             }}
           />
           <button type="button" autoFocus disabled={busy} className={`${PRIMARY} self-start`} onClick={() => input.current?.click()}>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { useDialogFocus } from "./useDialogFocus";
 
 interface UnsavedChangesDialogProps {
   name: string;
@@ -32,6 +33,8 @@ export default function UnsavedChangesDialog({
   onCancel,
   onContinue,
 }: UnsavedChangesDialogProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") onCancel();
@@ -43,6 +46,7 @@ export default function UnsavedChangesDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCancel}>
       <div
+        ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="unsaved-title"

@@ -36,20 +36,23 @@ Every file in the repository and what it is for. Details are in the linked pages
 | `not-found.tsx` | 404 page |
 | `privacy/page.tsx` | Privacy notice and acceptance box |
 | `privacy/WithdrawConsent.tsx` | Shows when consent was given; withdraw button |
-| `contact/page.tsx` | Contact page: self-help cards, the address to email, donation section |
+| `contact/page.tsx` | Contact page: self-help cards, the address to email |
+| `pricing/page.tsx` | Plans page: Free and coming-soon plans, Notify me, Subscribe once a plan is live |
 | `maintenance/page.tsx` | Maintenance page (dynamic) |
 | `maintenance/MaintenanceStatus.tsx` | Expected end time, Try again, 30-second check |
 | `favicon.ico`, `icon.svg`, `apple-icon.png` | Site icons (Next.js file conventions) |
 
 ## `src/proxy.ts`
 
-Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-maintenance-mode--srcproxyts)).
+Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-maintenance-mode--srcproxyts)), and each
+page's Content-Security-Policy with a fresh nonce ([security](14-security.md#content-security-policy)).
 
 ## `src/components/`
 
 | File | Purpose |
 | --- | --- |
 | `ConsentGate.tsx` | Privacy-notice acceptance dialog on app pages ([consent](11-privacy-consent-and-forms.md#the-consent-gate)) |
+| `Analytics.tsx` | Cloudflare Web Analytics beacon, with a token, in production, unless the browser opts out ([operations](16-operations.md#monitoring-visits)) |
 | `ToastViewport.tsx` | Renders toasts; per-toast timers that pause ([notifications](12-notifications.md)) |
 | `BackLink.tsx` | The "← Home" / "← Start" button at the top of a page |
 | `TemplatePreview.tsx` | SVG preview of a template's first tab |
@@ -76,9 +79,11 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 | `canvasFocus.ts` | `goTo`: open a view, select an item and ask the canvas to zoom to it |
 | `exportRendering.ts` | `useRenderEverything`: mounts off-screen nodes while an export pictures the canvas |
 | `edges/ConnectionEdge.tsx` | A connection line: right-angled, curved or straight, with the dot that bends it |
-| `Canvas.tsx` | React Flow canvas: changes → store, drops, connections, empty state |
-| `Sidebar.tsx` | Palette: drag or tap to add containers and components |
-| `PropertiesPanel.tsx` | Details for the selection (component, container, connection, several, diagram, internal design) |
+| `Canvas.tsx` | React Flow canvas: changes → store, drops, connections, snapping drags and resizes to other boxes, 1 px nudges, the draw.io grid, empty state |
+| `PixelGuides.tsx` | Alignment guides, px gaps and the position/size readout while dragging or resizing; Alt + hover measuring (`useGuides`) |
+| `flowchartView.ts` | `useIsFlowchart`: whether the view on screen has flowchart shapes (so its shapes show quick-add arrows) |
+| `Sidebar.tsx` | Palette: drag or tap to add containers, text boxes, components and flowchart shapes; `ShapeIcon` |
+| `PropertiesPanel.tsx` | Details for the selection (component, container, text box, connection, several, diagram, internal design): X/Y/W/H, shape, look |
 | `LegendPanel.tsx` | Legend categories: colour, name, usage, add, remove |
 | `ColorPicker.tsx` | Named palette popover with custom colours |
 | `ExportDialog.tsx` | Export choices and summary ([export](10-export.md#the-export-dialog--exportdialogtsx)) |
@@ -89,11 +94,13 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 | `detailsPanel.ts` | `showDetails`: asks EditorApp to show the details panel (drawer or collapsed) and focus a field in it |
 | `PanelToggle.tsx` | Collapse/expand button for side panels |
 | `Icon.tsx` | Editor icon set |
-| `SequenceCanvas.tsx` | A sequence tab: SVG drawing, drag between lifelines to add a message (`.bb-sequence-sheet` is what exports picture) |
-| `SequencePanel.tsx` | Details panel on a sequence tab: participant, message, note, or the tab |
+| `SequenceCanvas.tsx` | A sequence tab: toolbar, SVG drawing with frames and activation bars, editing in place, zoom, drag between lifelines to add a message (`.bb-sequence-sheet` is what exports picture) |
+| `SequenceCode.tsx` | The left panel on a sequence tab: its Mermaid code, live both ways, highlighted, Copy, `.mmd` download |
+| `SequencePanel.tsx` | The right panel on a sequence tab: details for a participant, message (with activation), note, frame or divider |
 | `sequenceSelection.ts` | What's selected on a sequence tab |
 | `ImportDialog.tsx` | Import from a file or pasted text; used by the start page and File menu |
-| `nodes/BlockNode.tsx` | A component on the canvas: colour, handles, rename, notes marker, L2 badge |
+| `nodes/BlockNode.tsx` | A component on the canvas: colour, flowchart shape, handles, rename, notes marker, L2 badge, quick-add arrows (flowchart tabs) |
+| `nodes/TextNode.tsx` | A text box: writing in place, font size, alignment, grows to fit its text |
 | `nodes/ContainerNode.tsx` | A container: header placement, outline, resize limits, Fit/Tidy toolbar |
 
 ## `src/lib/`
@@ -107,7 +114,9 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 | `diagram/factory.ts` | Ids, blank diagrams and tabs, default labels |
 | `diagram/defaultLegend.ts` | The default legend |
 | `diagram/palette.ts` | Named colours, colour names, next colour, parsing colour codes, readable text colour |
-| `diagram/layout.ts` | Nesting, insets, arrange, tidy, fit, nudge, re-parenting ([layout](08-layout-and-containers.md)) |
+| `diagram/shapes.ts` | The flowchart shapes: meaning, usual size, default name, SVG outline, label inset; `isFlowchart` |
+| `diagram/guides.ts` | Pixel guides: snapping moves and resizes to other boxes (including same width/height), alignment lines, gaps to neighbours, distances between two boxes |
+| `diagram/layout.ts` | Nesting, insets, minimum sizes, arrange, tidy, fit, nudge, re-parenting ([layout](08-layout-and-containers.md)) |
 | `diagram/flowAdapter.ts` | Our nodes/edges ↔ React Flow's; undo keys; connection captions; line geometry (`connectionPath`); change marks |
 | `diagram/search.ts` | Finding components, containers, connections and sequence steps across the diagram; highlighting matches |
 | `diagram/export.ts` | Rendering pictures, PDF, SVG, CSV rows, export titles ([export](10-export.md)) |
@@ -115,36 +124,44 @@ Maintenance mode for every page request ([routing](03-routing.md#4-the-proxy-mai
 | `diagram/componentIcons.ts` | The built-in component icons (key, label, SVG path); keys are stored in files |
 | `diagram/compare.ts` | Comparing two tabs by name; change counts and the change-list CSV rows |
 | `diagram/legacy.ts` | Finds, downloads and removes diagrams left by earlier versions |
-| `diagram/sequence.ts` | Sequence diagrams: editing helpers (pure) and `layoutSequence` |
+| `diagram/sequence.ts` | Sequence diagrams: editing helpers (pure), frames (`frameOf`, `balanceSteps`, `wrapSteps`), `splitCaption`, and `layoutSequence` (frames and activation bars included) |
 | `diagram/importFile.ts` | Import entry point: picks draw.io or Mermaid, checks the result with `parseDiagram` |
+| `diagram/hints.ts` | "Check before you share": unconnected components, connections without a protocol, components without an owner (flowcharts: only unconnected steps) |
 | `diagram/importDrawio.ts` | draw.io (.drawio/.xml, compressed or not) → architecture tabs |
-| `diagram/importMermaid.ts` | Mermaid `sequenceDiagram` → a sequence; `ImportError` |
+| `diagram/importMermaid.ts` | Mermaid `sequenceDiagram` → a sequence (frames, activations); `tokenizeMermaidLine` for highlighting; `ImportError` |
+| `diagram/exportMermaid.ts` | A sequence → Mermaid code, and code applied back keeping colours, descriptions and links; `mermaidLineOf` / `mermaidIdAtLine` |
 | `diagram/xml.ts` | Small XML reader used by the draw.io import |
 | `zip.ts` | Minimal ZIP writer |
 | `toast.ts` | Toast store and API |
 | `consent.ts` | Privacy-notice acceptance, versioned |
 | `recentTemplates.ts` | The last three template ids started (a small preference); `useRecentTemplates` |
+| `csp.ts` | The pages' Content-Security-Policy for a nonce; `NONCE_HEADER` ([security](14-security.md#content-security-policy)) |
 | `levels.ts` | Roadmap levels computed from store actions |
 | `maintenance.ts` | Reads maintenance settings; `Retry-After`; upcoming end |
+| `plans.ts` | The plans on `/pricing`; `formatPrice`, `canSubscribe`; plan limits (`checkSequenceCodeLines`, not enforced while `LIMITS_ENFORCED` is false) |
 
 ## `src/templates/`
 
 | File | Purpose |
 | --- | --- |
-| `types.ts` | `TemplateDefinition` (category, keywords, `orientable`, `build(options)`), `TEMPLATE_CATEGORIES` |
-| `index.ts` | The list of templates; `getTemplate(id)`; re-exports `filterTemplates` |
+| `types.ts` | `TemplateDefinition` (category, keywords, `orientable`, `hidden`, `build(options)`), `TEMPLATE_CATEGORIES` |
+| `index.ts` | `allTemplates`, `templates` (without the hidden ones), `getTemplate(id)`; re-exports `filterTemplates` |
 | `filter.ts` | `filterTemplates`: search words and category for the templates page |
 | `blank.ts` | Blank canvas |
 | `build.ts` | Lays out templates written as data (`CanvasSpec`), vertically or as horizontal lanes (steps placed by their place in the flow), and builds diagrams with fresh ids |
 | `l0-architecture.ts` | Four-layer L0 example with connections |
 | `three-tier.ts` | Three-tier web application |
 | `event-driven.ts` | Event-driven microservices, with an internal design (L2) |
-| `current-vs-target.ts` | Two tabs, current and target, for Compare tabs |
 | `cross-functional.ts` | Swimlane process: one lane per team, hand-offs between lanes; vertical or horizontal |
 | `c4-context.ts` | System context: people, our system, external systems |
 | `data-pipeline.ts` | Sources, ingestion, lake and warehouse, consumption |
 | `cloud-landing-zone.ts` | Public, private and data subnets with shared services |
 | `migration-roadmap.ts` | Current, Transition and Target tabs |
+| `serverless.ts` | Serverless API on managed services |
+| `data-platform.ts` | Data and analytics platform |
+| `flowchart.ts` | Process flowchart: pills, steps, decision diamonds, a database and a title text box, placed by hand |
+| `current-vs-target.ts` | Two tabs, current and target, for Compare tabs (hidden for now) |
+| `sequence-build.ts` | Builds a one-tab sequence diagram from Mermaid code (`sequenceFromMermaid`) or from participants and steps written as data |
 | `sequence.ts` | A checkout flow as a sequence tab |
 
 ## `src/types/`

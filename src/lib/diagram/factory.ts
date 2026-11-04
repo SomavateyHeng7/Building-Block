@@ -6,7 +6,8 @@ export function createId(prefix: string): string {
 }
 
 /** The name a component or container gets when its name is left blank. */
-export function defaultLabel(type: "container" | "block"): string {
+export function defaultLabel(type: "container" | "block" | "text"): string {
+  if (type === "text") return "Text";
   return type === "container" ? "Untitled Container" : "Untitled";
 }
 

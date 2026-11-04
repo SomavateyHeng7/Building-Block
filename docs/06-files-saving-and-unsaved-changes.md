@@ -14,6 +14,7 @@ unsaved changes, and holds the file store.
 | `saved` | **The exact diagram object last written to a file.** `null` when never saved. |
 | `saving` | A write is in progress (prevents overlapping writes). |
 | `error` | The last write failed (stops autosave, shows "Not saved"). |
+| `savedAt` | When the diagram was last written or downloaded (ms); `null` until then. Shown in the toolbar tooltip. |
 
 `startDiagram(diagram, file?)` makes a diagram the open one: loads it into the diagram store (clearing history)
 and resets the file store. With `file` (opened from disk) it is clean; without (new or template) it has no file.
@@ -34,6 +35,12 @@ export function supportsFilePicker() {
 The types for the API are declared in `src/types/file-system-access.d.ts` because TypeScript's DOM library
 doesn't include them yet. The UI adapts its wording: "Save as…" becomes "Download a copy", and the File menu and
 start page explain that the browser can't save over a file.
+
+**Browsers without the API** (Safari, Firefox) never autosave, so they get three extra cues: a **"Downloaded
+plan.json"** toast on each Save, a **"Changed since download"** toolbar status (tooltip gives the time of the last
+download), and a **"You have unsaved changes"** reminder with a **Download** button every 5 minutes
+(`DOWNLOAD_REMINDER_MS` in `EditorApp.tsx`) while changes are unsaved. **Why:** each Save creates another file
+(`plan (1).json`…), so people need to know which download is the latest and when they last made one.
 
 ## Saving — `saveDiagramToFile({ saveAs })`
 
@@ -87,7 +94,10 @@ function differsFromSaved(saved, diagram) {
 
 - **Identity, not deep comparison:** the store creates a new diagram object for every edit, so `!==` means
   "edited". It's instant regardless of diagram size.
-- **An empty, never-saved diagram is clean:** there's nothing to lose, so New → New doesn't nag.
+- **An empty, never-saved diagram is clean:** there's nothing to lose, so New → New doesn't nag. "Empty" is
+  `hasContent`: no boxes on any tab **and no participants or steps on any sequence tab**. Sequence tabs keep `nodes`
+  empty, and counting nodes alone made a new sequence diagram look empty: no "Not saved" status, no warning on
+  reload and no recovery copy, so a reload lost it in silence (fixed, and tested).
 - **Navigation isn't an edit:** switching tabs or opening an internal design creates a new object that differs
   only in `activeSectionId`/`activeDetailId`. Comparing every other top-level field *by identity* recognises that
   in O(number of fields). Before this rule, switching tabs showed "Unsaved changes" and triggered an autosave.
@@ -127,7 +137,7 @@ The Save button is highlighted amber while there are changes and no file.
 
 | How work could be lost | Protection |
 | --- | --- |
-| Closing or reloading the tab | `beforeunload` handler while dirty (in `EditorApp`) |
+| Closing or reloading the tab | `beforeunload` handler while dirty (in `EditorApp`). If the person goes ahead, `pagehide` brings the recovery copy up to date (when recovery is on), or else sets a flag in `sessionStorage` (`markLostUnsaved`: just "1", nothing of the diagram), so the start page says the diagram couldn't be brought back and offers to turn recovery copies on |
 | File → New / Open in the editor | `useUnsavedGuard` in the toolbar |
 | Toolbar back button | `useUnsavedGuard`, then `opened: false` |
 | Browser Back, then New / Open / a template / dropping a file on `/diagrams` or `/templates` | `useUnsavedGuard` on those pages (the diagram is still in memory) |

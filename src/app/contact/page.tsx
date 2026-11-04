@@ -9,10 +9,8 @@ export const metadata: Metadata = {
   description: "Questions, problems, ideas or privacy requests: get in touch with the Building Block team.",
 };
 
-/** The address people write to, set at build time. Without it the email section is hidden. */
+/** The address people write to, set at build time. Without it the page points to the website and social pages instead. */
 const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL;
-/** A donation page (e.g. Ko-fi, GitHub Sponsors, a Stripe payment link), set at build time. Without it the section is hidden. */
-const DONATE_URL = process.env.NEXT_PUBLIC_DONATE_URL?.startsWith("https://") ? process.env.NEXT_PUBLIC_DONATE_URL : undefined;
 
 const ELSEWHERE = [
   {
@@ -67,56 +65,6 @@ function ElsewhereLinks() {
   );
 }
 
-function DonateSection() {
-  if (!DONATE_URL) {
-    return process.env.NODE_ENV === "development" ? (
-      <p className="rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
-        Set <code className="font-mono">NEXT_PUBLIC_DONATE_URL</code> (an https link to your donation page) to show the donation section.
-      </p>
-    ) : null;
-  }
-  return (
-    <section
-      aria-labelledby="donate-title"
-      className="flex flex-col gap-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 sm:flex-row sm:items-center sm:gap-6 dark:border-emerald-900 dark:bg-emerald-950/40"
-    >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-700 dark:bg-zinc-900 dark:text-emerald-400" aria-hidden>
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 20s-7-4.35-7-10a4 4 0 0 1 7-2.65A4 4 0 0 1 19 10c0 5.65-7 10-7 10z" />
-        </svg>
-      </span>
-      <div className="min-w-0 flex-1">
-        <h2 id="donate-title" className="font-semibold text-zinc-900 dark:text-zinc-100">
-          Would you like to support the team?
-        </h2>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Building Block is free, with no ads, no tracking and no account. If it saves you time, a donation helps pay for hosting and
-          new features. Any amount helps, and it&apos;s entirely optional.
-        </p>
-        <p className="mt-2 text-xs text-zinc-500">
-          Opens our payment provider in a new tab; we never see your card details. See the{" "}
-          <Link href="/privacy" className="underline underline-offset-2 hover:text-zinc-900 dark:hover:text-zinc-100">
-            privacy notice
-          </Link>
-          .
-        </p>
-      </div>
-      <a
-        href={DONATE_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex shrink-0 items-center justify-center gap-1.5 self-start rounded-full bg-emerald-700 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-800 sm:self-center dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400"
-      >
-        Donate
-        <span className="sr-only"> (opens in a new tab)</span>
-        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="M7 17 17 7M8 7h9v9" />
-        </svg>
-      </a>
-    </section>
-  );
-}
-
 /** The address to write to, and what helps us reply. There's no form: people write from their own email. */
 function EmailSection() {
   if (!CONTACT_EMAIL) {
@@ -124,7 +72,17 @@ function EmailSection() {
       <p className="rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
         Set <code className="font-mono">NEXT_PUBLIC_CONTACT_EMAIL</code> to the address people should write to, then rebuild, to show it here.
       </p>
-    ) : null;
+    ) : (
+      <section aria-labelledby="email-title" className="flex flex-col gap-2 rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
+        <h2 id="email-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          Get in touch
+        </h2>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          Use the website or social pages above to reach us, including for privacy requests such as removing your email from the
+          waitlist. We hold no diagrams, so there are none to delete.
+        </p>
+      </section>
+    );
   }
   const subject = encodeURIComponent("Building Block");
   return (
@@ -196,7 +154,6 @@ export default function ContactPage() {
 
         <EmailSection />
 
-        <DonateSection />
       </main>
       <Footer />
     </div>

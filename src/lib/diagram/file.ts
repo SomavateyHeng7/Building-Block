@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { toast } from "@/lib/toast";
 import { useDiagramStore } from "./store";
 import type { Diagram } from "./types";
+import { fileSizeProblem } from "./limits";
+import { createId } from "./factory";
 import { DiagramFileError, parseDiagram } from "./validate";
 
 /**
@@ -21,6 +23,8 @@ interface FileState {
   saving: boolean;
   /** The last write failed. */
   error: boolean;
+  /** When the diagram was last written or downloaded (ms since the epoch); null when it hasn't been this session. */
+  savedAt: number | null;
 }
 
 export const useFileStore = create<FileState>(() => ({
@@ -30,6 +34,7 @@ export const useFileStore = create<FileState>(() => ({
   saved: null,
   saving: false,
   error: false,
+  savedAt: null,
 }));
 
 const PICKER_TYPES: FilePickerAcceptType[] = [
@@ -40,8 +45,14 @@ export function supportsFilePicker(): boolean {
   return typeof window !== "undefined" && !!window.showOpenFilePicker && !!window.showSaveFilePicker;
 }
 
+/**
+ * Whether there's anything to lose: boxes on any tab, or participants or steps on a sequence tab (which keeps
+ * `nodes` empty, so counting nodes alone made a new sequence diagram look empty: no warning on reload, no recovery).
+ */
 export function hasContent(diagram: Diagram): boolean {
-  return diagram.sections.some((section) => section.nodes.length > 0);
+  return diagram.sections.some(
+    (section) => section.nodes.length > 0 || !!section.sequence?.participants.length || !!section.sequence?.steps.length,
+  );
 }
 
 /**
@@ -116,6 +127,7 @@ export function startDiagram(diagram: Diagram, file?: { handle: FileSystemFileHa
     saved: file ? diagram : null,
     saving: false,
     error: false,
+    savedAt: null,
   });
 }
 
@@ -141,10 +153,13 @@ export async function saveDiagramToFile({ saveAs = false }: { saveAs?: boolean }
       const writable = await handle.createWritable();
       await writable.write(json);
       await writable.close();
-      useFileStore.setState({ handle, fileName: handle.name, saved: diagram, error: false });
+      useFileStore.setState({ handle, fileName: handle.name, saved: diagram, error: false, savedAt: Date.now() });
     } else {
       downloadBlob(new Blob([json], { type: "application/json" }), baseName);
-      useFileStore.setState({ fileName: baseName, saved: diagram, error: false });
+      useFileStore.setState({ fileName: baseName, saved: diagram, error: false, savedAt: Date.now() });
+      toast.success(`Downloaded ${baseName}`, {
+        description: "This browser can't save over a file, so each Save downloads a new copy. Keep the latest one.",
+      });
     }
     return true;
   } catch (error) {
@@ -164,6 +179,8 @@ export async function saveDiagramToFile({ saveAs = false }: { saveAs?: boolean }
 }
 
 export async function parseDiagramFile(file: File): Promise<{ diagram: Diagram; fixes: string[] }> {
+  const tooLarge = fileSizeProblem(file);
+  if (tooLarge) throw new DiagramFileError(tooLarge);
   let json: unknown;
   try {
     json = JSON.parse(await file.text());
@@ -189,8 +206,10 @@ function pickFileWithInput(): Promise<File | null> {
 /**
  * Asks for a diagram file and opens it. Resolves null if the user cancelled or the file couldn't be read
  * (the user has already been told why). Call it straight from a click so the browser allows the picker.
+ * With `asCopy` the file is only a starting point: the diagram opens as a new one, and Save asks where to put it
+ * instead of writing over the file (for reusing a layout and legend as a template).
  */
-export async function openDiagramFromDevice(): Promise<Diagram | null> {
+export async function openDiagramFromDevice({ asCopy = false }: { asCopy?: boolean } = {}): Promise<Diagram | null> {
   let file: File | null;
   let handle: FileSystemFileHandle | null = null;
   try {
@@ -208,7 +227,46 @@ export async function openDiagramFromDevice(): Promise<Diagram | null> {
     return null;
   }
   if (!file) return null;
-  return openDiagramFile(file, handle);
+  return openDiagramFile(file, asCopy ? null : handle, asCopy);
+}
+
+/**
+ * Asks for another copy of the open diagram (a reviewer's, say) and brings its review comments into this one. Nothing
+ * else in the copy is used, and the copy is not changed. Call it straight from a click so the browser allows the picker.
+ */
+export async function mergeCommentsFromDevice(): Promise<void> {
+  let file: File | null;
+  try {
+    file = supportsFilePicker()
+      ? await (await window.showOpenFilePicker!({ types: PICKER_TYPES, multiple: false }))[0].getFile()
+      : await pickFileWithInput();
+  } catch (error) {
+    if (!isAbort(error)) {
+      console.error(error);
+      toast.error("Couldn't open the file", { description: "Please try again." });
+    }
+    return;
+  }
+  if (!file) return;
+  try {
+    const { diagram: other } = await parseDiagramFile(file);
+    if (!other.comments?.length) {
+      toast.info(`No comments in ${file.name}`);
+      return;
+    }
+    const { added, resolved, skipped } = useDiagramStore.getState().mergeComments(other.comments);
+    const notes = [
+      resolved ? `${resolved} marked resolved.` : "",
+      skipped ? `${skipped} skipped: they're about something that isn't in this diagram.` : "",
+      other.id !== useDiagramStore.getState().diagram.id ? "That file looks like a different diagram, so check these are the right comments." : "",
+    ].filter(Boolean);
+    const title = added ? `Added ${added} comment${added === 1 ? "" : "s"} from ${file.name}` : `Nothing new in ${file.name}`;
+    (added || resolved ? toast.success : toast.info)(title, { description: notes.join(" ") || undefined });
+  } catch (error) {
+    toast.error(`Couldn't read "${file.name}"`, {
+      description: error instanceof DiagramFileError ? error.message : "Please check it's a diagram saved from Building Block.",
+    });
+  }
 }
 
 export interface DroppedFile {
@@ -259,10 +317,12 @@ export async function openLaunchedDiagram(handle: FileSystemHandle): Promise<Dia
   return openDiagramFile(file, fileHandle);
 }
 
-async function openDiagramFile(file: File, handle: FileSystemFileHandle | null): Promise<Diagram | null> {
+async function openDiagramFile(file: File, handle: FileSystemFileHandle | null, asCopy = false): Promise<Diagram | null> {
   try {
-    const { diagram, fixes } = await parseDiagramFile(file);
-    startDiagram(diagram, { handle, fileName: file.name });
+    const parsed = await parseDiagramFile(file);
+    const { fixes } = parsed;
+    const diagram = asCopy ? { ...parsed.diagram, id: createId("diagram") } : parsed.diagram;
+    startDiagram(diagram, asCopy ? undefined : { handle, fileName: file.name });
     if (fixes.length) {
       toast.warning(`Opened "${diagram.name}" with repairs`, {
         description: "Some parts of the file needed fixing. Save to keep the repaired version.",

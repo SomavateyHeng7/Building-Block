@@ -22,4 +22,6 @@ export interface TemplateDefinition {
   /** Lanes can run vertically (columns) or horizontally (rows). */
   orientable?: boolean;
   build: (options?: TemplateOptions) => Diagram;
+  /** Left off the start page and /templates for now; still built and tested, and back by removing this. */
+  hidden?: boolean;
 }

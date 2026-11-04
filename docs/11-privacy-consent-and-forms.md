@@ -6,10 +6,11 @@
 | --- | --- | --- |
 | Diagrams | Memory while open; the user's `.json` file | **Never** |
 | Exports | Generated in the browser, downloaded | Never |
-| Preferences (theme, panels, export choices, the last three template ids started, `bb:recent-templates`) | `localStorage` | Never |
+| Preferences (theme, panels, export choices, the name used on review comments, the last three template ids started, `bb:recent-templates`) | `localStorage` | Never |
 | Privacy-notice acceptance | `localStorage` (`bb:consent`) | Never |
 | Waitlist email + consent record | Sent to the form provider | **Only if** `NEXT_PUBLIC_WAITLIST_URL` is set **and** the user ticks the box and submits |
 | Maintenance bypass cookie | Cookie, HttpOnly | Sent to our server (team only) |
+| Visit counts (page address, referrer, browser, device, country) | Cloudflare Web Analytics, no cookies | **Only if** `NEXT_PUBLIC_CF_ANALYTICS_TOKEN` is set, and not when the browser sends GPC or Do Not Track |
 | Standard hosting logs (IP, pages) | Hosting provider | Yes, as for any website |
 
 The privacy notice (`src/app/privacy/page.tsx`) says the same thing in plain language. **If you change what is
@@ -22,8 +23,13 @@ stored or sent, update the notice and bump `PRIVACY_VERSION`** (below).
 | `theme` | `next-themes` | `"light"`, `"dark"` or `"system"` |
 | `bb:panels` | `EditorApp` | `{ palette: boolean, properties: boolean }`: which side panels are collapsed |
 | `bb:export` | `Toolbar` | `{ formats, bundle, theme }`: the last export choices |
+| `bb:author` | `CommentsSection` | The name last typed on a review comment, so it isn't retyped. Only a convenience: comments themselves are saved in the diagram file |
 | `bb:exportTheme` | *(earlier versions)* | Still read once as the default export style; never written |
 | `bb:consent` | `src/lib/consent.ts` | `{ version, acceptedAt }` |
+| `bb:sequence-code-width` | `SequenceCode` | The Mermaid code panel's width in px |
+| `bb:recovery:enabled` | `src/lib/diagram/recovery.ts` | `"true"` while recovery copies are on (off unless the person turns them on) |
+| `bb:recovery:copy` | `recovery.ts` | Only while recovery copies are on: the open diagram's unsaved changes, until they're saved or discarded. Turning recovery off deletes it |
+| `bb:lost-unsaved` (**`sessionStorage`**, this tab only) | `EditorApp` / `recovery.ts` | `"1"` after leaving a diagram with unsaved changes that nothing kept, so the start page can say so once. Nothing of the diagram |
 | `bb:diagram:*`, `bb:templates`, `bb:index`, `bb:backups` | *(earlier versions)* | Old diagrams; only read and, on request, removed (see [legacy](06-files-saving-and-unsaved-changes.md#leftovers-from-earlier-versions)) |
 
 Every read and write is wrapped in `try/catch`: storage can be blocked (private browsing, policies), and the app
@@ -85,7 +91,8 @@ under it.
 with the address from `NEXT_PUBLIC_CONTACT_EMAIL`, what helps us reply (for a problem: what happened and which
 browser, without confidential diagram content; for a privacy request: that we hold no diagrams), and a **Write an
 email** button (`mailto:`, subject "Building Block"). The address is shown as text too, for people without an email
-app set up. Without the variable the section is hidden (in development, a hint says how to show it).
+app set up. Without the variable the section says to use the website and social pages instead (in development, a hint says how
+to show the address).
 
 **Why no form:** the product has no server by design, and a form provider would be one more place people's details
 go. Email keeps it simple: people write from their own email, and the app sends nothing. (There was a form, posting
@@ -93,5 +100,6 @@ to a provider; it was removed in October 2026.)
 
 ## The privacy notice — `src/app/privacy/page.tsx`
 
-A static page built from a `SECTIONS` array: your diagrams, what is stored in your browser, waitlist, writing to us,
-cookies/analytics/fonts, hosting logs, plus the acceptance box. Keep it in step with the tables above.
+A static page built from a `SECTIONS` array: who we are, your diagrams, what is stored in your browser, waitlist
+(naming the provider from the host of `NEXT_PUBLIC_WAITLIST_URL`, and how long emails are kept), writing to us,
+cookies/analytics/fonts, your rights, hosting logs, plus the acceptance box. Keep it in step with the tables above.

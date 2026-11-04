@@ -90,6 +90,16 @@ button, a, summary, [role="button"], [role="tab"], [role="menuitem"], label {
   opacity: 0;
   transition: opacity 0.12s;
 }
+/* Keyboard focus on the canvas must be visible: boxes and connections are reached with Tab. */
+.react-flow__node:focus-visible,
+.react-flow__edge:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
+}
+.react-flow__edge:focus-visible .react-flow__edge-path {
+  stroke: #2563eb;
+  stroke-width: 3;
+}
 .react-flow__node:hover .react-flow__handle.bb-handle,
 .react-flow__node.selected .react-flow__handle.bb-handle,
 .react-flow:has(.react-flow__handle.connectingfrom) .react-flow__handle.bb-handle {
@@ -99,6 +109,51 @@ button, a, summary, [role="button"], [role="tab"], [role="menuitem"], label {
   .react-flow__handle.bb-handle {
     opacity: 0.85;
   }
+}
+/* A round blue dot starts a connection: say so with the cursor, and keep it above the resize strips it sits on. */
+.react-flow .react-flow__handle.bb-handle {
+  z-index: 2;
+  cursor: crosshair;
+}
+
+/*
+ * Resize controls look nothing like the connection dots: white squares at the corners, and a grab strip 9 px
+ * wide along each edge (drawn as a 1 px line), so grabbing an edge resizes rather than needing a 1 px target.
+ * Higher specificity than React Flow's own stylesheet, which loads later.
+ */
+.react-flow .react-flow__resize-control {
+  z-index: 1;
+}
+.react-flow .react-flow__resize-control.handle {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid #2563eb;
+  border-radius: 2px;
+  background-color: #ffffff;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);
+}
+.react-flow .react-flow__resize-control.line {
+  border-width: 0;
+}
+.react-flow .react-flow__resize-control.line.left,
+.react-flow .react-flow__resize-control.line.right {
+  width: 9px;
+  background: linear-gradient(to right, transparent 4px, #2563eb 4px, #2563eb 5px, transparent 5px);
+}
+.react-flow .react-flow__resize-control.line.top,
+.react-flow .react-flow__resize-control.line.bottom {
+  height: 9px;
+  background: linear-gradient(to bottom, transparent 4px, #2563eb 4px, #2563eb 5px, transparent 5px);
+}
+/* One thing at a time: no connection dots or quick-add arrows mid-resize, no resize controls mid-connection. */
+.react-flow.bb-resizing .react-flow__handle.bb-handle,
+.react-flow.bb-resizing .bb-quick-add {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+.react-flow:has(.react-flow__handle.connectingfrom) .react-flow__resize-control {
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* View mode: connection dots stay in place (lines are attached to them) but can't be seen or used. */
@@ -193,4 +248,19 @@ button, a, summary, [role="button"], [role="tab"], [role="menuitem"], label {
     opacity: 0;
     transform: translateY(8px);
   }
+}
+
+/* Quick-add arrows on flowchart tabs (as in draw.io): shown while a shape is hovered or selected. */
+.bb-quick-add {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms;
+}
+.react-flow__node:hover .bb-quick-add,
+.react-flow__node.selected .bb-quick-add {
+  opacity: 1;
+  pointer-events: all;
+}
+.react-flow__node.dragging .bb-quick-add {
+  opacity: 0;
 }

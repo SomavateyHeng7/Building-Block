@@ -117,3 +117,29 @@ function recoverySnapshot(): RecoveryCopy | null {
 export function useRecoveryCopy(): RecoveryCopy | null {
   return useSyncExternalStore(subscribeRecovery, recoverySnapshot, () => null);
 }
+
+/**
+ * Left with unsaved changes (the browser asked, and the person went ahead) and no recovery copy to bring them back:
+ * a flag for this tab only, so the start page can say so instead of starting fresh in silence. Nothing of the
+ * diagram is stored.
+ */
+const LOST_KEY = "bb:lost-unsaved";
+
+export function markLostUnsaved(): void {
+  try {
+    window.sessionStorage.setItem(LOST_KEY, "1");
+  } catch {
+    // Storage is blocked: nothing to say later.
+  }
+}
+
+/** Whether changes were lost on the way here; asking clears it, so it's said once. */
+export function takeLostUnsaved(): boolean {
+  try {
+    const lost = window.sessionStorage.getItem(LOST_KEY) === "1";
+    window.sessionStorage.removeItem(LOST_KEY);
+    return lost;
+  } catch {
+    return false;
+  }
+}

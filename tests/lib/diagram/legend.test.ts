@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { everyNode, getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { createBlankDiagram } from "@/lib/diagram/factory";
+import { LEGEND_PRESETS } from "@/lib/diagram/defaultLegend";
 
 const store = () => useDiagramStore.getState();
 const keys = () => store().diagram.legend.map((entry) => entry.key);
@@ -49,5 +50,22 @@ describe("legend order and removal", () => {
     store().addBlock({ x: 0, y: 0 }, null, first);
     store().removeLegendEntry(first, "nope");
     expect(getActiveSection(store().diagram).nodes[0].data.colorKey).toBeUndefined();
+  });
+});
+
+describe("legend presets", () => {
+  beforeEach(() => store().loadDiagram({ ...createBlankDiagram(), legend: [] }));
+
+  it("adds a standard's categories once, as one undo step", () => {
+    const c4 = LEGEND_PRESETS.find((preset) => preset.id === "c4")!;
+    expect(store().addLegendEntries(c4.entries)).toBe(c4.entries.length);
+    expect(store().diagram.legend.map((entry) => entry.label)).toEqual(c4.entries.map((entry) => entry.label));
+    expect(new Set(keys()).size).toBe(c4.entries.length);
+
+    expect(store().addLegendEntries(c4.entries)).toBe(0);
+    expect(store().diagram.legend).toHaveLength(c4.entries.length);
+
+    store().undo();
+    expect(store().diagram.legend).toHaveLength(0);
   });
 });

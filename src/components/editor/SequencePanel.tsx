@@ -3,7 +3,10 @@
 import { useState, type ReactNode } from "react";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import {
+  BLOCK_DIVIDER,
   addStep,
+  frameOf,
+  newElse,
   findLinkable,
   linkableComponents,
   linkKey,
@@ -15,7 +18,17 @@ import {
   updateParticipant,
   updateStep,
 } from "@/lib/diagram/sequence";
-import type { SequenceDiagram, SequenceMessage, SequenceMessageKind, SequenceNote, SequenceParticipant } from "@/lib/diagram/types";
+import type {
+  SequenceBlock,
+  SequenceBlockKind,
+  SequenceDiagram,
+  SequenceMessage,
+  SequenceMessageKind,
+  SequenceNote,
+  SequenceParticipant,
+  SequenceStep,
+} from "@/lib/diagram/types";
+import { FRAME_KINDS } from "./SequenceCanvas";
 import { goTo } from "./canvasFocus";
 import { Icon } from "./Icon";
 import { SEQUENCE_LABEL_FIELD_ID, findSequenceItem, selectSequenceItem, useSequenceSelection } from "./sequenceSelection";
@@ -62,6 +75,12 @@ export default function SequencePanel({ headerAction }: { headerAction?: ReactNo
   if (item?.step.type === "note") {
     return <NotePanel sequence={sequence} note={item.step} index={item.index} action={headerAction} />;
   }
+  if (item?.step.type === "block") {
+    return <FramePanel sequence={sequence} block={item.step} index={item.index} action={headerAction} />;
+  }
+  if (item?.step.type === "else") {
+    return <DividerPanel sequence={sequence} step={item.step} action={headerAction} />;
+  }
   return <OverviewPanel sequence={sequence} action={headerAction} />;
 }
 
@@ -104,7 +123,7 @@ function OverviewPanel({ sequence, action }: { sequence: SequenceDiagram; action
         <div className={FIELD_LABEL}>
           Add a message at the end
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5">
-            <select aria-label="From" className={FIELD} value={fromId} onChange={(event) => setFrom(event.target.value)}>
+            <select aria-label="From" className={`${FIELD} min-w-0`} value={fromId} onChange={(event) => setFrom(event.target.value)}>
               {participants.map((participant) => (
                 <option key={participant.id} value={participant.id}>
                   {participant.label}
@@ -112,7 +131,7 @@ function OverviewPanel({ sequence, action }: { sequence: SequenceDiagram; action
               ))}
             </select>
             <span aria-hidden>→</span>
-            <select aria-label="To" className={FIELD} value={toId} onChange={(event) => setTo(event.target.value)}>
+            <select aria-label="To" className={`${FIELD} min-w-0`} value={toId} onChange={(event) => setTo(event.target.value)}>
               {participants.map((participant) => (
                 <option key={participant.id} value={participant.id}>
                   {participant.label}
@@ -137,8 +156,9 @@ function OverviewPanel({ sequence, action }: { sequence: SequenceDiagram; action
       <div className="flex gap-2.5 rounded-lg bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
         <Icon name="cursor" className="mt-0.5 h-4 w-4 shrink-0" />
         <p>
-          Drag from one lifeline (the dashed line under a participant) to another to add a message there; drag back onto the
-          same one for a call to itself. Click a participant, message or note to edit it.
+          Use the bar above the sheet to add participants, messages, notes and frames (loop, alt…), or write Mermaid on the
+          left: the sheet follows as you type. Drag from one lifeline to another to add a message there. Double-click
+          anything to rename it.
         </p>
       </div>
     </div>
@@ -411,13 +431,35 @@ function MessagePanel({ sequence, message, index, action }: { sequence: Sequence
         </div>
         <span className={HINT}>{KIND_OPTIONS.find((option) => option.value === kind)?.hint}</span>
       </div>
+      <div className={FIELD_LABEL}>
+        Activation
+        <label className="flex items-center gap-2 font-normal">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-zinc-900 dark:accent-zinc-100"
+            checked={!!message.activate}
+            onChange={(event) => edit((current) => updateStep(current, message.id, { activate: event.target.checked || undefined }))}
+          />
+          {participantName(sequence, message.to)} becomes busy (starts a bar, <code>+</code>)
+        </label>
+        <label className="flex items-center gap-2 font-normal">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-zinc-900 dark:accent-zinc-100"
+            checked={!!message.deactivate}
+            onChange={(event) => edit((current) => updateStep(current, message.id, { deactivate: event.target.checked || undefined }))}
+          />
+          {participantName(sequence, message.from)} is done (ends its bar, <code>-</code>)
+        </label>
+      </div>
       <div className="flex flex-wrap gap-1.5">
         <button
           type="button"
           className={ACTION_BUTTON}
           title="Add the reply to this call just after it"
           onClick={() => {
-            const reply = newMessage(message.to, message.from, { kind: "reply" });
+            // A reply to a call that started a bar ends it, as Mermaid's ->>+ … -->>- pair.
+            const reply = newMessage(message.to, message.from, { kind: "reply", ...(message.activate ? { deactivate: true } : {}) });
             edit((current) => addStep(current, reply, index + 1));
             selectSequenceItem(reply.id);
             requestAnimationFrame(() => document.getElementById(SEQUENCE_LABEL_FIELD_ID)?.focus());
@@ -471,6 +513,131 @@ function NotePanel({ sequence, note, index, action }: { sequence: SequenceDiagra
         </label>
       </div>
       <StepFooter sequence={sequence} id={note.id} index={index} noun="note" />
+    </div>
+  );
+}
+
+function participantName(sequence: SequenceDiagram, id: string) {
+  return sequence.participants.find((participant) => participant.id === id)?.label ?? "It";
+}
+
+/** Sets or clears the label of a frame's start or divider. */
+function relabel(sequence: SequenceDiagram, id: string, label: string): SequenceDiagram {
+  return {
+    ...sequence,
+    steps: sequence.steps.map((step): SequenceStep => {
+      if (step.id !== id || (step.type !== "block" && step.type !== "else")) return step;
+      const { label: _old, ...rest } = step;
+      void _old;
+      return label.trim() ? { ...rest, label } : rest;
+    }),
+  };
+}
+
+function FramePanel({ sequence, block, index, action }: { sequence: SequenceDiagram; block: SequenceBlock; index: number; action?: ReactNode }) {
+  const edit = useEdit();
+  const frame = frameOf(sequence.steps, block.id);
+  const inside = frame ? sequence.steps.slice(frame.start + 1, frame.end).filter((step) => step.type === "message" || step.type === "note").length : 0;
+  const divider = BLOCK_DIVIDER[block.kind];
+  const info = FRAME_KINDS.find((candidate) => candidate.kind === block.kind);
+  return (
+    <div className={PANEL}>
+      <Title action={action}>Frame</Title>
+      <div className={FIELD_LABEL}>
+        Kind
+        <div role="radiogroup" aria-label="Kind" className="grid grid-cols-3 gap-0.5 rounded-md border border-zinc-300 p-0.5 dark:border-zinc-700">
+          {FRAME_KINDS.map((option) => (
+            <button
+              key={option.kind}
+              type="button"
+              role="radio"
+              aria-checked={block.kind === option.kind}
+              title={option.hint}
+              onClick={() =>
+                edit((current) => ({
+                  ...current,
+                  steps: current.steps.map((step) => (step.id === block.id ? { ...block, kind: option.kind as SequenceBlockKind } : step)),
+                }))
+              }
+              className={`rounded px-1.5 py-1 font-mono text-[11px] font-medium ${
+                block.kind === option.kind ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              }`}
+            >
+              {option.kind}
+            </button>
+          ))}
+        </div>
+        <span className={HINT}>{info?.hint}</span>
+      </div>
+      <label className={FIELD_LABEL}>
+        Condition
+        <input
+          id={SEQUENCE_LABEL_FIELD_ID}
+          className={FIELD}
+          placeholder={block.kind === "loop" ? "e.g. Every minute, For each item" : "e.g. Payment approved"}
+          value={block.label ?? ""}
+          onChange={(event) => edit((current) => relabel(current, block.id, event.target.value), `frame:${block.id}:label`)}
+        />
+      </label>
+      <p className="text-xs text-zinc-500">
+        Holds {inside} step{inside === 1 ? "" : "s"}. Move its top with Earlier / Later, or drag messages in by moving them past its edges.
+      </p>
+      {divider && frame && (
+        <button
+          type="button"
+          className={`${ACTION_BUTTON} self-start`}
+          title={`Add another part to the frame (Mermaid's "${divider}")`}
+          onClick={() => {
+            const part = newElse();
+            edit((current) => addStep(current, part, frame.end));
+            selectSequenceItem(part.id);
+            requestAnimationFrame(() => document.getElementById(SEQUENCE_LABEL_FIELD_ID)?.focus());
+          }}
+        >
+          Add “{divider}” part
+        </button>
+      )}
+      <StepFooter sequence={sequence} id={block.id} index={index} noun="frame (keeps its steps)" />
+    </div>
+  );
+}
+
+function DividerPanel({ sequence, step, action }: { sequence: SequenceDiagram; step: Extract<SequenceStep, { type: "else" }>; action?: ReactNode }) {
+  const edit = useEdit();
+  const frame = frameOf(sequence.steps, step.id);
+  const owner = frame ? sequence.steps[frame.start] : undefined;
+  const word = owner?.type === "block" ? (BLOCK_DIVIDER[owner.kind] ?? "else") : "else";
+  return (
+    <div className={PANEL}>
+      <Title action={action}>“{word}” part</Title>
+      <label className={FIELD_LABEL}>
+        Condition
+        <input
+          id={SEQUENCE_LABEL_FIELD_ID}
+          className={FIELD}
+          placeholder="e.g. Payment declined"
+          value={step.label ?? ""}
+          onChange={(event) => edit((current) => relabel(current, step.id, event.target.value), `else:${step.id}:label`)}
+        />
+      </label>
+      <div className="flex flex-wrap gap-1.5">
+        {owner && (
+          <button type="button" className={ACTION_BUTTON} onClick={() => selectSequenceItem(owner.id)}>
+            Select its frame
+          </button>
+        )}
+        <button
+          type="button"
+          className={DELETE_BUTTON}
+          onClick={() => {
+            edit((current) => ({ ...current, steps: current.steps.filter((candidate) => candidate.id !== step.id) }));
+            selectSequenceItem(owner?.id ?? null);
+          }}
+        >
+          <Icon name="trash" className="h-3.5 w-3.5" />
+          Remove this part (keeps its steps)
+        </button>
+      </div>
     </div>
   );
 }

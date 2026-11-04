@@ -7,6 +7,7 @@ import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { CONTAINER_MIN, containerInsets, contentExtents } from "@/lib/diagram/layout";
 import type { ContainerNodeData, HeaderAlign, HeaderPosition } from "@/lib/diagram/types";
 import { NotesMarker, SIDES } from "./BlockNode";
+import { CommentMarker } from "./CommentMarker";
 import { useReadOnly } from "../viewMode";
 
 export type ContainerFlowNode = Node<ContainerNodeData, "container">;
@@ -80,15 +81,13 @@ function ContainerNodeComponent({ id, data, selected }: NodeProps<ContainerFlowN
       <NodeResizer
         minWidth={Math.max(CONTAINER_MIN.width, contentRight + insets.right)}
         minHeight={Math.max(CONTAINER_MIN.height, contentBottom + insets.bottom)}
-        color="#2563eb"
-        handleStyle={{ width: 10, height: 10, borderRadius: 2 }}
         handleClassName={selected ? "" : "opacity-0 group-hover:opacity-100"}
         lineClassName={selected ? "" : "opacity-0 group-hover:opacity-100"}
       />
       )}
       {/* Containers start and end connections too, like components. */}
       {SIDES.map((side) => (
-        <Handle key={side.id} id={side.id} type="source" position={side.position} className="bb-handle" />
+        <Handle key={side.id} id={side.id} type="source" position={side.position} className="bb-handle" title="Drag to draw a connection" />
       ))}
       {contentRight > 0 && !readOnly && (
         <NodeToolbar position={Position.Top} align="end" offset={6}>
@@ -113,6 +112,7 @@ function ContainerNodeComponent({ id, data, selected }: NodeProps<ContainerFlowN
         </NodeToolbar>
       )}
       {data.notes && <NotesMarker id={id} notes={data.notes} />}
+      <CommentMarker id={id} />
       <div
         data-container-header={headerPosition}
         className={`flex shrink-0 items-center text-xs font-semibold text-zinc-800 dark:text-zinc-100 ${

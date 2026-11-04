@@ -54,10 +54,10 @@ export default function ViewSheet({ legendOpen, onCloseLegend }: { legendOpen: b
     const container = node.parentId ? section.nodes.find((candidate) => candidate.id === node.parentId) : undefined;
     const links = (section.edges ?? []).filter((candidate) => candidate.source === node.id || candidate.target === node.id);
     const insideCount = node.data.kind === "block" ? (node.data.detail?.nodes.length ?? 0) : 0;
-    title = node.data.label;
+    title = node.type === "text" ? "Text box" : node.data.label;
     body = (
       <dl className="flex flex-col gap-3">
-        <Field label={node.type === "container" ? "Container" : "Component"}>
+        <Field label={node.type === "container" ? "Container" : node.type === "text" ? "Text box" : "Component"}>
           <span className="inline-flex items-center gap-1.5">
             {category && (
               <span aria-hidden className="h-3 w-3 rounded-sm border border-black/15" style={{ backgroundColor: category.color }} />

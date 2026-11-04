@@ -120,11 +120,10 @@ describe("searching sequence tabs", () => {
       ["participant", "Orders Service"],
       ["message", "Customer → Web Shop"],
       ["message", "Web Shop → Orders Service"],
-      ["note", "Retries twice if the gateway times out, then cancels the …"],
       ["message", "Orders Service → Notification Service"],
       ["message", "Orders Service → Web Shop"],
     ]);
     expect(searchDiagram(diagram, "kafka")[0]).toMatchObject({ kind: "message", match: "Protocol: Kafka", sectionId: section.id });
-    expect(searchDiagram(diagram, "retries")[0]).toMatchObject({ kind: "note", where: "Checkout › note over Orders Service" });
+    expect(searchDiagram(diagram, "retries")[0]).toMatchObject({ kind: "note", where: "Checkout › note over Orders Service, Payment Gateway" });
   });
 });
