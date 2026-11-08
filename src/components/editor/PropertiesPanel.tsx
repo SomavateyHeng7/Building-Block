@@ -755,7 +755,9 @@ function ConnectionPanel({ edge, action }: { edge: DiagramEdge; action?: ReactNo
   const reverseConnection = useDiagramStore((state) => state.reverseConnection);
   const deleteConnections = useDiagramStore((state) => state.deleteConnections);
   const setSelection = useDiagramStore((state) => state.setSelection);
+  const setNumberConnections = useDiagramStore((state) => state.setNumberConnections);
   const diagram = useDiagramStore((state) => state.diagram);
+  const numbered = diagram.numberConnections === true;
   const suggestions = connectionSuggestions(diagram);
   const otherLabels = suggestions.labels.filter((value) => value !== edge.label);
   const suggestAsync = isAsyncProtocol(edge.protocol) && (edge.style ?? "solid") === "solid";
@@ -1072,6 +1074,47 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
             className="relative h-5 w-9 shrink-0 rounded-full bg-zinc-300 transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:bg-zinc-900 peer-checked:after:translate-x-4 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500/40 dark:bg-zinc-700 dark:peer-checked:bg-zinc-100 dark:after:bg-zinc-950"
           />
         </label>
+        <SwitchRow
+          title="Show step numbers"
+          hint="1, 2, 3… on the connections"
+          checked={diagram.numberConnections === true}
+          onChange={setNumberConnections}
+        />
+        <div className={FIELD_LABEL}>
+          Flow
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              className={ACTION_BUTTON}
+              disabled={!section.edges?.length}
+              title="Number the connections in the order the flow reaches them, and show the numbers"
+              onClick={numberConnectionsInFlowOrder}
+            >
+              Number in flow order
+            </button>
+            <button
+              type="button"
+              className={ACTION_BUTTON}
+              disabled={!section.nodes.length}
+              title="Lay everything out again in columns, following the connections (one undo step)"
+              onClick={() => tidyAndFit("LR")}
+            >
+              Tidy left to right
+            </button>
+            <button
+              type="button"
+              className={ACTION_BUTTON}
+              disabled={!section.nodes.length}
+              title="Lay everything out again in rows, following the connections (one undo step)"
+              onClick={() => tidyAndFit("TB")}
+            >
+              Tidy top to bottom
+            </button>
+          </div>
+          <span className="text-[11px] font-normal text-zinc-400">
+            Tidy moves containers and components into neat columns and re-attaches connections to the sides that face each other. Undo puts everything back.
+          </span>
+        </div>
         {hasNested && (
           <button
             type="button"
