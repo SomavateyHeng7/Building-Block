@@ -34,6 +34,8 @@ import SequencePanel from "./SequencePanel";
 import { ShapeIcon } from "./Sidebar";
 import { SHAPES, shapeInfo } from "@/lib/diagram/shapes";
 import { DEFAULT_FONT_SIZE } from "./nodes/TextNode";
+import { addL1ContextAndShow, focusNodes, goTo } from "./canvasFocus";
+import { connectionSuggestions, isAsyncProtocol, l1Neighbours, landscapeSummary, protocolChips } from "@/lib/diagram/levelTools";
 
 const DETAIL_FIELDS: {
   key: keyof NodeDetails;
@@ -568,7 +570,12 @@ function InternalDesignSection({ nodeId, count }: { nodeId: string; count: numbe
           ? `${count} item${count === 1 ? "" : "s"} inside.`
           : "Break this component down into what it's made of, on a canvas of its own."}
       </span>
-      <button type="button" className={`${ACTION_BUTTON} inline-flex items-center gap-1.5 self-start`} onClick={() => openDetail(nodeId)}>
+      <button
+        type="button"
+        title="Ctrl/⌘ + Enter. Esc comes back."
+        className={`${ACTION_BUTTON} inline-flex items-center gap-1.5 self-start`}
+        onClick={() => openDetail(nodeId)}
+      >
         <Icon name="layers" className="h-3.5 w-3.5" />
         {count ? "Open internal design" : "Design its internals"}
       </button>
@@ -577,11 +584,11 @@ function InternalDesignSection({ nodeId, count }: { nodeId: string; count: numbe
 }
 
 /** Inside an internal design: the component it belongs to, and how that component connects at L1. */
-function ParentContext({ parent }: { parent: NonNullable<ActiveView["parent"]> }) {
+function ParentContext({ parent, design }: { parent: NonNullable<ActiveView["parent"]>; design: DiagramNode[] }) {
   const closeDetail = useDiagramStore((state) => state.closeDetail);
   const { section, component } = parent;
-  const labelOf = (id: string) => section.nodes.find((node) => node.id === id)?.data.label ?? "?";
-  const links = (section.edges ?? []).filter((edge) => edge.source === component.id || edge.target === component.id);
+  const neighbours = l1Neighbours(section, component, design);
+  const missing = neighbours.filter((row) => !row.present).length;
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-blue-200 bg-blue-50/60 p-3 text-xs text-zinc-600 dark:border-blue-900 dark:bg-blue-950/40 dark:text-zinc-300">
@@ -593,27 +600,107 @@ function ParentContext({ parent }: { parent: NonNullable<ActiveView["parent"]> }
       {component.data.description && <p className="text-zinc-500">{component.data.description}</p>}
       <div className="flex flex-col gap-1">
         <span className="font-medium text-zinc-700 dark:text-zinc-200">Its connections at L1</span>
-        {links.length ? (
+        {neighbours.length ? (
           <ul className="flex flex-col gap-0.5">
-            {links.map((edge) => {
-              const outgoing = edge.source === component.id;
-              const caption = connectionCaption(edge);
-              return (
-                <li key={edge.id} className="flex items-baseline gap-1.5">
-                  <span aria-hidden>{edge.direction === "both" ? "↔" : edge.direction === "none" ? "—" : outgoing ? "→" : "←"}</span>
-                  <span className="min-w-0 flex-1 truncate font-medium">{labelOf(outgoing ? edge.target : edge.source)}</span>
-                  {caption && <span className="shrink-0 text-zinc-500">{caption}</span>}
-                </li>
-              );
-            })}
+            {neighbours.flatMap(({ node, edges, present }) =>
+              edges.map((edge) => {
+                const outgoing = edge.source === component.id;
+                const caption = connectionCaption(edge);
+                return (
+                  <li key={edge.id}>
+                    <button
+                      type="button"
+                      title={`Go to ${node.data.label} on ${section.name}`}
+                      onClick={() => goTo({ sectionId: section.id, kind: "node", id: node.id })}
+                      className="flex w-full items-baseline gap-1.5 rounded px-1 py-0.5 text-left hover:bg-blue-100/70 dark:hover:bg-blue-900/40"
+                    >
+                      <span aria-hidden>{edge.direction === "both" ? "↔" : edge.direction === "none" ? "—" : outgoing ? "→" : "←"}</span>
+                      {/* The name matters more than the caption, so the caption gives way first. */}
+                      <span className="min-w-0 max-w-[60%] shrink-0 truncate font-medium">{node.data.label}</span>
+                      <span className="min-w-0 flex-1 truncate text-right text-zinc-500" title={caption || undefined}>
+                        {caption}
+                      </span>
+                      <span
+                        className={present ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-400"}
+                        title={present ? "Drawn in this design" : "Not drawn in this design yet"}
+                      >
+                        {present ? "✓" : "○"}
+                        <span className="sr-only">{present ? " (drawn here)" : " (not drawn here yet)"}</span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              }),
+            )}
           </ul>
         ) : (
           <span className="text-zinc-400">None yet.</span>
         )}
       </div>
+      {missing > 0 && (
+        <div className="flex flex-col gap-1">
+          <button
+            type="button"
+            className={`${ACTION_BUTTON} self-start bg-white dark:bg-zinc-950`}
+            title="Draw what this component talks to at L1, so you can connect the inside to it"
+            onClick={addL1ContextAndShow}
+          >
+            Add {missing} L1 neighbour{missing === 1 ? "" : "s"} as context
+          </button>
+          <span className="text-[11px] text-zinc-500">
+            They go in a dashed &ldquo;Connected at L1&rdquo; container. ✓ marks the ones already drawn here.
+          </span>
+        </div>
+      )}
       <button type="button" className={`${ACTION_BUTTON} self-start bg-white dark:bg-zinc-950`} onClick={closeDetail}>
         Back to {section.name}
       </button>
+    </div>
+  );
+}
+
+/** L0 at a glance: what's on this canvas, by category. Clicking a category selects everything in it. */
+function LandscapeOverview() {
+  const view = useDiagramStore((state) => getActiveSection(state.diagram));
+  const legend = useDiagramStore((state) => state.diagram.legend);
+  const setSelection = useDiagramStore((state) => state.setSelection);
+  const summary = landscapeSummary(view, legend);
+  if (!summary.containers && !summary.components) return null;
+  const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+
+  return (
+    <div className={FIELD_LABEL}>
+      <span>
+        On this canvas
+        <span className="block font-normal text-zinc-500">
+          {plural(summary.containers, "container")} · {plural(summary.components, "component")} ·{" "}
+          {plural(summary.connections, "connection")}
+        </span>
+      </span>
+      <ul className="flex flex-col gap-0.5">
+        {summary.categories.map((category) => (
+          <li key={category.key ?? "none"}>
+            <button
+              type="button"
+              title={`Select the ${plural(category.ids.length, "item")} in ${category.label}`}
+              onClick={() => {
+                setSelection(category.ids);
+                focusNodes(category.ids);
+              }}
+              className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs font-normal hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            >
+              <span
+                aria-hidden
+                className={`h-3 w-3 shrink-0 rounded-sm border ${category.color ? "border-black/15 dark:border-white/15" : "border-dashed border-zinc-400"}`}
+                style={category.color ? { backgroundColor: category.color } : undefined}
+              />
+              <span className="min-w-0 flex-1 truncate">{category.label}</span>
+              <span className="font-mono text-zinc-500">{category.ids.length}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <span className="text-[11px] font-normal text-zinc-400">Click a category to select and zoom to everything in it, then recolour or line them up together.</span>
     </div>
   );
 }
@@ -641,6 +728,11 @@ function ConnectionPanel({ edge, action }: { edge: DiagramEdge; action?: ReactNo
   const reverseConnection = useDiagramStore((state) => state.reverseConnection);
   const deleteConnections = useDiagramStore((state) => state.deleteConnections);
   const setSelection = useDiagramStore((state) => state.setSelection);
+  const diagram = useDiagramStore((state) => state.diagram);
+  const suggestions = connectionSuggestions(diagram);
+  const otherLabels = suggestions.labels.filter((value) => value !== edge.label);
+  const suggestAsync = isAsyncProtocol(edge.protocol) && (edge.style ?? "solid") === "solid";
+  const chips = protocolChips(diagram, edge.protocol);
 
   const end = (id: string) => (
     <button
@@ -657,6 +749,7 @@ function ConnectionPanel({ edge, action }: { edge: DiagramEdge; action?: ReactNo
       <PanelTitle action={action}>Connection</PanelTitle>
       <p className="-mt-3 text-xs text-zinc-500">
         {end(edge.source)} → {end(edge.target)}
+        <span className="hidden text-zinc-400 pointer-fine:inline"> · double-click the line to type on it</span>
       </p>
 
       <label className={FIELD_LABEL}>
@@ -664,18 +757,56 @@ function ConnectionPanel({ edge, action }: { edge: DiagramEdge; action?: ReactNo
         <input
           className={FIELD}
           placeholder="e.g. Orders, customer data"
+          list="connection-label-suggestions"
           value={edge.label ?? ""}
           onChange={(event) => updateConnection(edge.id, { label: event.target.value })}
         />
+        <datalist id="connection-label-suggestions">
+          {otherLabels.map((value) => (
+            <option key={value} value={value} />
+          ))}
+        </datalist>
       </label>
       <label className={FIELD_LABEL}>
         Protocol or technology
         <input
           className={FIELD}
           placeholder="e.g. REST, gRPC, Kafka, SFTP"
+          list="connection-protocol-suggestions"
           value={edge.protocol ?? ""}
           onChange={(event) => updateConnection(edge.id, { protocol: event.target.value })}
         />
+        <datalist id="connection-protocol-suggestions">
+          {suggestions.protocols.map((value) => (
+            <option key={value} value={value} />
+          ))}
+        </datalist>
+        {/* One tap for the usual ones: the browser's suggestion list is easy to miss, and awkward on touch. */}
+        <div className="flex flex-wrap gap-1" role="group" aria-label="Pick a protocol">
+          {chips.map((value) => (
+            <button
+              key={value}
+              type="button"
+              title={`Set the protocol to ${value}`}
+              onClick={() => updateConnection(edge.id, { protocol: value }, { ownStep: true })}
+              className="rounded-full border border-zinc-300 px-2 py-0.5 text-[11px] font-medium text-zinc-600 transition-colors hover:bg-zinc-100 pointer-coarse:px-3 pointer-coarse:py-1.5 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              {value}
+            </button>
+          ))}
+        </div>
+        {suggestAsync && (
+          <span className="flex flex-wrap items-center gap-1.5 text-[11px] font-normal text-zinc-500">
+            {edge.protocol?.trim()} is usually asynchronous.
+            <button
+              type="button"
+              className="font-medium text-blue-600 hover:underline dark:text-blue-400"
+              onClick={() => updateConnection(edge.id, { style: "dashed" }, { ownStep: true })}
+            >
+              Use a dashed line
+            </button>
+          </span>
+        )}
       </label>
       <label className={FIELD_LABEL}>
         Description
@@ -861,7 +992,8 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
     return (
       <div className={PANEL}>
         <PanelTitle action={headerAction}>{section.parent ? "Internal design" : "Diagram"}</PanelTitle>
-        {section.parent && <ParentContext parent={section.parent} />}
+        {section.parent && <ParentContext parent={section.parent} design={section.nodes} />}
+        <LandscapeOverview />
         <label className="flex cursor-pointer items-center justify-between gap-3 text-sm text-zinc-700 dark:text-zinc-200">
           <span>
             Show technology

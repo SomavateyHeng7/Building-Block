@@ -11,6 +11,21 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-06",
+    title: "Quicker landscapes, consistent connections and internal designs that start from L1",
+    changes: [
+      "With nothing selected, the details panel counts what's on the canvas by category. Click a category to select everything in it.",
+      "Typing what flows or the protocol on a connection now suggests what the diagram already uses, plus common protocols, so the same thing is spelled the same way everywhere.",
+      "Give a connection an asynchronous protocol such as Kafka or SQS and the details panel offers to make its line dashed.",
+      "Inside an internal design, click one of the component's L1 connections to go to that neighbour on the tab. A tick shows which neighbours the design already draws.",
+      "Add the component's L1 neighbours to its internal design in one click: they appear in a dashed \u201cConnected at L1\u201d container, ready to connect to.",
+      "The canvas now follows you: it zooms to the category you pick, the neighbours you add, and the component you go to.",
+      "Double-click a connection, or select it and press Enter, to type what flows and its protocol right on the line.",
+      "Pick a protocol with one tap from the chips under the field, and a new connection starts with the protocol you used last on that canvas.",
+      "Press Ctrl/\u2318 + Enter to open the selected component's internal design, and Esc to come back. Going in and out now zooms smoothly instead of jumping.",
+    ],
+  },
+  {
     date: "2026-11-04",
     title: "Resizing that lines up with the rest of your diagram",
     changes: [

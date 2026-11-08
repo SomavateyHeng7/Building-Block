@@ -77,7 +77,8 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 | `SearchDialog.tsx` | Find (Ctrl/⌘+F) across tabs and internal designs |
 | `canvasFocus.ts` | `goTo`: open a view, select an item and ask the canvas to zoom to it |
 | `exportRendering.ts` | `useRenderEverything`: mounts off-screen nodes while an export pictures the canvas |
-| `edges/ConnectionEdge.tsx` | A connection line: right-angled, curved or straight, with the dot that bends it |
+| `edges/ConnectionEdge.tsx` | A connection line: right-angled, curved or straight, with the dot that bends it and the on-line caption editor |
+| `edges/edgeEditing.ts` | Which connection's caption is being typed on the canvas |
 | `Canvas.tsx` | React Flow canvas: changes → store, drops, connections, snapping drags and resizes to other boxes, 1 px nudges, the draw.io grid, empty state |
 | `PixelGuides.tsx` | Alignment guides, px gaps and the position/size readout while dragging or resizing; Alt + hover measuring (`useGuides`) |
 | `flowchartView.ts` | `useIsFlowchart`: whether the view on screen has flowchart shapes (so its shapes show quick-add arrows) |
@@ -115,6 +116,7 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 | `diagram/palette.ts` | Named colours, colour names, next colour, parsing colour codes, readable text colour |
 | `diagram/shapes.ts` | The flowchart shapes: meaning, usual size, default name, SVG outline, label inset; `isFlowchart` |
 | `diagram/guides.ts` | Pixel guides: snapping moves and resizes to other boxes (including same width/height), alignment lines, gaps to neighbours, distances between two boxes |
+| `diagram/levelTools.ts` | L0 landscape summary, L1 connection suggestions, protocol chips, last protocol and async protocols, L2 neighbours and "Connected at L1" context |
 | `diagram/layout.ts` | Nesting, insets, minimum sizes, arrange, tidy, fit, nudge, re-parenting ([layout](08-layout-and-containers.md)) |
 | `diagram/flowAdapter.ts` | Our nodes/edges ↔ React Flow's; undo keys; connection captions; line geometry (`connectionPath`); change marks |
 | `diagram/search.ts` | Finding components, containers, connections and sequence steps across the diagram; highlighting matches |

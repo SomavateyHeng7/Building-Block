@@ -186,7 +186,7 @@ function DetailBadge({ id, count }: { id: string; count: number }) {
   return (
     <button
       type="button"
-      title={label}
+      title={`${label}. Or select the component and press Ctrl/⌘ + Enter.`}
       aria-label={label}
       className="nodrag nopan absolute -bottom-2 -right-2 flex h-4 min-h-0 items-center gap-0.5 rounded-full border border-white bg-blue-600 px-1.5 text-[9px] font-bold leading-none text-white shadow-sm hover:bg-blue-700 dark:border-zinc-900"
       onClick={(event) => {

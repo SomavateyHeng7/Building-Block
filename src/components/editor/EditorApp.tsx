@@ -22,6 +22,7 @@ import ShortcutsHelp from "./ShortcutsHelp";
 import Announcer from "./Announcer";
 import DeleteContainerDialog from "./DeleteContainerDialog";
 import { ungroup } from "./deletePrompt";
+import { startEditingEdge } from "./edges/edgeEditing";
 import { useDetailsRequest } from "./detailsPanel";
 import { Icon } from "./Icon";
 import PanelToggle from "./PanelToggle";
@@ -172,6 +173,19 @@ export default function EditorApp() {
         return;
       }
 
+      // Into the selected component's internal design (L2); Esc comes back out. Navigation, so it works in View too.
+      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key === "Enter") {
+        const store = useDiagramStore.getState();
+        const section = getActiveSection(store.diagram);
+        const selected =
+          store.selectedNodeIds.length === 1 ? section.nodes.find((node) => node.id === store.selectedNodeIds[0]) : undefined;
+        if (selected?.type === "block" && !section.parent && !isSequenceSection(section)) {
+          event.preventDefault();
+          store.openDetail(selected.id);
+        }
+        return;
+      }
+
       // View mode only looks: Esc still clears the selection and leaves an internal design.
       if (readOnlyRef.current && event.key !== "Escape") return;
 
@@ -207,9 +221,12 @@ export default function EditorApp() {
           store.setActiveSectionNodes(nodes, { coalesceKey: `nudge:${store.selectedNodeIds.join(",")}` });
         } else if (event.key === "Escape") {
           // Esc clears the selection first; with nothing selected it goes back up from an internal design.
+          // Going back selects the component it came from, so that isn't cleared straight after.
           if (!hasSelection && !store.selectedEdgeId && section.parent) store.closeDetail();
-          store.setSelection([]);
-          store.setSelectedEdge(null);
+          else {
+            store.setSelection([]);
+            store.setSelectedEdge(null);
+          }
         }
         else if (event.key === "?") setHelpOpen((open) => !open);
         else if (event.key.toLowerCase() === "t" && !event.shiftKey) {
@@ -220,6 +237,9 @@ export default function EditorApp() {
           const count = section.nodes.length;
           if (containerId) store.addText(nextSlotInContainer(section.nodes, containerId), undefined, containerId);
           else store.addText({ x: 80 + (count % 5) * 48, y: 80 + Math.floor(count / 5) * 48 });
+        } else if (event.key === "Enter" && store.selectedEdgeId && !store.selectedNodeIds.length) {
+          // Enter on a selected connection types its caption on the line, like double-clicking it.
+          startEditingEdge(store.selectedEdgeId);
         } else if (event.key === "Enter" && store.selectedNodeIds.length === 1) {
           // Enter on a selected text box starts writing in it, like double-clicking.
           const node = section.nodes.find((candidate) => candidate.id === store.selectedNodeIds[0]);
@@ -376,7 +396,7 @@ export default function EditorApp() {
               className={`${drawer === "palette" ? "flex" : "hidden"} absolute inset-y-0 left-0 z-30 w-72 max-w-[85%] shadow-xl lg:static lg:z-auto ${hidden.palette ? "lg:hidden" : "lg:flex"} lg:w-60 lg:shrink-0 lg:shadow-none`}
             />
           )}
-          <div className={`relative min-w-0 flex-1 ${readOnly ? "bb-readonly" : ""}`}>
+          <div className={`relative min-w-0 flex-1 overflow-hidden ${readOnly ? "bb-readonly" : ""}`}>
             {sequenceTab ? <SequenceCanvas /> : <Canvas />}
             {/* On a sequence tab these sit below its toolbar. */}
             <div className={`absolute left-3 z-10 flex gap-2 lg:hidden ${sequenceTab && !readOnly ? "top-14" : "top-3"}`}>
