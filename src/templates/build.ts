@@ -69,7 +69,8 @@ const CANVAS_TOP = 60;
 const BLOCK_LEFT = 20;
 const BLOCK_WIDTH = 260;
 const BLOCK_HEIGHT = 48;
-const BLOCK_GAP_Y = 12;
+// Tall enough for a connection label between two stacked components to sit in the gap without covering either.
+const BLOCK_GAP_Y = 28;
 const BLOCK_TOP_OFFSET = 48;
 const CONTAINER_BOTTOM_PADDING = 16;
 // Horizontal lanes: a step sits in the slot its place in the flow gives it, so lanes line up in time.

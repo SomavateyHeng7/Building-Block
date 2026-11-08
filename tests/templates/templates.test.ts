@@ -114,7 +114,7 @@ describe("templates", () => {
     expect(listed.map((template) => template.id)).not.toContain("current-vs-target");
     expect(listed.length).toBe(templates.filter((template) => !template.hidden).length);
     const sequences = listed.filter((template) => template.build().sections.some((section) => section.kind === "sequence"));
-    expect(sequences.map((template) => template.id)).toEqual(["sequence"]);
+    expect(sequences.map((template) => template.id)).toEqual(["sequence", "sequence-login"]);
   });
 
   it("the richer templates show connections, an internal design and several tabs", () => {
@@ -155,6 +155,49 @@ describe("template connections", () => {
       }
     });
   }
+});
+
+describe("internal designs and the newer templates", () => {
+  const detailsOf = (id: string) =>
+    templates
+      .find((template) => template.id === id)!
+      .build()
+      .sections[0].nodes.flatMap((node) => (node.data.kind === "block" && node.data.detail ? [node.data.label] : []));
+
+  it("offers an internal design (L2) to open on the larger architecture templates", () => {
+    expect(detailsOf("event-driven")).toEqual(["Order Service"]);
+    expect(detailsOf("three-tier")).toEqual(["Application Server"]);
+    expect(detailsOf("serverless")).toEqual(["Bookings Function"]);
+    expect(detailsOf("cloud-landing-zone")).toEqual(["App Servers"]);
+    expect(detailsOf("data-platform")).toEqual(["Data Warehouse"]);
+    expect(detailsOf("c4-context")).toEqual(["Order Platform"]);
+  });
+
+  it("gives only the roadmap's Target tab an internal design, so Compare tabs shows it as a change", () => {
+    const [current, transition, target] = templates.find((template) => template.id === "migration-roadmap")!.build().sections;
+    const designs = (section: typeof current) => section.nodes.filter((node) => node.data.kind === "block" && node.data.detail).map((node) => node.data.label);
+    expect([designs(current), designs(transition), designs(target)]).toEqual([[], [], ["Order Service"]]);
+  });
+
+  it("has the incident escalation as a second process that can run in rows or columns", () => {
+    const incident = templates.find((template) => template.id === "incident-escalation");
+    expect(incident?.orientable).toBe(true);
+    expect(incident?.category).toBe("Process");
+    const lanes = incident!.build().sections[0].nodes.filter((node) => node.type === "container");
+    expect(lanes.map((node) => node.data.label)).toEqual(["Customer", "Support", "Incident Manager", "Engineering"]);
+  });
+
+  it("has a data model whose relationships say how many", () => {
+    const edges = templates.find((template) => template.id === "er-data-model")!.build().sections[0].edges ?? [];
+    expect(edges.length).toBeGreaterThan(0);
+    expect(edges.every((edge) => /\((1|many) to (1|many)\)/.test(edge.label ?? ""))).toBe(true);
+  });
+
+  it("starts the sign-in sequence with the user and has a failure path", () => {
+    const sequence = templates.find((template) => template.id === "sequence-login")!.build().sections[0].sequence!;
+    expect(sequence.participants.map((participant) => participant.label)).toEqual(["User", "Web App", "Identity Provider", "Orders API"]);
+    expect(sequence.steps.some((step) => "label" in step && step.label === "Sign-in failed")).toBe(true);
+  });
 });
 
 describe("template builder", () => {

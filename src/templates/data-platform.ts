@@ -1,6 +1,37 @@
 import { buildDiagram, type CanvasSpec } from "./build";
 import type { TemplateDefinition } from "./types";
 
+/** What the warehouse is made of, so the template shows an internal design (L2). */
+const WAREHOUSE: CanvasSpec = {
+  columns: [
+    [{ label: "Raw", components: [{ label: "Raw Tables", colorKey: "product", description: "Loaded as delivered, never edited." }] }],
+    [
+      {
+        label: "Transform",
+        components: [
+          { label: "Staging Models", colorKey: "new", technology: "dbt", description: "Rename, cast and de-duplicate." },
+          { label: "Mart Models", colorKey: "new", technology: "dbt", description: "Joined and aggregated for the business." },
+        ],
+      },
+    ],
+    [
+      {
+        label: "Serve",
+        components: [
+          { label: "Semantic Layer", colorKey: "enhancement", description: "One definition of each metric." },
+          { label: "Quality Tests", colorKey: "enhancement", technology: "dbt tests" },
+        ],
+      },
+    ],
+  ],
+  connections: [
+    { from: "Raw Tables", to: "Staging Models", label: "Cleans", protocol: "SQL" },
+    { from: "Staging Models", to: "Mart Models", label: "Joins and aggregates", protocol: "SQL" },
+    { from: "Mart Models", to: "Semantic Layer", label: "Metrics", protocol: "SQL" },
+    { from: "Mart Models", to: "Quality Tests", label: "Checks", protocol: "SQL", dashed: true },
+  ],
+};
+
 // Rows line up across columns (database → CDC → lake → models; SaaS → connectors → warehouse → dashboards), so
 // most connections run straight across.
 const CANVAS: CanvasSpec = {
@@ -30,7 +61,7 @@ const CANVAS: CanvasSpec = {
         label: "Storage and Processing",
         components: [
           { label: "Data Lake", colorKey: "product", technology: "Object storage, Parquet" },
-          { label: "Data Warehouse", colorKey: "product", technology: "Snowflake, dbt models" },
+          { label: "Data Warehouse", colorKey: "product", technology: "Snowflake, dbt models", detail: WAREHOUSE },
         ],
       },
     ],
@@ -61,8 +92,8 @@ const CANVAS: CanvasSpec = {
 export const dataPlatformTemplate: TemplateDefinition = {
   id: "data-platform",
   name: "Data and analytics platform",
-  description: "From sources through ingestion (change capture, batch connectors, an event stream) to a lake and a warehouse, then models, dashboards and reverse ETL.",
+  description: "From sources through ingestion (change capture, batch connectors, an event stream) to a lake and a warehouse, then models, dashboards and reverse ETL. The Data Warehouse has an internal design (L2) to open.",
   category: "Architecture",
-  keywords: ["data","analytics","warehouse","lake","etl","dashboards"],
+  keywords: ["data","analytics","warehouse","lake","etl","dashboards", "l2"],
   build: () => buildDiagram("Data and Analytics Platform", [{ name: "Overview", canvas: CANVAS }]),
 };

@@ -1,6 +1,37 @@
 import { buildDiagram, type CanvasSpec } from "./build";
 import type { TemplateDefinition } from "./types";
 
+/** What runs on the app servers, so the template shows an internal design (L2). */
+const APP_SERVERS: CanvasSpec = {
+  columns: [
+    [{ label: "Ingress", components: [{ label: "HTTP Listener", colorKey: "product", technology: "Container port 8080" }] }],
+    [
+      {
+        label: "Application",
+        components: [
+          { label: "Request Handlers", colorKey: "product" },
+          { label: "Session Manager", colorKey: "new" },
+        ],
+      },
+    ],
+    [
+      {
+        label: "Platform Agents",
+        components: [
+          { label: "Secrets Client", colorKey: "enhancement", description: "Fetches credentials at start-up, never baked into images." },
+          { label: "Log Shipper", colorKey: "enhancement" },
+        ],
+      },
+    ],
+  ],
+  connections: [
+    { from: "HTTP Listener", to: "Request Handlers", label: "Requests", protocol: "HTTP" },
+    { from: "Request Handlers", to: "Session Manager", label: "Session lookups", protocol: "In-process" },
+    { from: "Request Handlers", to: "Secrets Client", label: "Fetch credentials", protocol: "In-process", dashed: true },
+    { from: "Request Handlers", to: "Log Shipper", label: "Structured logs", protocol: "In-process", dashed: true },
+  ],
+};
+
 const CANVAS: CanvasSpec = {
   columns: [
     [
@@ -25,7 +56,7 @@ const CANVAS: CanvasSpec = {
       {
         label: "Private Subnet",
         components: [
-          { label: "App Servers", colorKey: "product", technology: "Containers" },
+          { label: "App Servers", colorKey: "product", technology: "Containers", detail: APP_SERVERS },
           { label: "Background Workers", colorKey: "product" },
         ],
       },
@@ -63,8 +94,8 @@ const CANVAS: CanvasSpec = {
 export const cloudLandingZoneTemplate: TemplateDefinition = {
   id: "cloud-landing-zone",
   name: "Cloud landing zone",
-  description: "Public, private and data subnets behind a CDN and load balancer, with shared secrets and monitoring.",
+  description: "Public, private and data subnets behind a CDN and load balancer, with shared secrets and monitoring. The App Servers have an internal design (L2) to open.",
   category: "Architecture",
-  keywords: ["cloud", "aws", "azure", "gcp", "network", "vpc", "subnet", "infrastructure", "security"],
+  keywords: ["cloud", "aws", "azure", "gcp", "network", "vpc", "subnet", "infrastructure", "security", "l2"],
   build: () => buildDiagram("Cloud Landing Zone", [{ name: "Overview", canvas: CANVAS }]),
 };

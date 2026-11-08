@@ -21,7 +21,9 @@ A connection that names a component that isn't on its canvas makes `buildCanvas`
 a typo shows up in the tests rather than as a missing arrow.
 
 It appears on `/templates` (with search and its category) automatically, and on the start page if it is one of the
-first six after Blank (`START_PAGE_TEMPLATES`). Its preview is drawn from `build()`.
+first six after Blank (`START_PAGE_TEMPLATES`; recently used ones are moved to the front). Its preview and its "n tabs · n
+components" line are drawn from `build()`. A multi-tab template can set `compare: { from, to }` (tab names) to open with
+those tabs' differences marked, as the Migration roadmap does; start templates through `startFromTemplate`.
 
 - A **sequence template** is easiest written as Mermaid code: `sequenceFromMermaid(name, tab, code, colors)` from
   `./sequence-build` (frames and activation marks included; `colors` maps participant names to legend keys).

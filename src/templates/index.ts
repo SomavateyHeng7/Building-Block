@@ -1,7 +1,13 @@
 import { c4ContextTemplate } from "./c4-context";
+import { ciCdPipelineTemplate } from "./ci-cd-pipeline";
+import { erDataModelTemplate } from "./er-data-model";
+import { incidentEscalationTemplate } from "./incident-escalation";
+import { securityZonesTemplate } from "./security-zones";
+import { sequenceLoginTemplate } from "./sequence-login";
 import { cloudLandingZoneTemplate } from "./cloud-landing-zone";
 import { dataPipelineTemplate } from "./data-pipeline";
 import { migrationRoadmapTemplate } from "./migration-roadmap";
+import { orgChartTemplate } from "./org-chart";
 import { blankTemplate } from "./blank";
 import { crossFunctionalTemplate } from "./cross-functional";
 import { currentVsTargetTemplate } from "./current-vs-target";
@@ -30,6 +36,12 @@ export const allTemplates: TemplateDefinition[] = [
   dataPipelineTemplate,
   cloudLandingZoneTemplate,
   migrationRoadmapTemplate,
+  incidentEscalationTemplate,
+  ciCdPipelineTemplate,
+  securityZonesTemplate,
+  erDataModelTemplate,
+  sequenceLoginTemplate,
+  orgChartTemplate,
 ];
 
 /** The templates offered on the start page and /templates. */
@@ -43,3 +55,4 @@ export { TEMPLATE_CATEGORIES } from "./types";
 export type { Orientation, TemplateCategory, TemplateDefinition, TemplateOptions } from "./types";
 
 export { filterTemplates } from "./filter";
+export { describeSummary, describeTemplate, summarizeDiagram } from "./summary";

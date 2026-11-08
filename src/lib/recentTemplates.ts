@@ -62,6 +62,30 @@ export function clearRecentTemplates(): void {
   listeners.forEach((listener) => listener());
 }
 
+/** `items` with the ones whose id is in `recentIds` first (in that order), then the rest in their usual order. */
+export function recentFirst<T extends { id: string }>(items: T[], recentIds: string[]): T[] {
+  const recent = recentIds.flatMap((id) => items.filter((item) => item.id === id));
+  return [...recent, ...items.filter((item) => !recent.includes(item))];
+}
+
+/** Forgets ids that aren't templates any more (renamed or removed), so they don't take one of the three places. */
+export function pruneRecentTemplates(validIds: Iterable<string>): void {
+  const valid = new Set(validIds);
+  const current = readRecentTemplates();
+  const kept = current.filter((id) => valid.has(id));
+  if (kept.length === current.length) return;
+  if (kept.length === 0) clearRecentTemplates();
+  else {
+    memory = kept;
+    try {
+      window.localStorage.setItem(KEY, JSON.stringify(kept));
+    } catch {
+      // Kept in memory for this tab only.
+    }
+    listeners.forEach((listener) => listener());
+  }
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   window.addEventListener("storage", listener);

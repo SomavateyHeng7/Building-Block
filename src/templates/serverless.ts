@@ -1,6 +1,37 @@
 import { buildDiagram, type CanvasSpec } from "./build";
 import type { TemplateDefinition } from "./types";
 
+/** What the Bookings Function is made of, so the template shows an internal design (L2). */
+const BOOKINGS_FUNCTION: CanvasSpec = {
+  columns: [
+    [{ label: "Entry", components: [{ label: "Request Handler", colorKey: "microservice", technology: "Lambda handler" }] }],
+    [
+      {
+        label: "Logic",
+        components: [
+          { label: "Validation", colorKey: "enhancement", description: "Rejects bad dates, party sizes and prices." },
+          { label: "Booking Logic", colorKey: "microservice" },
+        ],
+      },
+    ],
+    [
+      {
+        label: "Clients",
+        components: [
+          { label: "DynamoDB Client", colorKey: "product", technology: "AWS SDK" },
+          { label: "Queue Publisher", colorKey: "new", technology: "AWS SDK" },
+        ],
+      },
+    ],
+  ],
+  connections: [
+    { from: "Request Handler", to: "Validation", label: "Raw request", protocol: "In-process" },
+    { from: "Validation", to: "Booking Logic", label: "Valid booking", protocol: "In-process" },
+    { from: "Booking Logic", to: "DynamoDB Client", label: "Saves booking", protocol: "In-process" },
+    { from: "Booking Logic", to: "Queue Publisher", label: "Booking made", protocol: "In-process", dashed: true },
+  ],
+};
+
 // Rows line up across columns so most connections run straight across.
 const CANVAS: CanvasSpec = {
   columns: [
@@ -27,7 +58,7 @@ const CANVAS: CanvasSpec = {
         label: "Functions",
         components: [
           { label: "Search Function", colorKey: "microservice", technology: "AWS Lambda" },
-          { label: "Bookings Function", colorKey: "microservice", technology: "AWS Lambda" },
+          { label: "Bookings Function", colorKey: "microservice", technology: "AWS Lambda", detail: BOOKINGS_FUNCTION },
           { label: "Receipt Worker", colorKey: "microservice", technology: "AWS Lambda" },
         ],
       },
@@ -60,8 +91,8 @@ const CANVAS: CanvasSpec = {
 export const serverlessTemplate: TemplateDefinition = {
   id: "serverless",
   name: "Serverless API",
-  description: "An API on managed services: a CDN and an API gateway in front of functions, a key-value table, a queue that triggers a worker, and file storage.",
+  description: "An API on managed services: a CDN and an API gateway in front of functions, a key-value table, a queue that triggers a worker, and file storage. The Bookings Function has an internal design (L2) to open.",
   category: "Architecture",
-  keywords: ["serverless","lambda","functions","api gateway","queue"],
+  keywords: ["serverless","lambda","functions","api gateway","queue", "l2"],
   build: () => buildDiagram("Serverless API", [{ name: "Overview", canvas: CANVAS }]),
 };

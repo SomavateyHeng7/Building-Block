@@ -136,7 +136,8 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 | `zip.ts` | Minimal ZIP writer |
 | `toast.ts` | Toast store and API |
 | `consent.ts` | Privacy-notice acceptance, versioned |
-| `recentTemplates.ts` | The last three template ids started (a small preference); `useRecentTemplates` |
+| `recentTemplates.ts` | The last three template ids started (a small preference); `useRecentTemplates`; `recentFirst` orders the start page cards; `pruneRecentTemplates` forgets ids that are no longer templates |
+| `startTemplate.ts` | `startFromTemplate`: builds and opens a template, records it as recent, and marks the tabs in its `compare` pair |
 | `csp.ts` | The pages' Content-Security-Policy for a nonce; `NONCE_HEADER` ([security](14-security.md#content-security-policy)) |
 | `levels.ts` | Roadmap levels computed from store actions |
 | `maintenance.ts` | Reads maintenance settings; `Retry-After`; upcoming end |
@@ -150,21 +151,28 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 | `index.ts` | `allTemplates`, `templates` (without the hidden ones), `getTemplate(id)`; re-exports `filterTemplates` |
 | `filter.ts` | `filterTemplates`: search words and category for the templates page |
 | `blank.ts` | Blank canvas |
+| `summary.ts` | `describeTemplate`: "1 tab · 14 components", or for several tabs "3 tabs: Current, Transition, Target · 3 to 6 components each", shown on template cards (participants for a sequence) |
 | `build.ts` | Lays out templates written as data (`CanvasSpec`), vertically or as horizontal lanes (steps placed by their place in the flow), and builds diagrams with fresh ids |
 | `l0-architecture.ts` | Four-layer L0 example with connections |
-| `three-tier.ts` | Three-tier web application |
+| `three-tier.ts` | Three-tier web application, with an internal design (L2) |
 | `event-driven.ts` | Event-driven microservices, with an internal design (L2) |
 | `cross-functional.ts` | Swimlane process: one lane per team, hand-offs between lanes; vertical or horizontal |
 | `c4-context.ts` | System context: people, our system, external systems |
 | `data-pipeline.ts` | Sources, ingestion, lake and warehouse, consumption |
-| `cloud-landing-zone.ts` | Public, private and data subnets with shared services |
+| `cloud-landing-zone.ts` | Public, private and data subnets with shared services, with an internal design (L2) |
 | `migration-roadmap.ts` | Current, Transition and Target tabs |
-| `serverless.ts` | Serverless API on managed services |
+| `serverless.ts` | Serverless API on managed services, with an internal design (L2) |
 | `data-platform.ts` | Data and analytics platform |
 | `flowchart.ts` | Process flowchart: pills, steps, decision diamonds, a database and a title text box, placed by hand |
 | `current-vs-target.ts` | Two tabs, current and target, for Compare tabs (hidden for now) |
 | `sequence-build.ts` | Builds a one-tab sequence diagram from Mermaid code (`sequenceFromMermaid`) or from participants and steps written as data |
 | `sequence.ts` | A checkout flow as a sequence tab |
+| `org-chart.ts` | Reporting lines: leadership, directors, managers, teams |
+| `sequence-login.ts` | OAuth sign-in (authorisation code with PKCE) as a sequence tab |
+| `incident-escalation.ts` | Swimlane process for escalating a customer problem to an incident; vertical or horizontal |
+| `ci-cd-pipeline.ts` | Commit to production: build, tests, security scan, environments, monitoring |
+| `security-zones.ts` | Internet, DMZ, application and data zones with security operations |
+| `er-data-model.ts` | Entities by domain with key fields and relationship cardinality |
 
 ## `src/types/`
 

@@ -21,6 +21,8 @@ export interface TemplateDefinition {
   keywords?: string[];
   /** Lanes can run vertically (columns) or horizontally (rows). */
   orientable?: boolean;
+  /** Tabs (by name) to open with their differences marked, as Compare tabs does. */
+  compare?: { from: string; to: string };
   build: (options?: TemplateOptions) => Diagram;
   /** Left off the start page and /templates for now; still built and tested, and back by removing this. */
   hidden?: boolean;

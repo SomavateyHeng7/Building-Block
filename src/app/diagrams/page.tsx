@@ -17,7 +17,7 @@ import {
   supportsFilePicker,
   takeDroppedFile,
 } from "@/lib/diagram/file";
-import { recordRecentTemplate, useRecentTemplates } from "@/lib/recentTemplates";
+import { pruneRecentTemplates, recentFirst, useRecentTemplates } from "@/lib/recentTemplates";
 import {
   clearRecoveryCopy,
   setRecoveryEnabled,
@@ -28,7 +28,8 @@ import {
 } from "@/lib/diagram/recovery";
 import { downloadLegacyItem, readLegacyItems, removeLegacyItems, type LegacyItem } from "@/lib/diagram/legacy";
 import { toast } from "@/lib/toast";
-import { templates } from "@/templates";
+import { TEMPLATE_CATEGORIES, describeTemplate, templates } from "@/templates";
+import { startFromTemplate } from "@/lib/startTemplate";
 import ImportDialog, { describeImport } from "@/components/editor/ImportDialog";
 import TemplatePreview from "@/components/TemplatePreview";
 import { ImportError, diagramFromImport, importDiagramText, isImportable, readImportText, type ImportResult } from "@/lib/diagram/importFile";
@@ -112,7 +113,21 @@ function ActionCard({
 }
 
 /** A template to start from, with a picture of what it actually holds (drawn from the template itself). */
-function TemplateCard({ name, body, build, onClick }: { name: string; body: string; build: () => Diagram; onClick: () => void }) {
+function TemplateCard({
+  name,
+  body,
+  meta,
+  recent,
+  build,
+  onClick,
+}: {
+  name: string;
+  body: string;
+  meta: string;
+  recent: boolean;
+  build: () => Diagram;
+  onClick: () => void;
+}) {
   return (
     <button type="button" onClick={onClick} className={CARD_PLAIN}>
       <span className="block w-full shrink-0 overflow-hidden rounded-xl">
@@ -124,6 +139,9 @@ function TemplateCard({ name, body, build, onClick }: { name: string; body: stri
           <Icon path={ICONS.arrow} className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
         </span>
         <span className="text-sm text-zinc-600 dark:text-zinc-400">{body}</span>
+        {(meta || recent) && (
+          <span className="text-xs font-medium text-zinc-500">{[recent ? "Recently used" : "", meta].filter(Boolean).join(" · ")}</span>
+        )}
       </span>
     </button>
   );
@@ -141,10 +159,11 @@ export default function StartPage() {
   const mounted = useMounted();
   const legacy = removed ? NO_ITEMS : found;
   const allStarterTemplates = templates.filter((template) => template.id !== "blank");
-  // The first few are shown here; the rest, with search and categories, are on the templates page.
-  const starterTemplates = allStarterTemplates.slice(0, START_PAGE_TEMPLATES);
   const recentIds = useRecentTemplates();
+  useEffect(() => pruneRecentTemplates(templates.map((template) => template.id)), []);
   const recentTemplates = recentIds.flatMap((id) => allStarterTemplates.filter((template) => template.id === id));
+  // What was used lately comes first, then the usual order; the rest, with search and categories, are on the templates page.
+  const starterTemplates = recentFirst(allStarterTemplates, recentIds).slice(0, START_PAGE_TEMPLATES);
   // A diagram can still be open in memory, e.g. after the browser's Back button from the editor.
   const { guard, dialog: unsavedDialog } = useUnsavedGuard();
   const recovered = useRecoveryCopy();
@@ -186,8 +205,7 @@ export default function StartPage() {
     const template = templates.find((candidate) => candidate.id === id);
     if (!template) return;
     guard(() => {
-      startDiagram(template.build());
-      recordRecentTemplate(id);
+      startFromTemplate(template);
       router.push("/editor");
     });
   }
@@ -396,12 +414,26 @@ export default function StartPage() {
                 ))}
               </div>
             )}
+            <nav aria-label="Browse templates by category" className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-zinc-500">Browse by category:</span>
+              {TEMPLATE_CATEGORIES.filter((name) => allStarterTemplates.some((template) => template.category === name)).map((name) => (
+                <Link
+                  key={name}
+                  href={`/templates?category=${encodeURIComponent(name)}`}
+                  className="rounded-full border border-zinc-300 px-3 py-1.5 font-medium text-zinc-700 transition-colors hover:border-zinc-500 hover:bg-zinc-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-500 dark:hover:bg-zinc-800 dark:focus-visible:outline-zinc-100"
+                >
+                  {name} ({allStarterTemplates.filter((template) => template.category === name).length})
+                </Link>
+              ))}
+            </nav>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {starterTemplates.map((template) => (
                 <TemplateCard
                   key={template.id}
                   name={template.name}
                   body={template.description}
+                  meta={describeTemplate(template)}
+                  recent={recentTemplates.includes(template)}
                   build={template.build}
                   onClick={() => startTemplate(template.id)}
                 />

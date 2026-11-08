@@ -50,3 +50,37 @@ describe("recently used templates", () => {
     expect(recent.readRecentTemplates()).toEqual([]);
   });
 });
+
+describe("recentFirst", () => {
+  const items = ["a", "b", "c", "d"].map((id) => ({ id }));
+
+  it("puts recent ones first in their own order, then the rest as before", async () => {
+    const { recentFirst } = await import("@/lib/recentTemplates");
+    expect(recentFirst(items, ["c", "a"]).map((item) => item.id)).toEqual(["c", "a", "b", "d"]);
+  });
+
+  it("ignores ids that aren't there and changes nothing without any", async () => {
+    const { recentFirst } = await import("@/lib/recentTemplates");
+    expect(recentFirst(items, ["zzz"])).toEqual(items);
+    expect(recentFirst(items, [])).toEqual(items);
+  });
+});
+
+describe("pruneRecentTemplates", () => {
+  it("drops ids that aren't templates any more and keeps the order of the rest", async () => {
+    stubWindow(memoryStorage(false, '["gone","b","old"]'));
+    const recent = await import("@/lib/recentTemplates");
+    recent.pruneRecentTemplates(["a", "b"]);
+    expect(recent.readRecentTemplates()).toEqual(["b"]);
+  });
+
+  it("clears the list when nothing is left, and leaves a valid list alone", async () => {
+    stubWindow(memoryStorage(false, '["x","y"]'));
+    const recent = await import("@/lib/recentTemplates");
+    const before = recent.readRecentTemplates();
+    recent.pruneRecentTemplates(["x", "y"]);
+    expect(recent.readRecentTemplates()).toBe(before);
+    recent.pruneRecentTemplates(["z"]);
+    expect(recent.readRecentTemplates()).toEqual([]);
+  });
+});

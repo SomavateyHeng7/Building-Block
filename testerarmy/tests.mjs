@@ -166,7 +166,7 @@ const allTests = [
       act("Type 'roadmap' into the 'Search templates' box."),
       assert("Only 'Migration roadmap' is listed, and the count reads '1 of' the total number of templates."),
       act("Clear the search box, then click the 'Process' category button."),
-      assert("Only 'Cross-functional process' is listed and the 'Process' button is shown as selected."),
+      assert("Only 'Cross-functional process', 'Incident escalation' and 'Flowchart' are listed and the 'Process' button is shown as selected."),
       act("Type 'kubernetes' into the search box."),
       assert("The page says 'No template matches that search.' and offers 'Clear search and filters'."),
       act("Click 'Clear search and filters'."),
@@ -192,8 +192,32 @@ const allTests = [
     steps: [
       ...openTemplate("Three-tier web application"),
       act("Go back to the /diagrams page."),
-      assert("A 'Recently used:' row shows 'Three-tier web application', and the page offers 'All 10 templates'."),
-      assert("The start page shows six template cards, not all ten."),
+      assert("A 'Recently used:' row shows 'Three-tier web application', and the page offers 'All 18 templates'."),
+      assert("The start page shows six template cards, not all eighteen, and 'Three-tier web application' is the first card, marked 'Recently used'."),
+    ],
+  },
+  {
+    title: "The start page links to the templates page by category",
+    settings: desktop,
+    steps: [
+      consent,
+      act("Open the /diagrams page."),
+      assert("A 'Browse by category' row shows 'Architecture', 'Process', 'Planning' and 'Sequence', each with a count in brackets."),
+      act("Click the 'Process' category."),
+      assert("The /templates page opens (URL contains category=Process) with the 'Process' button selected, listing only 'Cross-functional process', 'Incident escalation' and 'Flowchart'."),
+    ],
+  },
+  {
+    title: "Migration roadmap opens with Current and Target compared",
+    settings: desktop,
+    steps: [
+      consent,
+      act("Open the /templates page and click the 'Migration roadmap' card."),
+      assert("The editor opens (URL ends in /editor) on the 'Current' tab."),
+      assert("A bar reading 'Changes:' with 'Current' and 'Target' is shown, with a legend of Added, Changed and Removed."),
+      assert("On the Current tab the 'Monolith' component is marked 'Removed'."),
+      act("Click 'Stop showing' in the bar."),
+      assert("The bar and the 'Removed' marks are gone."),
     ],
   },
   {
@@ -203,7 +227,7 @@ const allTests = [
       consent,
       act("Open the /templates page."),
       assert(
-        "These templates are all listed: L0 Architecture, Three-tier web application, Event-driven microservices, Cross-functional process, System context (C4), Data pipeline, Cloud landing zone, Migration roadmap, Serverless API, Data and analytics platform, Flowchart, Sequence diagram; 'Current vs target state' is not.",
+        "These templates are all listed: Blank canvas, L0 Architecture, Three-tier web application, Event-driven microservices, Cross-functional process, System context (C4), Data pipeline, Cloud landing zone, Migration roadmap, Serverless API, Data and analytics platform, Flowchart, Sequence diagram, Incident escalation, CI/CD pipeline, Network security zones, Data model (ER), Sign-in sequence (OAuth), Org chart; 'Current vs target state' is not. The count reads '19 templates'.",
       ),
     ],
   },

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { TEMPLATE_CATEGORIES, filterTemplates, templates, type Orientation, type TemplateCategory } from "@/templates";
-import { openDiagramFromDevice, startDiagram } from "@/lib/diagram/file";
-import { recordRecentTemplate, useRecentTemplates } from "@/lib/recentTemplates";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { TEMPLATE_CATEGORIES, describeTemplate, filterTemplates, templates, type Orientation, type TemplateCategory } from "@/templates";
+import { openDiagramFromDevice } from "@/lib/diagram/file";
+import { pruneRecentTemplates, useRecentTemplates } from "@/lib/recentTemplates";
+import { startFromTemplate } from "@/lib/startTemplate";
 import { ThemeToggle } from "@/components/theme-toggle";
 import BackLink from "@/components/BackLink";
 import TemplatePreview from "@/components/TemplatePreview";
@@ -25,14 +26,30 @@ const ORIENTATIONS: { value: Orientation; label: string }[] = [
   { value: "horizontal", label: "Horizontal lanes" },
 ];
 
+/** `?category=Process` opens the page filtered (the start page links to it); anything else shows all. */
+function categoryFromQuery(value: string | null): TemplateCategory | "All" {
+  return TEMPLATE_CATEGORIES.find((name) => name === value) ?? "All";
+}
+
 export default function TemplatesPage() {
+  // useSearchParams needs a Suspense boundary on a prerendered route.
+  return (
+    <Suspense fallback={null}>
+      <Templates />
+    </Suspense>
+  );
+}
+
+function Templates() {
   const router = useRouter();
+  const initialCategory = categoryFromQuery(useSearchParams().get("category"));
   // A diagram can still be open in memory, e.g. after the browser's Back button from the editor.
   const { guard, dialog: unsavedDialog } = useUnsavedGuard();
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<TemplateCategory | "All">("All");
+  const [category, setCategory] = useState<TemplateCategory | "All">(initialCategory);
   const [orientations, setOrientations] = useState<Record<string, Orientation>>({});
   const recentIds = useRecentTemplates();
+  useEffect(() => pruneRecentTemplates(templates.map((template) => template.id)), []);
 
   const orientationOf = (id: string): Orientation => orientations[id] ?? "vertical";
   const shown = filterTemplates(templates, query, category);
@@ -43,8 +60,7 @@ export default function TemplatesPage() {
     const template = templates.find((candidate) => candidate.id === id);
     if (!template) return;
     guard(() => {
-      startDiagram(template.build({ orientation: orientationOf(id) }));
-      recordRecentTemplate(id);
+      startFromTemplate(template, { orientation: orientationOf(id) });
       router.push("/editor");
     });
   }
@@ -134,6 +150,9 @@ export default function TemplatesPage() {
                   <span className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-500">{template.category}</span>
                   <h2 className="font-medium text-zinc-900 dark:text-zinc-100">{template.name}</h2>
                   <p className="mt-1 text-sm text-zinc-500">{template.description}</p>
+                  {describeTemplate(template) && (
+                    <p className="mt-2 text-xs font-medium text-zinc-500">{describeTemplate(template)}</p>
+                  )}
                 </button>
                 {template.orientable && (
                   <div role="group" aria-label={`${template.name} lane direction`} className="flex flex-wrap gap-2 px-4 pb-4">

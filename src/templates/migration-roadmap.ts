@@ -41,6 +41,28 @@ const TRANSITION: CanvasSpec = {
   ],
 };
 
+/** What the new Order Service is made of: the target state has an internal design the earlier tabs don't. */
+const ORDER_SERVICE: CanvasSpec = {
+  columns: [
+    [{ label: "API", components: [{ label: "Order Endpoints", colorKey: "microservice", technology: "REST" }] }],
+    [
+      {
+        label: "Domain",
+        components: [
+          { label: "Order Logic", colorKey: "microservice" },
+          { label: "Event Publisher", colorKey: "new", technology: "Kafka" },
+        ],
+      },
+    ],
+    [{ label: "Data", components: [{ label: "Order Store", colorKey: "product", technology: "PostgreSQL" }] }],
+  ],
+  connections: [
+    { from: "Order Endpoints", to: "Order Logic", label: "Commands", protocol: "In-process" },
+    { from: "Order Logic", to: "Event Publisher", label: "Order events", protocol: "In-process", dashed: true },
+    { from: "Order Logic", to: "Order Store", label: "Reads and writes", protocol: "SQL" },
+  ],
+};
+
 const TARGET: CanvasSpec = {
   columns: [
     [{ label: "Channels", components: [{ label: "Customer Portal", colorKey: "product" }] }],
@@ -49,7 +71,7 @@ const TARGET: CanvasSpec = {
       {
         label: "Services",
         components: [
-          { label: "Order Service", colorKey: "microservice" },
+          { label: "Order Service", colorKey: "microservice", detail: ORDER_SERVICE },
           { label: "Customer Service", colorKey: "microservice" },
         ],
       },
@@ -77,9 +99,11 @@ export const migrationRoadmapTemplate: TemplateDefinition = {
   id: "migration-roadmap",
   name: "Migration roadmap",
   description:
-    "Three tabs, Current, Transition and Target, for moving off a monolith step by step. Use Compare tabs to see each step's changes.",
+    "Three tabs, Current, Transition and Target, for moving off a monolith step by step. Use Compare tabs to see each step's changes; the Target's Order Service has an internal design (L2).",
   category: "Planning",
-  keywords: ["roadmap", "migration", "monolith", "strangler", "phases", "modernisation", "compare"],
+  keywords: ["roadmap", "migration", "monolith", "strangler", "phases", "modernisation", "compare", "l2"],
+  // Opens with what the move removes and adds already marked; Compare tabs in the toolbar changes the pair.
+  compare: { from: "Current", to: "Target" },
   build: () =>
     buildDiagram("Migration Roadmap", [
       { name: "Current", canvas: CURRENT },
