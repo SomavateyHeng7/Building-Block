@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { allTemplates as templates, templates as listed } from "@/templates";
 import { parseDiagram } from "@/lib/diagram/validate";
 import { growContainerToFit } from "@/lib/diagram/layout";
+import { buildCanvas } from "@/templates/build";
 
 describe("templates", () => {
   it("have unique ids", () => {
@@ -133,5 +134,35 @@ describe("templates", () => {
     expect(loop && forward && [loop.sourceSide, loop.targetSide]).toEqual(["top", "top"]);
     expect(forward?.sourceSide).toBe("right");
     expect(built["current-vs-target"].sections.map((section) => section.name)).toEqual(["Current", "Target"]);
+  });
+});
+
+describe("template connections", () => {
+  for (const template of templates) {
+    it(`${template.name}: every component takes part in at least one connection`, () => {
+      for (const section of template.build().sections) {
+        const canvases = [
+          section,
+          ...section.nodes.flatMap((node) => (node.data.kind === "block" && node.data.detail ? [node.data.detail] : [])),
+        ];
+        for (const canvas of canvases) {
+          const touched = new Set((canvas.edges ?? []).flatMap((edge) => [edge.source, edge.target]));
+          const lonely = canvas.nodes.filter((node) => node.type === "block" && !touched.has(node.id));
+          // Only the layered overview and the blank/sequence/hidden ones may leave components unconnected.
+          if (["l0-architecture", "blank", "sequence", "current-vs-target"].includes(template.id)) continue;
+          expect(lonely.map((node) => node.data.label)).toEqual([]);
+        }
+      }
+    });
+  }
+});
+
+describe("template builder", () => {
+  it("refuses a connection that names a component that isn't there", () => {
+    const spec = {
+      columns: [[{ label: "A", components: [{ label: "One", colorKey: "product" as const }] }]],
+      connections: [{ from: "One", to: "Missing", label: "Oops" }],
+    };
+    expect(() => buildCanvas(spec)).toThrow(/unknown component.*Missing/);
   });
 });

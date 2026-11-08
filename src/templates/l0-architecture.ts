@@ -50,6 +50,9 @@ const CANVAS: CanvasSpec = {
   connections: [
     { from: "Customer Portal", to: "Customer Profile Service", label: "Profile data", protocol: "REST" },
     { from: "Mobile App", to: "Order Management", label: "Orders", protocol: "REST" },
+    { from: "Chatbot Assistant", to: "Customer Profile Service", label: "Looks up customers", protocol: "REST" },
+    { from: "Partner Mini Apps", to: "Loyalty Service", label: "Awards points", protocol: "REST" },
+    { from: "API Gateway", to: "Billing Engine", label: "Invoices", protocol: "REST" },
     { from: "Order Management", to: "Event Bus", label: "Order events", protocol: "Kafka", dashed: true },
   ],
 };

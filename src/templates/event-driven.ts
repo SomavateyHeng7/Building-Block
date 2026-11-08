@@ -27,6 +27,7 @@ const ORDER_SERVICE: CanvasSpec = {
   connections: [
     { from: "Order Controller", to: "Order Aggregate", label: "Commands", protocol: "In-process" },
     { from: "Order Aggregate", to: "Orders Database", label: "Orders and outbox rows", protocol: "SQL" },
+    { from: "Order Aggregate", to: "Pricing Rules", label: "Prices the order", protocol: "In-process" },
     { from: "Orders Database", to: "Outbox Relay", label: "Pending events", protocol: "SQL polling", dashed: true },
   ],
 };

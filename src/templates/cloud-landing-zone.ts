@@ -54,6 +54,7 @@ const CANVAS: CanvasSpec = {
     { from: "App Servers", to: "Database", label: "Reads and writes", protocol: "SQL" },
     { from: "App Servers", to: "Cache", label: "Sessions", protocol: "Redis" },
     { from: "App Servers", to: "Secrets Manager", label: "Fetch secrets", protocol: "HTTPS", dashed: true },
+    { from: "App Servers", to: "Background Workers", label: "Queued jobs", dashed: true },
     { from: "Background Workers", to: "NAT Gateway", label: "Outbound calls", protocol: "HTTPS", dashed: true },
     { from: "App Servers", to: "Logging and Monitoring", label: "Logs and metrics", dashed: true },
   ],

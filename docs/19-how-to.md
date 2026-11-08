@@ -13,7 +13,12 @@ Recipes for common changes, with the files to touch and the rules to keep. After
    ids and copies the legend. A hand-written `build()` must do both too: a **new** diagram with **fresh ids** every
    call (use `createId`), and `DEFAULT_LEGEND.map((entry) => ({ ...entry }))` so diagrams don't share the legend.
 2. Add it to the list in `src/templates/index.ts`.
-3. `tests/templates/templates.test.ts` runs every listed template through the validator and the layout checks.
+3. `tests/templates/templates.test.ts` runs every listed template through the validator and the layout checks, including that
+   every component has a connection (L0 is exempt) and `crossings.test.ts` that no connection runs straight through another
+   component. Keep connections between neighbouring columns, or route them with `sides`.
+
+A connection that names a component that isn't on its canvas makes `buildCanvas` throw (it used to drop it silently), so
+a typo shows up in the tests rather than as a missing arrow.
 
 It appears on `/templates` (with search and its category) automatically, and on the start page if it is one of the
 first six after Blank (`START_PAGE_TEMPLATES`). Its preview is drawn from `build()`.

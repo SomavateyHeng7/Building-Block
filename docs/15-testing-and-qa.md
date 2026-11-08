@@ -48,7 +48,9 @@ Library and jsdom are dev dependencies).
 | `tests/lib/csp.test.ts` | 3 | The policy: nonce and `'strict-dynamic'` scripts; eval only in development; HTTPS upgrade; waitlist and analytics hosts, ignoring endpoints that aren't `https://` |
 | `tests/lib/levels.test.ts` | 2 | Roadmap statuses and heading wording |
 | `tests/lib/diagram/compare.test.ts` | 13 | Compare tabs: matching by name across ids, added/removed/changed fields, container moves, ignoring layout, connection matching (incl. two-way), internal designs, change-list rows |
-| `tests/templates/templates.test.ts` | 40 | Every template opens without repairs, mints fresh ids, connects real components, fits its containers; horizontal lanes (valid, fit, in flow order, one step per spot); the richer templates have connections, an L2 design and several tabs |
+| `tests/templates/templates.test.ts` | 65 | Every template opens without repairs, mints fresh ids, connects real components (every component has a connection), fits its containers; the builder throws on an unknown component name; horizontal lanes (valid, fit, in flow order, one step per spot); the richer templates have connections, an L2 design and several tabs |
+| `tests/templates/crossings.test.ts` | 15 | No template connection runs straight through a component that isn't one of its ends (vertical and horizontal builds; loop-backs that leave and return on the same side are routed around, so skipped) |
+| `tests/components/PropertiesPanelFlow.test.tsx` | 2 | The nothing-selected panel offers Number in flow order, both Tidy buttons and the step-numbers switch, and they act on the diagram |
 | `tests/templates/filter.test.ts` | 5 | Template search (any order, case and accents ignored, every word must match), category filter, every template has a known category |
 | `tests/lib/recentTemplates.test.ts` | 4 | Newest first, no repeats, at most three; damaged values ignored; blocked storage lasts for the tab |
 | `tests/lib/diagram/search.test.ts` | 9 | Names first, then details; several words in any order; accents ignored; a changed diagram is searched afresh; highlighting; sequence participants, messages and notes |

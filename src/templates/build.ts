@@ -224,7 +224,10 @@ function buildEdges(
   return (spec.connections ?? []).flatMap((connection): DiagramEdge[] => {
     const source = placed.get(connection.from);
     const target = placed.get(connection.to);
-    if (!source || !target) return [];
+    if (!source || !target) {
+      // A typo in a template would otherwise lose the connection without a word.
+      throw new Error(`Template connection "${connection.label}" names an unknown component: "${connection.from}" → "${connection.to}"`);
+    }
     const [sourceSide, targetSide] = connection.sides ?? sidesFor(source, target);
     return [
       {

@@ -40,6 +40,8 @@ const CANVAS: CanvasSpec = {
   connections: [
     { from: "Web Front End", to: "Load Balancer", label: "Requests", protocol: "HTTPS" },
     { from: "Admin Console", to: "Load Balancer", label: "Admin requests", protocol: "HTTPS" },
+    { from: "Load Balancer", to: "Application Server", label: "Routes requests", protocol: "HTTP" },
+    { from: "Application Server", to: "Background Worker", label: "Queued jobs", protocol: "AMQP", dashed: true },
     { from: "Application Server", to: "Identity Provider", label: "Token checks", protocol: "OIDC" },
     { from: "Application Server", to: "Primary Database", label: "Reads and writes", protocol: "SQL" },
     { from: "Application Server", to: "Cache", label: "Sessions", protocol: "Redis" },
