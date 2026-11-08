@@ -51,6 +51,25 @@ facing sides (`suggestConnectionSides`) and clears the bend.
 
 **Deleting a component deletes its connections** (`withoutDanglingEdges`), in the same undo step.
 
+**Typing on the line:** double-click a connection (or select it and press **Enter**) to type *What flows* and
+*Protocol* in a small editor on the line (`edges/edgeEditing.ts`, `CaptionEditor` in `ConnectionEdge.tsx`). Enter,
+✓ or clicking away keeps both as **one** undo step; Esc leaves it as it was. It stays screen-sized at any zoom, and
+ends when the connection is no longer selected. Not in View mode.
+
+**Protocol chips:** under the Protocol field, up to six one-tap protocols (`protocolChips`): the diagram's most used,
+then common ones, without the one already set. **Why chips as well as the suggestion list:** the browser's list is
+easy to miss and awkward on touch screens; chips look the same everywhere.
+
+**New connections start with the newest protocol** on the canvas (`lastProtocol`, applied in `addConnection`),
+because connections come in runs (REST between services, Kafka off the broker). Flowchart canvases (`isFlowchart`)
+are left alone: their lines have no protocols.
+
+**Suggestions:** *What flows* and *Protocol* offer, as you type, the values already used anywhere in the diagram
+(tabs and internal designs, most used first, case-insensitive) and then common protocols not used yet
+(`connectionSuggestions` in `levelTools.ts`). **Why:** the connection CSV is only useful if "Kafka" isn't also
+"kafka" and "Apache Kafka". A protocol that is asynchronous by nature (`isAsyncProtocol`: Kafka, AMQP, SQS, events,
+queues, SFTP…) on a solid line shows **Use a dashed line**; it is a suggestion, never applied by itself.
+
 **Copying:** connections are copied when *both* ends are copied (copy/paste, duplicate, duplicate tab).
 
 **Export:** drawn in images; listed in the connection CSV (Section, Part of, From, To, Direction, Line, What
@@ -64,10 +83,26 @@ connections, using the same tools as a tab.
 ### Using it
 
 - **Open:** select a component and click **Design its internals** (or **Open internal design** once it has
-  content) in the details panel, or click the blue **L2** badge on the component.
+  content) in the details panel, click the blue **L2** badge on the component, or press **Ctrl/⌘+Enter** with it
+  selected (works in View too: it's navigation).
+- **Changing level is animated:** going in, the canvas grows into place (`bb-view-in`); coming out, it settles from
+  slightly larger (`bb-view-out`). 200 ms, only when the level changes (not between tabs), and skipped for
+  `prefers-reduced-motion`. Worked out in `Canvas.tsx` from the view shown before.
+- An **empty** internal design whose component has L1 connections offers **Start from its *n* L1 neighbours** on
+  the canvas.
 - A blue bar above the canvas shows **← Back to *tab* / *component* · L2 · Internal design**.
 - With nothing selected, the details panel shows **Internal design**: the component you're inside, its technology
   and description, and **its connections at L1**. This is the "linked to the level above".
+- **Its connections at L1** are links: clicking one closes the design and selects that neighbour on the tab. Each
+  row shows ✓ when the design already draws a box with the neighbour's name.
+- **Add *n* L1 neighbours as context** (`addL1Context`, one undo step) draws the neighbours not shown yet as components
+  in a dashed **Connected at L1** container to the right of the design, keeping their name, category, technology,
+  icon and shape. Run again after new L1 connections and it adds to the same container. **Why copies, not links:**
+  internal designs are one level deep and self-contained; a copy is an ordinary component every tool already
+  handles, and matching by name is what ✓ checks, so renaming one side is visible straight away.
+- Adding them (`addL1ContextAndShow` in `canvasFocus.ts`) zooms to the new boxes and shows a toast with **Undo**, so
+  nothing appears off-screen without a word. Going to a neighbour and selecting a category in **On this canvas**
+  zoom to what they select the same way (`focusNodes`).
 - **Back:** the bar's button, **Esc** with nothing selected, or clicking the tab. You return with the component
   selected.
 

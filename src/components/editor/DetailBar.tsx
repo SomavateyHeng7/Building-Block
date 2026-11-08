@@ -10,7 +10,7 @@ export default function DetailBar() {
   if (!parent) return null;
 
   return (
-    <div className="flex min-w-0 items-center gap-2 border-b border-blue-200 bg-blue-50 px-2 py-1.5 text-sm text-blue-950 sm:px-3 dark:border-blue-900 dark:bg-blue-950/60 dark:text-blue-100">
+    <div className="bb-detail-bar flex min-w-0 items-center gap-2 border-b border-blue-200 bg-blue-50 px-2 py-1.5 text-sm text-blue-950 sm:px-3 dark:border-blue-900 dark:bg-blue-950/60 dark:text-blue-100">
       <button
         type="button"
         title="Back to the tab (Esc)"

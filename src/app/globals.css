@@ -250,6 +250,40 @@ button, a, summary, [role="button"], [role="tab"], [role="menuitem"], label {
   }
 }
 
+/*
+ * Changing level: into an internal design the canvas grows into place (zooming in), back out it settles from
+ * slightly larger (zooming out). Short, and skipped for people who prefer reduced motion.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .react-flow.bb-view-in {
+    animation: bb-view-in 200ms ease-out;
+  }
+  .react-flow.bb-view-out {
+    animation: bb-view-out 200ms ease-out;
+  }
+  .bb-detail-bar {
+    animation: bb-detail-bar-in 160ms ease-out;
+  }
+}
+@keyframes bb-view-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+@keyframes bb-view-out {
+  from {
+    opacity: 0;
+    transform: scale(1.05);
+  }
+}
+@keyframes bb-detail-bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
 /* Quick-add arrows on flowchart tabs (as in draw.io): shown while a shape is hovered or selected. */
 .bb-quick-add {
   opacity: 0;

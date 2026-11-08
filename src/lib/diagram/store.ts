@@ -4,8 +4,9 @@ import { hasBranding } from "./branding";
 import { MAX_CHECKPOINTS, snapshotOf, nextCheckpointName, type Checkpoint } from "./checkpoints";
 import { MAX_COMMENTS, commentTargets, mergeComments, type MergeResult } from "./comments";
 import { nextLegendColor } from "./palette";
-import { shapeInfo } from "./shapes";
+import { isFlowchart, shapeInfo } from "./shapes";
 import { syncLinkedParticipants } from "./sequence";
+import { l1Neighbours, lastProtocol, withL1Context } from "./levelTools";
 import {
   absolutePosition,
   arrangeNodes,
@@ -277,7 +278,11 @@ interface DiagramState {
   addConnection: (connection: NewConnection) => string | null;
   /** Moves one or both ends of a connection to other boxes or sides; false when it isn't allowed. */
   reconnectConnection: (id: string, ends: NewConnection) => boolean;
-  updateConnection: (id: string, patch: ConnectionPatch) => void;
+  /**
+   * Edits a connection. Edits to the same fields in quick succession (typing) undo as one step; `ownStep` makes this
+   * one its own step, for finished changes such as a caption typed on the line or a protocol chip.
+   */
+  updateConnection: (id: string, patch: ConnectionPatch, options?: { ownStep?: boolean }) => void;
   reverseConnection: (id: string) => void;
   deleteConnections: (ids: string[]) => void;
   selectAll: () => void;
@@ -361,6 +366,11 @@ interface DiagramState {
   openDetail: (componentId: string) => void;
   /** Back from an internal design to the tab it belongs to, with its component selected. */
   closeDetail: () => void;
+  /**
+   * Inside an internal design: draws the components its owner connects to at L1, which the design doesn't show yet,
+   * in a dashed "Connected at L1" container, and selects them. One undo step. Returns how many were added.
+   */
+  addL1Context: () => number;
   /** Adds a tab of either kind and opens it. */
   addSection: (name?: string, kind?: DiagramSection["kind"]) => void;
   /** Changes the sequence diagram on the open sequence tab; does nothing on other tabs. */
@@ -430,7 +440,16 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
     );
     if (exists) return null;
     const id = createId("edge");
-    const edge: DiagramEdge = { id, source, target, ...(sourceSide ? { sourceSide } : {}), ...(targetSide ? { targetSide } : {}) };
+    // Starts with the protocol of the newest connection here; flowchart lines don't have protocols.
+    const protocol = isFlowchart(section.nodes) ? undefined : lastProtocol(section.edges);
+    const edge: DiagramEdge = {
+      id,
+      source,
+      target,
+      ...(sourceSide ? { sourceSide } : {}),
+      ...(targetSide ? { targetSide } : {}),
+      ...(protocol ? { protocol } : {}),
+    };
     set((state) => ({
       ...commit(
         state,
@@ -443,7 +462,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
   },
 
   // Blank text is stored as undefined so it drops out of saved JSON.
-  updateConnection: (id, patch) =>
+  updateConnection: (id, patch, options) =>
     set((state) => {
       const cleaned = Object.fromEntries(
         Object.entries(patch).map(([field, value]) => [field, typeof value === "string" && !value.trim() ? undefined : value]),
@@ -454,7 +473,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
           ...section,
           edges: (section.edges ?? []).map((edge) => (edge.id === id ? { ...edge, ...cleaned } : edge)),
         })),
-        `edge:${id}:${Object.keys(patch).join(",")}`,
+        options?.ownStep ? undefined : `edge:${id}:${Object.keys(patch).join(",")}`,
       );
     }),
 
@@ -1185,6 +1204,19 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
         selectedEdgeId: null,
       };
     }),
+
+  addL1Context: () => {
+    const view = getActiveSection(get().diagram);
+    if (!view.parent) return 0;
+    const { nodes, added } = withL1Context(view.nodes, l1Neighbours(view.parent.section, view.parent.component, view.nodes));
+    if (!added.length) return 0;
+    set((state) => ({
+      ...commit(state, mapActiveSection(state.diagram, () => nodes)),
+      selectedNodeIds: added,
+      selectedEdgeId: null,
+    }));
+    return added.length;
+  },
 
   addSection: (name, kind) =>
     set((state) => {

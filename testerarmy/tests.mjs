@@ -1029,6 +1029,71 @@ ${ok}`,
       assert("The Flowchart card's picture shows a top-to-bottom flowchart with diamonds, and the Sequence diagram card's picture shows participants with lifelines, unlike the other cards."),
     ],
   },
+  {
+    title: "L0: the details panel counts the canvas by category, and a category selects and zooms to its items",
+    settings: desktop,
+    steps: [
+      ...openTemplate("Event-driven microservices"),
+      assert("With nothing selected, the right panel shows 'On this canvas' with '6 containers · 9 components · 8 connections' and a row per category with a count."),
+      act("In 'On this canvas', click the 'Microservices' row."),
+      js(
+        "The three Microservices components are selected",
+        `const selected = [...document.querySelectorAll(".react-flow__node.selected")].map((el) => el.innerText);
+if (selected.length !== 3) ${fail('selected.length + " selected: " + selected.join(", ")')}
+if (!selected.every((text) => text.includes("Microservices"))) ${fail('"selected " + selected.join(", ")')}
+${ok}`,
+      ),
+      assert("The canvas has zoomed in on the three selected components, and the right panel says '3 items selected'."),
+    ],
+  },
+  {
+    title: "L1: type a connection's caption on the line, pick a protocol chip, and new lines start with the last protocol",
+    settings: desktop,
+    steps: [
+      ...openTemplate("Event-driven microservices"),
+      act("Double-click the 'Payments · REST' label on the line from Payment Service to Payment Provider."),
+      assert("A small editor opens on the line with two fields, 'What flows' (showing 'Payments', selected) and 'Protocol' (showing 'REST'), and a blue ✓ button."),
+      act("Type 'Card payments', press Tab, select all the text in the Protocol field, type 'gRPC' and press Enter."),
+      assert("The editor closes and the line's label reads 'Card payments · gRPC'."),
+      act("Press Ctrl+Z (⌘+Z on a Mac) once."),
+      assert("The label is back to 'Payments · REST': both fields were undone in one step."),
+      act("Click the 'Payments · REST' label once to select the line, then in the right panel click the 'Kafka' chip under 'Protocol or technology'."),
+      assert("The Protocol field shows 'Kafka', and under it the panel says Kafka is usually asynchronous with a 'Use a dashed line' link."),
+      act("Click 'Use a dashed line'."),
+      assert("The line turns dashed and 'Dashed' is chosen under Line."),
+      act("Press Esc, click the 'Web Shop' component, and in the right panel's 'Connect to…' list choose 'Payment Provider'."),
+      assert("A new connection is selected, and its Protocol field already shows 'Kafka'."),
+    ],
+  },
+  {
+    title: "L2: Ctrl/⌘+Enter opens an internal design, it starts from the L1 neighbours, and a neighbour leads back",
+    settings: desktop,
+    steps: [
+      ...openTemplate("Event-driven microservices"),
+      act("Click the 'Payment Service' component, then press Ctrl+Enter (⌘+Enter on a Mac)."),
+      assert("A blue bar says 'Back to Overview / Payment Service · L2 · Internal design', and the empty canvas shows a blue 'Start from its 2 L1 neighbours' button."),
+      act("Click 'Start from its 2 L1 neighbours'."),
+      assert("A dashed 'Connected at L1' container appears holding 'Order Service' and 'Payment Provider', the view zooms to it, and a toast says 'Added 2 L1 neighbours' with an Undo button."),
+      act("Press Esc to clear the selection."),
+      assert("In the right panel, 'Its connections at L1' lists Order Service and Payment Provider, each with a ✓."),
+      act("In that list, click 'Payment Provider'."),
+      js(
+        "Back on the tab, with Payment Provider selected",
+        `if (document.querySelector(".bb-detail-bar")) ${fail('"still inside the internal design"')}
+const selected = [...document.querySelectorAll(".react-flow__node.selected")].map((el) => el.innerText);
+if (selected.length !== 1 || !selected[0].includes("Payment Provider")) ${fail('"selected: " + selected.join(", ")')}
+${ok}`,
+      ),
+      act("Click 'Payment Service', press Ctrl+Enter (⌘+Enter on a Mac), then press Esc once."),
+      js(
+        "Esc returns to the tab with Payment Service selected",
+        `if (document.querySelector(".bb-detail-bar")) ${fail('"still inside the internal design"')}
+const selected = [...document.querySelectorAll(".react-flow__node.selected")].map((el) => el.innerText);
+if (selected.length !== 1 || !selected[0].includes("Payment Service")) ${fail('"selected: " + selected.join(", ")')}
+${ok}`,
+      ),
+    ],
+  },
 ];
 
 export const tests = allTests.filter((test) => !opensHiddenTemplate(test));

@@ -36,6 +36,7 @@ Library and jsdom are dev dependencies).
 | `tests/lib/diagram/connections.test.ts` | 27 | Connections: creating, refusing, editing, deleting with components, copying; paste/duplicate growing containers; no-op renames; `historyKey`; `defaultLabel` |
 | `tests/lib/diagram/layout.test.ts` | 22 | Container content extents (computed once per nodes array); align/distribute/size (incl. containers carrying children and leaving containers), grow/fit, next slot, nudging, `dropIntoContainers` |
 | `tests/lib/diagram/detail.test.ts` | 15 | L2: drawing inside a component, back, navigation isn't an edit, undo, emptying, one level deep, copying, legend removal, stable view objects, file round-trip, nested-design repair, CSV "Part of", export titles |
+| `tests/lib/diagram/levelTools.test.ts` | 14 | L0 landscape summary by category, L1 suggestions (used first, case-insensitive, inside designs), async protocols, protocol chips, newest protocol on new connections (not on flowcharts), L2 neighbours, "Connected at L1" context (one undo step, once only, reused container, fits, clean file) |
 | `tests/lib/diagram/exportPlan.test.ts` | 8 | Views and file names; single file vs zip; PDF pages vs files; empty views skipped; name collisions; descriptions |
 | `tests/lib/diagram/export.test.ts` | 6 | CSV quoting and formula injection; BOM and CRLF; pixel ratio within iOS canvas limits |
 | `tests/lib/diagram/palette.test.ts` | 14 | WCAG contrast; every default legend colour has 4.5:1 text; palette has no duplicates; default legend colours are named; next colour; parsing typed colour codes; draw.io outlines for its fills, darkened outlines for others |
@@ -146,6 +147,10 @@ a real device or a deployment setting, which is why they're here:
 - [ ] Rename a tab, a component (double-click) and press Esc: name unchanged. Arrow keys move between tabs.
 - [ ] Connections: drag from a dot; "Connect to…"; edit; delete a component deletes its lines.
 - [ ] L2: Design its internals, draw, connect, Back, Esc; L2 badge opens it; reopen the saved file inside it.
+- [ ] L2: **Ctrl+Enter (Windows) and ⌘+Enter (Mac)** on a clicked component open its design; Esc comes back with it
+      selected. An empty design's "Start from its L1 neighbours" zooms to them and its toast's Undo removes them.
+- [ ] L1: double-click a line's label, type both fields, Enter: one Ctrl+Z undoes it. On a phone (Edit mode) the
+      editor stays on screen near the edges and the keyboard doesn't zoom the page.
 - [ ] Legend: colour picker by mouse and keyboard; "used by" dots; custom code; remove an entry in use asks first.
 - [ ] Collapse both side panels; reload: still collapsed.
 - [ ] Drag a component near another: pink guides and an orange gap in px; it snaps; hold Alt to move freely. Arrow
@@ -180,6 +185,18 @@ a real device or a deployment setting, which is why they're here:
 - [ ] Phone: drawers open and close; tapping the palette adds; handles are visible; no zoom when typing.
 
 ## QA history
+
+**6 November 2026:** QA of the L0/L1/L2 enhancements (landscape summary, connection suggestions, chips and typing on
+the line, L1 context in internal designs, the camera following, level transitions). A 66-check Playwright pass on the
+production build (desktop Chromium, dark mode, reduced motion, a phone in Chromium and WebKit) found and fixed:
+**⌘+Enter didn't open an internal design on a Mac** (and Ctrl+Enter wouldn't on Windows): React Flow reads Enter on a
+focused box as "select it" and, with its multi-select key held, unselected it first, so the shortcut is now handled on
+the canvas before React Flow; **two quick edits typed on a line undid as one step**, so finished edits (the line
+editor, protocol chips, "Use a dashed line") are now their own undo step (`updateConnection(…, { ownStep: true })`);
+**the line editor ran off a phone screen** near the edge, so it is now kept inside the canvas; and, from before
+these changes, **Esc out of an internal design didn't leave the component selected** as documented, because the same
+key press then cleared the selection. Three browser tests were added (L0 summary, L1 typing/chips/last protocol, L2
+shortcut/context/navigation) and walked locally, running their own `javascript` checks.
 
 **4 November 2026:** after user testing found that resizing gave no sense of size against other blocks and that
 grabbing an edge often drew an arrow instead, resizes now snap (edges, same width/height) and the resize controls

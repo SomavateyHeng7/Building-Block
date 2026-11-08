@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   Background,
   Controls,
@@ -33,7 +33,9 @@ import TextNode from "./nodes/TextNode";
 import { shapeInfo } from "@/lib/diagram/shapes";
 import PixelGuides, { useGuides } from "./PixelGuides";
 import ConnectionEdge from "./edges/ConnectionEdge";
-import { useCanvasFocus } from "./canvasFocus";
+import { addL1ContextAndShow, useCanvasFocus } from "./canvasFocus";
+import { startEditingEdge } from "./edges/edgeEditing";
+import { l1Neighbours } from "@/lib/diagram/levelTools";
 import { requestDelete } from "./deletePrompt";
 import { useCompareView } from "./compareView";
 import { useRenderEverything } from "./exportRendering";
@@ -234,6 +236,7 @@ export default function Canvas() {
   const diagram = useDiagramStore((state) => state.diagram);
   const selectedNodeIds = useDiagramStore((state) => state.selectedNodeIds);
   const setActiveSectionNodes = useDiagramStore((state) => state.setActiveSectionNodes);
+  const openDetail = useDiagramStore((state) => state.openDetail);
   const setSelection = useDiagramStore((state) => state.setSelection);
   const selectedEdgeId = useDiagramStore((state) => state.selectedEdgeId);
   const setSelectedEdge = useDiagramStore((state) => state.setSelectedEdge);
@@ -277,6 +280,21 @@ export default function Canvas() {
   const colorMode = mounted && resolvedTheme === "dark" ? "dark" : "light";
 
   const section = getActiveSection(diagram);
+  // An empty internal design can start from what its component talks to at L1.
+  const neighbourCount =
+    section.parent && !section.nodes.length ? l1Neighbours(section.parent.section, section.parent.component, []).length : 0;
+
+  // Going into an internal design zooms in, coming back out zooms out, so the change of level reads as one; other
+  // changes of view (another tab) just swap. Worked out while rendering, from the view shown before.
+  const level = section.parent ? 2 : 1;
+  const [shown, setShown] = useState<{ id: string; level: number; transition?: string }>({ id: section.id, level });
+  if (shown.id !== section.id) {
+    setShown({
+      id: section.id,
+      level,
+      transition: level > shown.level ? "bb-view-in" : level < shown.level ? "bb-view-out" : undefined,
+    });
+  }
 
   /** The middle of what's on screen, in diagram coordinates. */
   function paneCenter() {
@@ -313,7 +331,7 @@ export default function Canvas() {
   useEffect(() => {
     if (!focus) return;
     const edge = focus.kind === "edge" ? section.edges?.find((candidate) => candidate.id === focus.id) : undefined;
-    const ids = edge ? [edge.source, edge.target] : [focus.id];
+    const ids = focus.kind === "nodes" ? focus.ids : edge ? [edge.source, edge.target] : [focus.id];
     if (!ids.every((id) => section.nodes.some((node) => node.id === id))) return;
     let cancelled = false;
     const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
@@ -325,7 +343,8 @@ export default function Canvas() {
       await frame();
       if (cancelled) return;
       useCanvasFocus.getState().clear();
-      void fitView({ nodes: ids.map((id) => ({ id })), padding: 0.6, maxZoom: 1.25, duration: 300 });
+      // Several boxes need less room around them than one does, or they end up tiny.
+      void fitView({ nodes: ids.map((id) => ({ id })), padding: ids.length > 2 ? 0.25 : 0.6, maxZoom: 1.25, duration: 300 });
     })();
     return () => {
       cancelled = true;
@@ -515,7 +534,7 @@ export default function Canvas() {
   return (
     <ReactFlow
       key={section.id}
-      className={resizingBox ? "bb-resizing" : undefined}
+      className={[resizingBox ? "bb-resizing" : "", shown.id === section.id ? (shown.transition ?? "") : ""].join(" ").trim() || undefined}
       nodes={flowNodes}
       edges={flowEdges}
       nodeTypes={nodeTypes}
@@ -528,6 +547,17 @@ export default function Canvas() {
       }
       // A focused box would move 5 px per arrow press (React Flow's own keys); the editor's nudge (1 px, Shift: 10) runs instead.
       onKeyDownCapture={(event) => {
+        // Ctrl/⌘+Enter on a focused box opens its internal design. Handled before React Flow, which reads Enter on a
+        // box as "select it" and, with its multi-select key (⌘ on a Mac, Ctrl elsewhere) held, unselects it instead.
+        if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey) {
+          const focused = (event.target as HTMLElement).closest?.<HTMLElement>(".react-flow__node");
+          if (!focused) return;
+          event.stopPropagation();
+          event.preventDefault();
+          const id = selectedNodeIds.length === 1 ? selectedNodeIds[0] : focused.dataset.id;
+          if (id && !section.parent && section.nodes.some((candidate) => candidate.id === id && candidate.type === "block")) openDetail(id);
+          return;
+        }
         const direction = ARROWS[event.key];
         if (!direction || event.altKey || event.metaKey || event.ctrlKey) return;
         if (!(event.target as HTMLElement).closest?.(".react-flow__node")) return;
@@ -542,6 +572,12 @@ export default function Canvas() {
       }}
       onNodeMouseEnter={(_event, node) => hoverNode(node.id)}
       onNodeMouseLeave={() => hoverNode(null)}
+      onEdgeDoubleClick={(event, edge) => {
+        if (readOnly) return;
+        event.stopPropagation();
+        setSelectedEdge(edge.id);
+        startEditingEdge(edge.id);
+      }}
       onConnect={handleConnect}
       onReconnect={handleReconnect}
       onEdgesChange={handleEdgesChange}
@@ -591,6 +627,17 @@ export default function Canvas() {
               <p className="text-xs text-zinc-500">Switch to Edit to add something.</p>
             ) : (
             <div className="flex flex-wrap justify-center gap-2">
+              {neighbourCount > 0 && (
+                <button
+                  type="button"
+                  title="Draw what this component talks to at L1, then design the inside and connect it to them"
+                  className="inline-flex basis-full items-center justify-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                  onClick={addL1ContextAndShow}
+                >
+                  <Icon name="layers" />
+                  Start from its {neighbourCount} L1 neighbour{neighbourCount === 1 ? "" : "s"}
+                </button>
+              )}
               <button
                 type="button"
                 className="inline-flex items-center gap-1.5 rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
