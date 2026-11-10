@@ -40,11 +40,11 @@ const CANVAS: CanvasSpec = {
     { from: "Operational Database", to: "Batch Loader", label: "Nightly extract", protocol: "SQL" },
     { from: "SaaS Application", to: "Batch Loader", label: "API export", protocol: "HTTPS" },
     { from: "Event Stream", to: "Stream Processor", label: "Events", protocol: "Kafka", dashed: true },
-    { from: "Batch Loader", to: "Data Lake", label: "Raw files" },
-    { from: "Stream Processor", to: "Data Lake", label: "Raw events", dashed: true },
-    { from: "Data Lake", to: "Data Warehouse", label: "Cleaned and modelled" },
+    { from: "Batch Loader", to: "Data Lake", label: "Raw files", protocol: "S3 API" },
+    { from: "Stream Processor", to: "Data Lake", label: "Raw events", protocol: "Kafka Connect", dashed: true },
+    { from: "Data Lake", to: "Data Warehouse", label: "Cleaned and modelled", protocol: "SQL" },
     { from: "Data Warehouse", to: "BI Dashboards", label: "Queries", protocol: "SQL" },
-    { from: "Data Lake", to: "ML Models", label: "Training data" },
+    { from: "Data Lake", to: "ML Models", label: "Training data", protocol: "Parquet" },
   ],
 };
 

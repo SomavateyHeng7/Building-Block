@@ -54,6 +54,10 @@ const CANVAS: CanvasSpec = {
     { from: "Partner Mini Apps", to: "Loyalty Service", label: "Awards points", protocol: "REST" },
     { from: "API Gateway", to: "Billing Engine", label: "Invoices", protocol: "REST" },
     { from: "Order Management", to: "Event Bus", label: "Order events", protocol: "Kafka", dashed: true },
+    { from: "Event Bus", to: "Legacy Adapter", label: "Legacy events", protocol: "File drop", dashed: true },
+    { from: "Legacy Adapter", to: "Core Network", label: "Legacy traffic", protocol: "TCP" },
+    { from: "Event Bus", to: "Cloud Hosting", label: "Runs on", protocol: "Managed service", dashed: true },
+    { from: "API Gateway", to: "Monitoring & Observability", label: "Metrics and logs", protocol: "OpenTelemetry", dashed: true },
   ],
 };
 

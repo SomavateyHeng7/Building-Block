@@ -45,12 +45,12 @@ const CANVAS: CanvasSpec = {
     { from: "Developers", to: "Source Repository", label: "Push commits", protocol: "Git" },
     { from: "Source Repository", to: "CI Runner", label: "Triggers build", protocol: "Webhook" },
     { from: "CI Runner", to: "Artifact Registry", label: "Publishes image", protocol: "HTTPS" },
-    { from: "CI Runner", to: "Automated Tests", label: "Runs tests" },
+    { from: "CI Runner", to: "Automated Tests", label: "Runs tests", protocol: "Pipeline job" },
     { from: "Artifact Registry", to: "Security Scanner", label: "Scans image", protocol: "HTTPS" },
-    { from: "Automated Tests", to: "Staging", label: "Deploys candidate" },
-    { from: "Security Scanner", to: "Staging", label: "Passes the gate" },
-    { from: "Staging", to: "Production", label: "Promote after approval" },
-    { from: "Production", to: "Monitoring", label: "Metrics and logs", dashed: true },
+    { from: "Automated Tests", to: "Staging", label: "Deploys candidate", protocol: "Deploy job" },
+    { from: "Security Scanner", to: "Staging", label: "Passes the gate", protocol: "Policy check" },
+    { from: "Staging", to: "Production", label: "Promote after approval", protocol: "Deploy job" },
+    { from: "Production", to: "Monitoring", label: "Metrics and logs", protocol: "Agent", dashed: true },
   ],
 };
 

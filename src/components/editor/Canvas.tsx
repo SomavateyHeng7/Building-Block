@@ -9,7 +9,11 @@ import {
   ReactFlow,
   SelectionMode,
   applyNodeChanges,
+  getNodesBounds,
+  getViewportForBounds,
+  useNodesInitialized,
   useReactFlow,
+  useStore,
   type Connection,
   type Edge,
   type EdgeChange,
@@ -229,6 +233,37 @@ function historyOptionsFor(changes: NodeChange[]): NodesChangeOptions | null {
   if (changes.some((change) => change.type === "remove" || change.type === "add" || change.type === "replace")) {
     return {};
   }
+  return null;
+}
+
+/** Below this zoom the text on a box is too small to read, so a big diagram opens at this zoom instead of fitting. */
+const READABLE_ZOOM = 0.5;
+
+/**
+ * Sets the view when a tab opens: the whole diagram if it is readable that way, otherwise at a readable zoom
+ * starting at the top left (where a flow begins), with the minimap and the scroll to reach the rest. The canvas
+ * is keyed by tab, so this runs once for each.
+ */
+function InitialView() {
+  const initialized = useNodesInitialized();
+  const width = useStore((state) => state.width);
+  const height = useStore((state) => state.height);
+  const { getNodes, setViewport } = useReactFlow();
+  const done = useRef(false);
+  useEffect(() => {
+    if (done.current || !initialized || !width || !height) return;
+    const nodes = getNodes();
+    if (!nodes.length) return;
+    done.current = true;
+    const bounds = getNodesBounds(nodes);
+    const fit = getViewportForBounds(bounds, width, height, 0.2, 1.25, 0.1);
+    if (fit.zoom >= READABLE_ZOOM) {
+      void setViewport(fit);
+      return;
+    }
+    const margin = 40;
+    void setViewport({ x: margin - bounds.x * READABLE_ZOOM, y: margin - bounds.y * READABLE_ZOOM, zoom: READABLE_ZOOM });
+  }, [initialized, width, height, getNodes, setViewport]);
   return null;
 }
 
@@ -596,8 +631,8 @@ export default function Canvas() {
       minZoom={0.2}
       maxZoom={2}
       onlyRenderVisibleElements={!renderEverything}
-      fitView
     >
+      <InitialView />
       <Background gap={16} />
       <PixelGuides />
       <Controls />

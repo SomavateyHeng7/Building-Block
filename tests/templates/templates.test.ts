@@ -3,6 +3,7 @@ import { allTemplates as templates, templates as listed } from "@/templates";
 import { parseDiagram } from "@/lib/diagram/validate";
 import { growContainerToFit } from "@/lib/diagram/layout";
 import { buildCanvas } from "@/templates/build";
+import { diagramHints } from "@/lib/diagram/hints";
 
 describe("templates", () => {
   it("have unique ids", () => {
@@ -148,8 +149,8 @@ describe("template connections", () => {
         for (const canvas of canvases) {
           const touched = new Set((canvas.edges ?? []).flatMap((edge) => [edge.source, edge.target]));
           const lonely = canvas.nodes.filter((node) => node.type === "block" && !touched.has(node.id));
-          // Only the layered overview and the blank/sequence/hidden ones may leave components unconnected.
-          if (["l0-architecture", "blank", "sequence", "current-vs-target"].includes(template.id)) continue;
+          // Only the blank, sequence and hidden ones may leave components unconnected.
+          if (["blank", "sequence", "current-vs-target"].includes(template.id)) continue;
           expect(lonely.map((node) => node.data.label)).toEqual([]);
         }
       }
@@ -197,6 +198,25 @@ describe("internal designs and the newer templates", () => {
     const sequence = templates.find((template) => template.id === "sequence-login")!.build().sections[0].sequence!;
     expect(sequence.participants.map((participant) => participant.label)).toEqual(["User", "Web App", "Identity Provider", "Orders API"]);
     expect(sequence.steps.some((step) => "label" in step && step.label === "Sign-in failed")).toBe(true);
+  });
+});
+
+describe("what Check would say about a new template", () => {
+  it("never finds a component with no connections (the hidden current-vs-target excepted)", () => {
+    for (const template of templates.filter((candidate) => candidate.id !== "current-vs-target")) {
+      expect(diagramHints(template.build()).filter((hint) => hint.kind === "unconnected")).toEqual([]);
+    }
+  });
+
+  it("finds no connection without a protocol in the architecture templates, where one is meaningful", () => {
+    const architecture = [
+      "l0-architecture", "three-tier", "event-driven", "serverless", "data-platform", "c4-context",
+      "data-pipeline", "cloud-landing-zone", "ci-cd-pipeline", "security-zones", "migration-roadmap",
+    ];
+    for (const id of architecture) {
+      const missing = diagramHints(templates.find((template) => template.id === id)!.build()).filter((hint) => hint.kind === "no-protocol");
+      expect(missing.map((hint) => hint.label), id).toEqual([]);
+    }
   });
 });
 

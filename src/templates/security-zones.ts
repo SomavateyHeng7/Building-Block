@@ -48,8 +48,8 @@ const CANVAS: CanvasSpec = {
     { from: "API Gateway", to: "Internal APIs", label: "Authenticated calls", protocol: "HTTPS" },
     { from: "Web Servers", to: "Internal APIs", label: "Service calls", protocol: "HTTPS" },
     { from: "Internal APIs", to: "Database", label: "Reads and writes", protocol: "SQL over TLS" },
-    { from: "Database", to: "Backup Storage", label: "Encrypted backups", dashed: true },
-    { from: "Internal APIs", to: "Security Monitoring", label: "Audit logs", dashed: true },
+    { from: "Database", to: "Backup Storage", label: "Encrypted backups", protocol: "TLS", dashed: true },
+    { from: "Internal APIs", to: "Security Monitoring", label: "Audit logs", protocol: "Syslog over TLS", dashed: true },
   ],
 };
 

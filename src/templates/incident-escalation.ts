@@ -44,10 +44,10 @@ const CANVAS: CanvasSpec = {
   ],
   connections: [
     { from: "Report Issue", to: "Triage Ticket", label: "Ticket" },
-    { from: "Triage Ticket", to: "Escalate to On-call", label: "Needs engineering" },
+    { from: "Triage Ticket", to: "Escalate to On-call", label: "Escalate" },
     { from: "Escalate to On-call", to: "Declare Incident", label: "Page on-call" },
     { from: "Declare Incident", to: "Investigate Cause", label: "Assign engineer" },
-    { from: "Investigate Cause", to: "Deploy Fix", label: "Root cause found" },
+    { from: "Investigate Cause", to: "Deploy Fix", label: "Cause found" },
     { from: "Deploy Fix", to: "Post Status Update", label: "Fix live" },
     { from: "Post Status Update", to: "Close Ticket", label: "Customers told" },
     { from: "Close Ticket", to: "Confirm Resolution", label: "Resolved" },

@@ -14,6 +14,7 @@ import {
   supportsFilePicker,
   useFileStore,
   useIsDirty,
+  useUntouchedNewDiagram,
 } from "@/lib/diagram/file";
 import { createBlankDiagram } from "@/lib/diagram/factory";
 import { setRecoveryEnabled, useRecoveryEnabled } from "@/lib/diagram/recovery";
@@ -205,6 +206,7 @@ function formatTime(ms: number): string {
 
 function SaveStatus() {
   const dirty = useIsDirty();
+  const untouched = useUntouchedNewDiagram();
   const { fileName, handle, saving, error, savedAt } = useFileStore();
   const pill = "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium";
   const dot = (color: string) => <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${color}`} />;
@@ -216,6 +218,15 @@ function SaveStatus() {
     );
   }
   if (saving) return <span className={`${pill} text-zinc-500`}>{dot("animate-pulse bg-zinc-400")}Saving…</span>;
+  if (dirty && untouched) {
+    return (
+      <span className={`${pill} text-zinc-500`} title="Not in a file yet. Save to keep it: Building Block doesn't store diagrams.">
+        {dot("bg-zinc-400")}
+        <span className="hidden sm:inline">Not saved yet</span>
+        <span className="sm:hidden">New</span>
+      </span>
+    );
+  }
   if (dirty) {
     return (
       <span
@@ -265,6 +276,7 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
   const hasFile = useFileStore((state) => state.handle !== null);
   const saving = useFileStore((state) => state.saving);
   const dirty = useIsDirty();
+  const untouched = useUntouchedNewDiagram();
   const readOnly = useReadOnly();
 
   const section = getActiveSection(diagram);
@@ -553,7 +565,7 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
         <div className={DIVIDER} />
         <button
           type="button"
-          className={`${SECONDARY_BUTTON} ${dirty && !hasFile ? "border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200 dark:hover:bg-amber-900" : ""}`}
+          className={`${SECONDARY_BUTTON} ${dirty && !hasFile && !untouched ? "border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200 dark:hover:bg-amber-900" : ""}`}
           disabled={saving}
           title={hasFile ? "Saves to the open file (Ctrl/⌘+S)" : "Choose where to save the file (Ctrl/⌘+S)"}
           onClick={() => void saveDiagramToFile()}

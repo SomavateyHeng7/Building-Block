@@ -6,6 +6,7 @@ import { useDiagramStore } from "@/lib/diagram/store";
 import CompareDialog from "./CompareDialog";
 import HintsDialog from "./HintsDialog";
 import { diagramHints } from "@/lib/diagram/hints";
+import { useUntouchedNewDiagram } from "@/lib/diagram/file";
 import { Icon } from "./Icon";
 import { useReadOnly } from "./viewMode";
 
@@ -22,7 +23,12 @@ export default function SectionTabs() {
   const duplicateSection = useDiagramStore((state) => state.duplicateSection);
 
   const comments = useDiagramStore((state) => state.diagram.comments);
-  const hintCount = useMemo(() => diagramHints({ sections, comments }).length, [sections, comments]);
+  const hints = useMemo(() => diagramHints({ sections, comments }), [sections, comments]);
+  // A template nobody has touched yet has plenty of blanks (owners, protocols): true, but not worth a number yet.
+  const untouched = useUntouchedNewDiagram();
+  const hintCount = untouched ? 0 : hints.length;
+  // Amber is for what is probably a slip (a component nothing connects to, an open comment); gaps are grey.
+  const urgent = hints.some((hint) => hint.kind === "unconnected" || hint.kind === "open-comment");
   const readOnly = useReadOnly();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -202,7 +208,13 @@ export default function SectionTabs() {
             <span className="hidden sm:inline">Check</span>
             <span className="sr-only sm:hidden">Check</span>
             {hintCount > 0 && (
-              <span className="rounded-full bg-amber-100 px-1.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+              <span
+                className={`rounded-full px-1.5 text-[11px] font-medium ${
+                  urgent
+                    ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                    : "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                }`}
+              >
                 {hintCount}
                 <span className="sr-only"> to look at</span>
               </span>
