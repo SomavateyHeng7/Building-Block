@@ -30,7 +30,7 @@ Files involved:
 | **Connection list (CSV)** | The whole diagram | Interface lists |
 | **Diagram file (JSON)** | The whole diagram | A copy to open again |
 
-A *view* is a tab or a component's internal design. Pictures include a **title** above and a **legend** below
+A *view* is a tab or a component's internal design. Pictures include a **title** above and (unless turned off) a **legend** below
 listing **only the categories used in that view**. Pictures are taken from the canvas, so they show text boxes,
 and flowchart shapes as drawn, and a sequence picture its frames and activation bars (zoom on a
 sequence sheet doesn't change the picture: it's on wrappers outside `.bb-sequence-sheet`). Text boxes aren't
@@ -38,18 +38,22 @@ components, so they're left out of the CSV and the document's component tables, 
 
 ## The export dialog — `ExportDialog.tsx`
 
-1. **Formats:** pick any number. Pictures (PNG, SVG, PDF) and "Lists and files (always the whole diagram)".
-2. **What to picture** (only when a picture format is chosen): every tab, with its internal designs indented
-   under it. Empty views are disabled. **Only this view** / **Everything** shortcuts. The view on screen is tagged
-   "On screen" and selected by default (or everything, if the view on screen is empty).
-3. **Picture style:** light or dark.
-4. **Download as** (only when it makes a difference): **One file** (a `.zip`, or a single PDF with a page per view)
-   or **Separate files** (one download each, with a note that the browser may ask to allow several downloads).
+1. **Format:** the four picture formats (PNG, SVG, PDF, interactive viewer) as tiles. Code (Mermaid, PlantUML)
+   and lists/files (CSVs, solution document, JSON) sit under a collapsed **More formats** toggle, which opens by
+   itself if one of them was chosen last time, and shows a count badge while closed.
+2. **What to export** (only when a picture or code format is chosen): every tab, with its internal designs
+   indented under it. Empty views are disabled. **Only this tab** / **All** shortcuts. The view on screen is tagged
+   "On screen" and selected by default (or everything, if the view on screen is empty). With only one non-empty
+   view, the list collapses to "The tab on screen. Change".
+3. **Picture options** (one card): **Background** light/dark, **Include legend** (on by default; off draws the
+   picture with no legend strip, in every picture format), and a collapsed **Logo and accent colour**.
+4. **Download as** (only when it makes a difference): a two-way switch, **One zip/One file** or **N separate files**
+   (the browser may ask to allow several downloads).
 5. **Summary:** "You'll get plan.zip (3 PNG images and the component list)." The button says exactly what it will
    download ("Download plan.zip", "Download 4 files"). If something is missing, the summary says what ("Choose at
    least one format") and the button is disabled.
 
-The last formats, bundle choice and style are remembered in `localStorage["bb:export"]` (the older
+The last formats, bundle choice, style and legend choice are remembered in `localStorage["bb:export"]` (the older
 `bb:exportTheme` key is still read once for the style).
 
 **Why a dialog instead of a menu:** people asked to download "one file or many according to their liking".

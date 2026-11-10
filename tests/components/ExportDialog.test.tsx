@@ -57,4 +57,20 @@ describe("ExportDialog", () => {
     expect(screen.getByText("Choose at least one format.")).toBeTruthy();
     expect((screen.getByRole("button", { name: "Download" }) as HTMLButtonElement).disabled).toBe(true);
   });
+
+  it("can leave the legend out of pictures", () => {
+    const { onExport } = renderDialog();
+    const legend = screen.getByRole("checkbox", { name: /Include legend/ }) as HTMLInputElement;
+    expect(legend.checked).toBe(true);
+    fireEvent.click(legend);
+    fireEvent.click(screen.getByRole("button", { name: "Download plan.png" }));
+    expect(onExport).toHaveBeenCalledWith(expect.objectContaining({ legend: false }));
+  });
+
+  it("keeps code and list formats under More formats", () => {
+    renderDialog();
+    expect(screen.queryByRole("checkbox", { name: /Mermaid/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /More formats/ }));
+    expect(screen.getByRole("checkbox", { name: /Mermaid/ })).toBeTruthy();
+  });
 });

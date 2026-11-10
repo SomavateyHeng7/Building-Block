@@ -65,7 +65,7 @@ const ALL_FORMATS = [...IMAGE_FORMATS, ...DATA_FORMATS];
 
 /** The last export's choices, so the dialog opens the way it was left. */
 function readExportPrefs(): ExportPrefs {
-  const fallback: ExportPrefs = { formats: ["png"], bundle: "one", theme: "light" };
+  const fallback: ExportPrefs = { formats: ["png"], bundle: "one", theme: "light", legend: true };
   try {
     const saved = JSON.parse(window.localStorage.getItem(EXPORT_PREFS_KEY) ?? "{}");
     const formats = Array.isArray(saved.formats) ? saved.formats.filter((f: ExportFormat) => ALL_FORMATS.includes(f)) : [];
@@ -74,6 +74,7 @@ function readExportPrefs(): ExportPrefs {
       formats: formats.length ? formats : fallback.formats,
       bundle: saved.bundle === "separate" ? "separate" : "one",
       theme: (saved.theme ?? oldTheme) === "dark" ? "dark" : "light",
+      legend: saved.legend !== false,
     };
   } catch {
     return fallback;
@@ -343,7 +344,7 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
    */
   async function runExport(choice: ExportChoice) {
     setExportOpen(false);
-    saveExportPrefs({ formats: choice.formats, bundle: choice.bundle, theme: choice.theme });
+    saveExportPrefs({ formats: choice.formats, bundle: choice.bundle, theme: choice.theme, legend: choice.legend });
     const plan = planExport(diagram, choice);
     if (!plan.files.length) return;
 
@@ -385,10 +386,13 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
               bounds: sheet ? { x: 0, y: 0, width: sheet.offsetWidth, height: sheet.offsetHeight } : getNodesBounds(getNodes()),
               title: exportTitle(diagram, view),
               // While a comparison is shown, the picture's legend says what the change colours mean.
-              legend: [
-                ...legendUsedIn(diagram, view),
-                ...(changeMarksForView(diagram, useCompareView.getState().pair, view)?.legend ?? []),
-              ],
+              // Left out entirely when the person chose a picture without a legend.
+              legend: choice.legend
+                ? [
+                    ...legendUsedIn(diagram, view),
+                    ...(changeMarksForView(diagram, useCompareView.getState().pair, view)?.legend ?? []),
+                  ]
+                : [],
               dark: choice.theme === "dark",
               branding: diagram.branding,
             };
