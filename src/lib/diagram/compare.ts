@@ -99,6 +99,8 @@ function detailSignature(node: DiagramNode): string {
   return JSON.stringify([nodes.sort(), edges.sort()]);
 }
 
+const SHAPE_LABELS: Record<string, string> = { process: "Process", decision: "Decision", terminal: "Start / end", data: "Data", document: "Document", database: "Database", subprocess: "Subprocess" };
+
 const DIRECTIONS = { forward: "One way", both: "Both ways", none: "No arrow" };
 
 /** Which tab is "from" and which is "to" decides what counts as added and removed. */
@@ -106,6 +108,8 @@ export function compareSections(diagram: Diagram, from: DiagramSection, to: Diag
   const category = (node: DiagramNode) =>
     diagram.legend.find((entry) => entry.key === node.data.colorKey)?.label ?? "";
   const iconLabel = (node: DiagramNode) => (node.data.kind === "block" ? (componentIcon(node.data.icon)?.label ?? "") : "");
+  const shapeLabel = (node: DiagramNode) =>
+    node.data.kind === "block" ? (SHAPE_LABELS[node.data.shape ?? "process"] ?? "") : "";
   const containerOf = (section: DiagramSection) => (node: DiagramNode) =>
     section.nodes.find((candidate) => candidate.id === node.parentId)?.data.label ?? "";
   const fromContainer = containerOf(from);
@@ -132,6 +136,7 @@ export function compareSections(diagram: Diagram, from: DiagramSection, to: Diag
         ["Category", category(before), category(after)],
         ...(type === "block" ? [["Container", fromContainer(before), toContainer(after)] as [string, string, string]] : []),
         ...(type === "block" ? [["Icon", iconLabel(before), iconLabel(after)] as [string, string, string]] : []),
+        ...(type === "block" ? [["Shape", shapeLabel(before), shapeLabel(after)] as [string, string, string]] : []),
         ["Technology", before.data.technology ?? "", after.data.technology ?? ""],
         ["Owner", before.data.owner ?? "", after.data.owner ?? ""],
         ["Description", before.data.description ?? "", after.data.description ?? ""],

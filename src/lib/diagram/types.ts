@@ -145,6 +145,11 @@ export interface DiagramEdge {
   /** Defaults to "step" (right angles). */
   shape?: ConnectionShape;
   /**
+   * Where this connection comes in the flow (1, 2, 3…). Shown on the line while the diagram's
+   * `numberConnections` is on; set by "Number in flow order" or typed in.
+   */
+  step?: number;
+  /**
    * How far the middle of the line is moved from where it's drawn by default, in canvas pixels; set by
    * dragging the dot on a selected connection. Relative, so the line keeps its bend when components move.
    */
@@ -274,6 +279,8 @@ export interface Diagram {
   activeDetailId?: string;
   /** Show each component's technology under its label. Defaults to true. */
   showTechnology?: boolean;
+  /** Show each connection's step number (see `DiagramEdge.step`) on the line. Defaults to false. */
+  numberConnections?: boolean;
   /** Added to exports: a logo and an accent colour. */
   branding?: Branding;
   /** Review comments, newest last. */

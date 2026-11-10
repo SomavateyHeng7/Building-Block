@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | Diagrams | Memory while open; the user's `.json` file | **Never** |
 | Exports | Generated in the browser, downloaded | Never |
-| Preferences (theme, panels, export choices, the name used on review comments) | `localStorage` | Never |
+| Preferences (theme, panels, export choices, the name used on review comments, the last three template ids started, `bb:recent-templates`) | `localStorage` | Never |
 | Privacy-notice acceptance | `localStorage` (`bb:consent`) | Never |
 | Waitlist email + consent record | Sent to the form provider | **Only if** `NEXT_PUBLIC_WAITLIST_URL` is set **and** the user ticks the box and submits |
 | Maintenance bypass cookie | Cookie, HttpOnly | Sent to our server (team only) |

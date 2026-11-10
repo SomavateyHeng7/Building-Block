@@ -27,6 +27,7 @@ const ORDER_SERVICE: CanvasSpec = {
   connections: [
     { from: "Order Controller", to: "Order Aggregate", label: "Commands", protocol: "In-process" },
     { from: "Order Aggregate", to: "Orders Database", label: "Orders and outbox rows", protocol: "SQL" },
+    { from: "Order Aggregate", to: "Pricing Rules", label: "Prices the order", protocol: "In-process" },
     { from: "Orders Database", to: "Outbox Relay", label: "Pending events", protocol: "SQL polling", dashed: true },
   ],
 };
@@ -88,5 +89,7 @@ export const eventDrivenTemplate: TemplateDefinition = {
   name: "Event-driven microservices",
   description:
     "Services that talk through an event broker, behind an API gateway. The Order Service has an internal design (L2) to open.",
+  category: "Architecture",
+  keywords: ["microservices", "kafka", "broker", "l2"],
   build: () => buildDiagram("Event-driven Microservices", [{ name: "Overview", canvas: CANVAS }]),
 };

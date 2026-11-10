@@ -34,6 +34,8 @@ html {
 
 body {
   overflow-x: hidden;
+  /* A long unbroken word wraps instead of being cut off by the hidden overflow. */
+  overflow-wrap: break-word;
   -webkit-tap-highlight-color: transparent;
 }
 

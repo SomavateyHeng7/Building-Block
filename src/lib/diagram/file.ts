@@ -117,6 +117,19 @@ export function useIsDirty(): boolean {
   return opened && differsFromSaved(saved, diagram);
 }
 
+/**
+ * A diagram started here (blank or from a template) that nothing has been done to yet and that isn't in a file.
+ * Its "not saved" state is true but not news, so the toolbar stays calm until the first edit.
+ */
+export function useUntouchedNewDiagram(): boolean {
+  const opened = useFileStore((state) => state.opened);
+  const handle = useFileStore((state) => state.handle);
+  const fileName = useFileStore((state) => state.fileName);
+  const savedAt = useFileStore((state) => state.savedAt);
+  const untouched = useDiagramStore((state) => state.past.length === 0 && state.future.length === 0);
+  return opened && !handle && !fileName && !savedAt && untouched;
+}
+
 /** Makes `diagram` the open one. `file` is where it came from; omit it for a new, unsaved diagram. */
 export function startDiagram(diagram: Diagram, file?: { handle: FileSystemFileHandle | null; fileName: string }): void {
   useDiagramStore.getState().loadDiagram(diagram);

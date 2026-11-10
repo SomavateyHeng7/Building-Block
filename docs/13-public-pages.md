@@ -62,7 +62,9 @@ enforcement on changes that wording to "allows", and `/pricing` must say so too.
   the page (a full-page overlay appears while a file is dragged over; leaving it means the drag left the window).
 - The three ways in (**New**, **Open**, **Import from draw.io or Mermaid**) sit in one row on wide screens.
 - **Start from a template:** cards with the template's real `TemplatePreview` (the same picture as on the templates
-  page), 2, 3 or 4 to a row as the screen widens.
+  page), 2, 3 or 4 to a row as the screen widens. Recently used templates come first; each card says what is in it
+  ("3 tabs: … · 3 to 6 components each"). A **Browse by category** row links to `/templates?category=Process` etc.
+  (the templates page reads `category` with `useSearchParams`, inside a `Suspense` boundary, and ignores unknown names).
 - **Changes lost on the way here:** after leaving a diagram with unsaved changes that no recovery copy kept, an
   amber notice says so once and offers **Turn on recovery copies** (`takeLostUnsaved`, see
   [files](06-files-saving-and-unsaved-changes.md#warnings-before-losing-work)). A kept copy shows the
@@ -84,12 +86,19 @@ still builds, is tested, and is found by `getTemplate`; removing `hidden` brings
 | --- | --- |
 | `blank` | `createBlankDiagram("Untitled Diagram")` |
 | `l0-architecture` | Four containers (channels, core systems, integration, infrastructure) of components laid out in columns with the default legend, plus three example connections (one dashed "Order events · Kafka"). The column gap leaves room for connection labels. |
-| `three-tier` | Presentation, application and data tiers plus an external identity provider, with technologies and six connections. |
+| `three-tier` | Presentation, application and data tiers plus an external identity provider, with technologies and connections, and an **internal design (L2)** for the Application Server. |
 | `event-driven` | Clients → API gateway → order services → event broker → downstream services, a payment provider, and an **internal design (L2)** for the Order Service. |
-| `serverless` | Clients → CDN and API gateway → functions → a table, a queue that triggers a worker, and a bucket. |
-| `data-platform` | Sources → ingestion (CDC, batch connectors, an event stream) → a lake and a warehouse → ML, dashboards and reverse ETL. |
+| `serverless` | Clients → CDN and API gateway → functions → a table, a queue that triggers a worker, and a bucket, with an **internal design (L2)** for the Bookings Function. |
+| `data-platform` | Sources → ingestion (CDC, batch connectors, an event stream) → a lake and a warehouse → ML, dashboards and reverse ETL, with an **internal design (L2)** for the Data Warehouse. |
 | `flowchart` | In the app's palette (Mint, Sky, Butter, Rose): an order-fulfilment process top to bottom: start/end pills, steps, two decision diamonds with Yes/No connections to exception paths, a "Stock levels" database feeding a step, and a title text box. Laid out by hand (to the pixel) with its own four-entry legend, not built from columns. |
 | `current-vs-target` | **Hidden for now.** Two tabs, **Current** and **Target**, that differ in added, removed and recategorised components, made to show **Compare tabs**. Browser tests that open it are held back from the TesterArmy sync until it's shown again. |
+| `cloud-landing-zone` | Internet, public, private and data subnets with shared services, and an **internal design (L2)** for the App Servers. |
+| `incident-escalation` | A swimlane process (Customer, Support, Incident Manager, Engineering), orientable like `cross-functional`, with a "reopen" loop-back. |
+| `ci-cd-pipeline` | Developers → repository → CI runner and registry → tests and security scan → staging → production → monitoring. |
+| `security-zones` | Untrusted internet → DMZ (WAF, API gateway) → application zone → data zone, plus a security-operations zone for audit logs. |
+| `er-data-model` | Entities of an ordering system as components (key fields on the technology line, so they show under the name), grouped by domain, with "1 to many" style relationship labels. |
+| `org-chart` | Leadership → directors → managers → teams, one level per column, with "Manages" / "Leads" connections. |
+| `sequence-login` | OAuth 2.0 authorisation code with PKCE as a sequence tab (Mermaid): sign-in, token exchange, an API call, a failure path and a token refresh. |
 | `sequence` | A checkout flow as a sequence tab, **written as Mermaid code**: calls, a self-call, replies, async events, a note, an `alt`/`else` frame, an `opt` frame with a `loop` inside, and activation bars. |
 
 Sequence templates are written as Mermaid code and built by `sequenceFromMermaid` in

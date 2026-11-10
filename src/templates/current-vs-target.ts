@@ -76,6 +76,8 @@ export const currentVsTargetTemplate: TemplateDefinition = {
   name: "Current vs target state",
   description:
     "Two tabs: the landscape today and where it is going. Use Compare tabs to list what is added, removed and changed.",
+  category: "Planning",
+  keywords: ["compare", "as-is", "to-be", "migration"],
   build: () =>
     buildDiagram("Current vs Target State", [
       { name: "Current", canvas: CURRENT },

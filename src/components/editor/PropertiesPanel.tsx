@@ -1,5 +1,6 @@
 "use client";
 
+import { useReactFlow } from "@xyflow/react";
 import { safeWebAddress } from "@/lib/diagram/webAddress";
 import CommentsSection from "./CommentsSection";
 import { useState, type ReactNode } from "react";
@@ -8,7 +9,6 @@ import { suggestConnectionSides, type ArrangeOp } from "@/lib/diagram/layout";
 import { connectionCaption } from "@/lib/diagram/flowAdapter";
 import type {
   BlockColorKey,
-  BlockShape,
   ConnectionDirection,
   ConnectionLineStyle,
   ConnectionShape,
@@ -73,6 +73,33 @@ const ARRANGE_GROUPS: { title: string; ops: { op: ArrangeOp; label: string; icon
     ],
   },
 ];
+
+/** A labelled on/off switch. */
+function SwitchRow({
+  title,
+  hint,
+  checked,
+  onChange,
+}: {
+  title: string;
+  hint: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-3 text-sm text-zinc-700 dark:text-zinc-200">
+      <span>
+        {title}
+        <span className="block text-xs text-zinc-500">{hint}</span>
+      </span>
+      <input type="checkbox" role="switch" checked={checked} onChange={(event) => onChange(event.target.checked)} className="peer sr-only" />
+      <span
+        aria-hidden
+        className="relative h-5 w-9 shrink-0 rounded-full bg-zinc-300 transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:bg-zinc-900 peer-checked:after:translate-x-4 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500/40 dark:bg-zinc-700 dark:peer-checked:bg-zinc-100 dark:after:bg-zinc-950"
+      />
+    </label>
+  );
+}
 
 const SECTION_TITLE = "text-xs font-semibold uppercase tracking-wide text-zinc-500";
 
@@ -728,7 +755,9 @@ function ConnectionPanel({ edge, action }: { edge: DiagramEdge; action?: ReactNo
   const reverseConnection = useDiagramStore((state) => state.reverseConnection);
   const deleteConnections = useDiagramStore((state) => state.deleteConnections);
   const setSelection = useDiagramStore((state) => state.setSelection);
+  const setNumberConnections = useDiagramStore((state) => state.setNumberConnections);
   const diagram = useDiagramStore((state) => state.diagram);
+  const numbered = diagram.numberConnections === true;
   const suggestions = connectionSuggestions(diagram);
   const otherLabels = suggestions.labels.filter((value) => value !== edge.label);
   const suggestAsync = isAsyncProtocol(edge.protocol) && (edge.style ?? "solid") === "solid";
@@ -767,6 +796,30 @@ function ConnectionPanel({ edge, action }: { edge: DiagramEdge; action?: ReactNo
           ))}
         </datalist>
       </label>
+      <label className={FIELD_LABEL}>
+        Step number
+        <input
+          type="number"
+          min={1}
+          max={9999}
+          step={1}
+          className={FIELD}
+          placeholder="e.g. 1"
+          value={edge.step ?? ""}
+          onChange={(event) => {
+            const value = Math.floor(Number(event.target.value));
+            updateConnection(edge.id, { step: event.target.value !== "" && value >= 1 && value <= 9999 ? value : undefined });
+          }}
+        />
+        <span className="text-[11px] font-normal text-zinc-400">
+          Where this comes in the flow. Number them all at once with &quot;Number in flow order&quot; (select nothing to find it).
+        </span>
+      </label>
+      {!numbered && edge.step !== undefined && (
+        <button type="button" className={`${ACTION_BUTTON} self-start`} onClick={() => setNumberConnections(true)}>
+          Show step numbers on the diagram
+        </button>
+      )}
       <label className={FIELD_LABEL}>
         Protocol or technology
         <input
@@ -975,7 +1028,17 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
   const setSelection = useDiagramStore((state) => state.setSelection);
   const updateContainerStyle = useDiagramStore((state) => state.updateContainerStyle);
   const setShowTechnology = useDiagramStore((state) => state.setShowTechnology);
+  const setNumberConnections = useDiagramStore((state) => state.setNumberConnections);
+  const numberConnectionsInFlowOrder = useDiagramStore((state) => state.numberConnectionsInFlowOrder);
+  const tidyDiagram = useDiagramStore((state) => state.tidyDiagram);
   const showTechnology = diagram.showTechnology !== false;
+  const { fitView } = useReactFlow();
+
+  /** Tidies, then shows the whole result: the boxes may have moved off screen. */
+  function tidyAndFit(direction: "LR" | "TB") {
+    tidyDiagram(direction);
+    requestAnimationFrame(() => requestAnimationFrame(() => void fitView({ padding: 0.1, duration: 300 })));
+  }
 
   const section = getActiveSection(diagram);
   if (isSequenceSection(section)) return <SequencePanel headerAction={headerAction} />;
@@ -1011,6 +1074,47 @@ export default function PropertiesPanel({ headerAction }: { headerAction?: React
             className="relative h-5 w-9 shrink-0 rounded-full bg-zinc-300 transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:bg-zinc-900 peer-checked:after:translate-x-4 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500/40 dark:bg-zinc-700 dark:peer-checked:bg-zinc-100 dark:after:bg-zinc-950"
           />
         </label>
+        <SwitchRow
+          title="Show step numbers"
+          hint="1, 2, 3… on the connections"
+          checked={diagram.numberConnections === true}
+          onChange={setNumberConnections}
+        />
+        <div className={FIELD_LABEL}>
+          Flow
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              className={ACTION_BUTTON}
+              disabled={!section.edges?.length}
+              title="Number the connections in the order the flow reaches them, and show the numbers"
+              onClick={numberConnectionsInFlowOrder}
+            >
+              Number in flow order
+            </button>
+            <button
+              type="button"
+              className={ACTION_BUTTON}
+              disabled={!section.nodes.length}
+              title="Lay everything out again in columns, following the connections (one undo step)"
+              onClick={() => tidyAndFit("LR")}
+            >
+              Tidy left to right
+            </button>
+            <button
+              type="button"
+              className={ACTION_BUTTON}
+              disabled={!section.nodes.length}
+              title="Lay everything out again in rows, following the connections (one undo step)"
+              onClick={() => tidyAndFit("TB")}
+            >
+              Tidy top to bottom
+            </button>
+          </div>
+          <span className="text-[11px] font-normal text-zinc-400">
+            Tidy moves containers and components into neat columns and re-attaches connections to the sides that face each other. Undo puts everything back.
+          </span>
+        </div>
         {hasNested && (
           <button
             type="button"

@@ -160,6 +160,9 @@ function parseNode(
   if (link) details.link = link;
   const colorKey = text(data.colorKey);
   const icon = type === "block" ? oneOf(data.icon, COMPONENT_ICON_KEYS) : undefined;
+  // "process" is the default, so it isn't kept.
+  // Files saved before the shape names settled call a start/end shape "terminator".
+  const shape = type === "block" ? oneOf(data.shape === "terminator" ? "terminal" : data.shape, BLOCK_SHAPES) : undefined;
   const unknownIcon = type === "block" && data.icon !== undefined && !icon;
   const label =
     type === "text"
@@ -202,11 +205,14 @@ function parseNode(
             containerId: null,
             ...(colorKey && legendKeys.has(colorKey) ? { colorKey } : {}),
             ...(icon ? { icon } : {}),
-            ...(oneOf(data.shape, BLOCK_SHAPES) ? { shape: oneOf(data.shape, BLOCK_SHAPES) } : {}),
+            ...(shape ? { shape } : {}),
           },
   };
   return { node, repaired, unknownIcon };
 }
+
+/** The most a connection can be numbered. */
+export const MAX_STEP = 9999;
 
 /** A text box keeps its text as written (line breaks too) and only a font size, alignment and weight. */
 function parseTextData(data: Record<string, unknown>, label: string): TextNodeData {
@@ -256,6 +262,8 @@ function parseEdges(raw: unknown, nodes: DiagramNode[], name: string, fixes: str
     if (direction) edge.direction = direction;
     if (style) edge.style = style;
     if (shape) edge.shape = shape;
+    const step = finite(item.step);
+    if (step !== undefined && Number.isInteger(step) && step >= 1 && step <= MAX_STEP) edge.step = step;
     if (bend?.x !== undefined && bend.y !== undefined && (bend.x || bend.y)) {
       edge.bend = { x: clamp(bend.x, MAX_COORDINATE), y: clamp(bend.y, MAX_COORDINATE) };
     }
@@ -601,6 +609,7 @@ export function parseDiagram(input: unknown): ParsedDiagram {
     updatedAt: text(input.updatedAt) ?? now,
   };
   if (typeof input.showTechnology === "boolean") diagram.showTechnology = input.showTechnology;
+  if (input.numberConnections === true) diagram.numberConnections = true;
   const checkpoints = parseCheckpoints(input.checkpoints, fixes);
   if (checkpoints.length) diagram.checkpoints = checkpoints;
   const comments = parseComments(input.comments, commentTargets({ sections }), fixes);

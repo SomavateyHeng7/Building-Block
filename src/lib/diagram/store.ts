@@ -18,6 +18,8 @@ import {
   tidyContainer,
   type ArrangeOp,
 } from "./layout";
+import { tidyLayout, type TidyDirection } from "./autoLayout";
+import { numberInFlowOrder } from "./flowOrder";
 import type { ComponentIconKey } from "./componentIcons";
 import type {
   BlockColorKey,
@@ -346,6 +348,12 @@ interface DiagramState {
   updateNodeIcon: (id: string, icon: ComponentIconKey | undefined) => void;
   /** Draws a component as a box, a start/end pill or a decision diamond. */
   updateNodeShape: (id: string, shape: BlockShape) => void;
+  /** Lays the tab out again: containers in columns (or rows) following the connections. One undo step. */
+  tidyDiagram: (direction: TidyDirection) => void;
+  /** Shows or hides the step numbers on connections. */
+  setNumberConnections: (show: boolean) => void;
+  /** Numbers the connections 1, 2, 3… in the order the flow reaches them, and shows the numbers. */
+  numberConnectionsInFlowOrder: () => void;
   updateContainerStyle: (id: string, patch: ContainerStyle) => void;
   updateLegendEntry: (key: BlockColorKey, patch: Partial<LegendEntry>) => void;
   addLegendEntry: () => BlockColorKey;
@@ -1121,6 +1129,49 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
               : candidate,
           ),
         ),
+      );
+    }),
+
+  tidyDiagram: (direction) =>
+    set((state) => {
+      const view = getActiveSection(state.diagram);
+      if (onSequenceTab(state.diagram) || !view.nodes.length) return state;
+      const { nodes, edges } = tidyLayout(view.nodes, view.edges ?? [], direction);
+      const same =
+        nodes.every((node, index) => {
+          const before = view.nodes[index];
+          return (
+            before.position.x === node.position.x &&
+            before.position.y === node.position.y &&
+            before.size.width === node.size.width &&
+            before.size.height === node.size.height
+          );
+        }) && edges.every((edge, index) => JSON.stringify(edge) === JSON.stringify(view.edges?.[index]));
+      if (same) return state;
+      return commit(
+        state,
+        mapActiveSectionFull(state.diagram, (section) => ({ ...section, nodes, ...(section.edges?.length ? { edges } : {}) })),
+      );
+    }),
+
+  setNumberConnections: (show) =>
+    set((state) =>
+      (state.diagram.numberConnections ?? false) === show
+        ? state
+        : commit(state, touch({ ...state.diagram, numberConnections: show || undefined })),
+    ),
+
+  numberConnectionsInFlowOrder: () =>
+    set((state) => {
+      const view = getActiveSection(state.diagram);
+      if (onSequenceTab(state.diagram) || !view.edges?.length) return state;
+      const numbered = numberInFlowOrder(view.nodes, view.edges);
+      return commit(
+        state,
+        touch({
+          ...mapActiveSectionFull(state.diagram, (section) => ({ ...section, edges: numbered })),
+          numberConnections: true,
+        }),
       );
     }),
 

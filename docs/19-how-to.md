@@ -5,15 +5,25 @@ Recipes for common changes, with the files to touch and the rules to keep. After
 
 ## Add a template
 
-1. Create `src/templates/<id>.ts` exporting a `TemplateDefinition` (`id`, `name`, `description`, `build`).
+1. Create `src/templates/<id>.ts` exporting a `TemplateDefinition` (`id`, `name`, `description`, `category`, `build`).
+   Add `keywords` for words people might search for. Set `orientable: true` and read `build({ orientation })` if
+   its lanes can run vertically or horizontally (pass `{ orientation }` on to `buildDiagram`).
    The easy way is a `CanvasSpec` per tab (columns of containers, components, connections by name; a component's
    `detail` is its internal design) and `build: () => buildDiagram(name, tabs)` from `./build`, which mints fresh
    ids and copies the legend. A hand-written `build()` must do both too: a **new** diagram with **fresh ids** every
    call (use `createId`), and `DEFAULT_LEGEND.map((entry) => ({ ...entry }))` so diagrams don't share the legend.
 2. Add it to the list in `src/templates/index.ts`.
-3. `tests/templates/templates.test.ts` runs every listed template through the validator and the layout checks.
+3. `tests/templates/templates.test.ts` runs every listed template through the validator and the layout checks, including that
+   every component has a connection (L0 is exempt) and `crossings.test.ts` that no connection runs straight through another
+   component. Keep connections between neighbouring columns, or route them with `sides`.
 
-It appears on `/templates` and the start page automatically, with a preview drawn from `build()`.
+A connection that names a component that isn't on its canvas makes `buildCanvas` throw (it used to drop it silently), so
+a typo shows up in the tests rather than as a missing arrow.
+
+It appears on `/templates` (with search and its category) automatically, and on the start page if it is one of the
+first six after Blank (`START_PAGE_TEMPLATES`; recently used ones are moved to the front). Its preview and its "n tabs · n
+components" line are drawn from `build()`. A multi-tab template can set `compare: { from, to }` (tab names) to open with
+those tabs' differences marked, as the Migration roadmap does; start templates through `startFromTemplate`.
 
 - A **sequence template** is easiest written as Mermaid code: `sequenceFromMermaid(name, tab, code, colors)` from
   `./sequence-build` (frames and activation marks included; `colors` maps participant names to legend keys).

@@ -115,6 +115,8 @@ export const flowchartTemplate: TemplateDefinition = {
   id: "flowchart",
   name: "Flowchart",
   description: "A process from start to end, with steps, Yes/No decisions and the exception paths they lead to. Hover a shape and click a blue arrow to add the next step.",
+  category: "Process",
+  keywords: ["flowchart","decision","steps","start","end","yes no"],
   build: () => {
     const diagram = createBlankDiagram("Order Fulfilment Flowchart");
     const section = { ...createBlankSection("Flow"), ...buildCanvas() };

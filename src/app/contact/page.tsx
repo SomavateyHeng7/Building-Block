@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import BackLink from "@/components/BackLink";
 import Footer from "@/components/landing/Footer";
 import { SOCIAL_LINKS } from "@/lib/links";
 
@@ -130,9 +131,7 @@ export default function ContactPage() {
   return (
     <div className="flex min-h-full w-full flex-1 flex-col">
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-10 px-4 py-12 sm:px-6 sm:py-16">
-        <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
-          ← Home
-        </Link>
+        <BackLink href="/">Home</BackLink>
         <header className="flex flex-col gap-3">
           <h1 className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Contact us</h1>
           <p className="text-zinc-600 dark:text-zinc-400">

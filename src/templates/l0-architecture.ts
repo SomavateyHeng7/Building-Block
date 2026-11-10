@@ -50,7 +50,14 @@ const CANVAS: CanvasSpec = {
   connections: [
     { from: "Customer Portal", to: "Customer Profile Service", label: "Profile data", protocol: "REST" },
     { from: "Mobile App", to: "Order Management", label: "Orders", protocol: "REST" },
+    { from: "Chatbot Assistant", to: "Customer Profile Service", label: "Looks up customers", protocol: "REST" },
+    { from: "Partner Mini Apps", to: "Loyalty Service", label: "Awards points", protocol: "REST" },
+    { from: "API Gateway", to: "Billing Engine", label: "Invoices", protocol: "REST" },
     { from: "Order Management", to: "Event Bus", label: "Order events", protocol: "Kafka", dashed: true },
+    { from: "Event Bus", to: "Legacy Adapter", label: "Legacy events", protocol: "File drop", dashed: true },
+    { from: "Legacy Adapter", to: "Core Network", label: "Legacy traffic", protocol: "TCP" },
+    { from: "Event Bus", to: "Cloud Hosting", label: "Runs on", protocol: "Managed service", dashed: true },
+    { from: "API Gateway", to: "Monitoring & Observability", label: "Metrics and logs", protocol: "OpenTelemetry", dashed: true },
   ],
 };
 
@@ -59,5 +66,7 @@ export const l0ArchitectureTemplate: TemplateDefinition = {
   name: "L0 Architecture",
   description:
     "A generic multi-layer system architecture: engagement channels, core systems, integration layer, and infrastructure, color-coded by component type, with a few example connections.",
+  category: "Architecture",
+  keywords: ["layers", "overview"],
   build: () => buildDiagram("L0 Architecture", [{ name: "Overview", canvas: CANVAS }]),
 };
