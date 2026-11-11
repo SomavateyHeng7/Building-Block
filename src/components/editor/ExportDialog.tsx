@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import {
   CODE_FORMATS,
   DATA_FORMATS,
@@ -8,6 +8,7 @@ import {
   describeFiles,
   exportViews,
   planExport,
+  viewHasLegend,
   type Bundle,
   type ExportFormat,
   type ExportPlan,
@@ -68,7 +69,10 @@ function Section({ title, aside, children }: { title: string; aside?: ReactNode;
   );
 }
 
-/** Two or three mutually exclusive choices as one row of buttons. */
+/**
+ * Two or three mutually exclusive choices as one row of buttons. Works like a radio group: Tab reaches only the
+ * chosen option, and the arrow keys (or Home and End) choose another and move focus to it.
+ */
 function Segmented<T extends string>({
   label,
   value,
@@ -80,13 +84,38 @@ function Segmented<T extends string>({
   options: { value: T; label: string }[];
   onChange: (value: T) => void;
 }) {
+  const buttons = useRef<(HTMLButtonElement | null)[]>([]);
+  const chosen = Math.max(0, options.findIndex((option) => option.value === value));
+
+  function handleKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const last = options.length - 1;
+    const next =
+      event.key === "ArrowRight" || event.key === "ArrowDown"
+        ? chosen === last ? 0 : chosen + 1
+        : event.key === "ArrowLeft" || event.key === "ArrowUp"
+          ? chosen === 0 ? last : chosen - 1
+          : event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? last
+              : null;
+    if (next === null) return;
+    event.preventDefault();
+    onChange(options[next].value);
+    buttons.current[next]?.focus();
+  }
+
   return (
-    <div role="radiogroup" aria-label={label} className="inline-flex rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
-      {options.map((option) => (
+    <div role="radiogroup" aria-label={label} onKeyDown={handleKeyDown} className="inline-flex rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
+      {options.map((option, index) => (
         <button
           key={option.value}
+          ref={(element) => {
+            buttons.current[index] = element;
+          }}
           type="button"
           role="radio"
+          tabIndex={index === chosen ? 0 : -1}
           aria-checked={value === option.value}
           className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${
             value === option.value
@@ -131,12 +160,15 @@ export default function ExportDialog({
   diagram,
   currentViewId,
   prefs,
+  markedViewIds = [],
   onCancel,
   onExport,
 }: {
   diagram: Diagram;
   currentViewId: string;
   prefs: ExportPrefs;
+  /** Views showing Compare's change marks, whose pictures get a legend for the marks. */
+  markedViewIds?: string[];
   onCancel: () => void;
   onExport: (choice: ExportChoice) => void;
 }) {
@@ -182,6 +214,8 @@ export default function ExportDialog({
   const chosenViews = views.filter((view) => viewIds.includes(view.id));
   const pictures = formats.some((format) => IMAGE_FORMATS.includes(format));
   const needsViews = pictures || formats.some((format) => CODE_FORMATS.includes(format));
+  // Nothing to put in a legend when none of the chosen views uses a legend colour or shows change marks.
+  const legendAvailable = chosenViews.some((view) => markedViewIds.includes(view.id) || viewHasLegend(diagram, view));
   const asOne = planExport(diagram, { views: chosenViews, formats, bundle: "one" });
   const asSeparate = planExport(diagram, { views: chosenViews, formats, bundle: "separate" });
   const plan = bundle === "one" ? asOne : asSeparate;
@@ -353,12 +387,20 @@ export default function ExportDialog({
                     onChange={setTheme}
                   />
                 </Row>
-                <label className="flex cursor-pointer items-center justify-between gap-2">
+                <label className="flex cursor-pointer items-center justify-between gap-2 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
                   <span>
                     <span className="block text-sm font-medium">Include legend</span>
-                    <span className="block text-xs text-zinc-500">The colour key under the diagram</span>
+                    <span className="block text-xs text-zinc-500">
+                      {legendAvailable ? "The colour key under the diagram" : "Nothing here uses a legend colour yet"}
+                    </span>
                   </span>
-                  <input type="checkbox" checked={legend} onChange={(event) => setLegend(event.target.checked)} className={CHECK} />
+                  <input
+                    type="checkbox"
+                    checked={legend && legendAvailable}
+                    disabled={!legendAvailable}
+                    onChange={(event) => setLegend(event.target.checked)}
+                    className={CHECK}
+                  />
                 </label>
                 <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
                   <button

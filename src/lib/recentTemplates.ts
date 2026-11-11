@@ -10,6 +10,8 @@ export const MAX_RECENT = 3;
 
 const NONE: string[] = [];
 let memory: string[] = NONE;
+/** Set when storage refused this tab's last write, so `memory` is newer than what's stored. */
+let memoryNewer = false;
 let cachedRaw: string | null | undefined;
 let cached: string[] = NONE;
 const listeners = new Set<() => void>();
@@ -33,7 +35,8 @@ export function readRecentTemplates(): string[] {
   } catch {
     return memory;
   }
-  if (raw === null) return memory;
+  // A write that storage refused (full, say) leaves an older list there; this tab's newer one wins.
+  if (raw === null || memoryNewer) return memory;
   if (raw !== cachedRaw) {
     cachedRaw = raw;
     cached = parse(raw);
@@ -41,25 +44,26 @@ export function readRecentTemplates(): string[] {
   return cached;
 }
 
-export function recordRecentTemplate(id: string): void {
-  const next = [id, ...readRecentTemplates().filter((existing) => existing !== id)].slice(0, MAX_RECENT);
-  memory = next;
+/** Keeps `ids` in memory and in storage (empty removes it), then tells the subscribers. */
+function save(ids: string[]): void {
+  memory = ids;
   try {
-    window.localStorage.setItem(KEY, JSON.stringify(next));
+    if (ids.length) window.localStorage.setItem(KEY, JSON.stringify(ids));
+    else window.localStorage.removeItem(KEY);
+    memoryNewer = false;
   } catch {
     // Kept in memory for this tab only.
+    memoryNewer = true;
   }
   listeners.forEach((listener) => listener());
 }
 
+export function recordRecentTemplate(id: string): void {
+  save([id, ...readRecentTemplates().filter((existing) => existing !== id)].slice(0, MAX_RECENT));
+}
+
 export function clearRecentTemplates(): void {
-  memory = NONE;
-  try {
-    window.localStorage.removeItem(KEY);
-  } catch {
-    // Nothing stored.
-  }
-  listeners.forEach((listener) => listener());
+  save(NONE);
 }
 
 /** `items` with the ones whose id is in `recentIds` first (in that order), then the rest in their usual order. */
@@ -74,24 +78,22 @@ export function pruneRecentTemplates(validIds: Iterable<string>): void {
   const current = readRecentTemplates();
   const kept = current.filter((id) => valid.has(id));
   if (kept.length === current.length) return;
-  if (kept.length === 0) clearRecentTemplates();
-  else {
-    memory = kept;
-    try {
-      window.localStorage.setItem(KEY, JSON.stringify(kept));
-    } catch {
-      // Kept in memory for this tab only.
-    }
-    listeners.forEach((listener) => listener());
-  }
+  save(kept.length ? kept : NONE);
+}
+
+/** Another tab saved a list: that one is now the newest. */
+function handleStorage(event: StorageEvent): void {
+  if (event.key !== KEY && event.key !== null) return;
+  memoryNewer = false;
+  listeners.forEach((listener) => listener());
 }
 
 function subscribe(listener: () => void): () => void {
+  if (!listeners.size) window.addEventListener("storage", handleStorage);
   listeners.add(listener);
-  window.addEventListener("storage", listener);
   return () => {
     listeners.delete(listener);
-    window.removeEventListener("storage", listener);
+    if (!listeners.size) window.removeEventListener("storage", handleStorage);
   };
 }
 

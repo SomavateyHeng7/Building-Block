@@ -31,3 +31,14 @@ describe("template search and categories", () => {
     for (const category of TEMPLATE_CATEGORIES) expect(filterTemplates(templates, "", category).length).toBeGreaterThan(0);
   });
 });
+
+describe("templates page address", () => {
+  it("keeps the category and search, and nothing when showing everything", async () => {
+    const { templatesSearch } = await import("@/templates");
+    expect(templatesSearch("", "All")).toBe("");
+    expect(templatesSearch("   ", "All")).toBe("");
+    expect(templatesSearch("", "Process")).toBe("?category=Process");
+    expect(templatesSearch("cloud zones", "All")).toBe("?q=cloud+zones");
+    expect(templatesSearch("swim", "Process")).toBe("?category=Process&q=swim");
+  });
+});

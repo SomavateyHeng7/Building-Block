@@ -2,7 +2,15 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { TEMPLATE_CATEGORIES, describeTemplate, filterTemplates, templates, type Orientation, type TemplateCategory } from "@/templates";
+import {
+  TEMPLATE_CATEGORIES,
+  describeTemplate,
+  filterTemplates,
+  templates,
+  templatesSearch,
+  type Orientation,
+  type TemplateCategory,
+} from "@/templates";
 import { openDiagramFromDevice } from "@/lib/diagram/file";
 import { pruneRecentTemplates, useRecentTemplates } from "@/lib/recentTemplates";
 import { startFromTemplate } from "@/lib/startTemplate";
@@ -26,7 +34,7 @@ const ORIENTATIONS: { value: Orientation; label: string }[] = [
   { value: "horizontal", label: "Horizontal lanes" },
 ];
 
-/** `?category=Process` opens the page filtered (the start page links to it); anything else shows all. */
+/** `?category=Process` opens the page filtered (the start page links to it); anything else shows all. `?q=` is the search. */
 function categoryFromQuery(value: string | null): TemplateCategory | "All" {
   return TEMPLATE_CATEGORIES.find((name) => name === value) ?? "All";
 }
@@ -42,11 +50,17 @@ export default function TemplatesPage() {
 
 function Templates() {
   const router = useRouter();
-  const initialCategory = categoryFromQuery(useSearchParams().get("category"));
+  const searchParams = useSearchParams();
   // A diagram can still be open in memory, e.g. after the browser's Back button from the editor.
   const { guard, dialog: unsavedDialog } = useUnsavedGuard();
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<TemplateCategory | "All">(initialCategory);
+  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
+  const [category, setCategory] = useState<TemplateCategory | "All">(() => categoryFromQuery(searchParams.get("category")));
+  // Mirror the filters in the address. replaceState doesn't reload or fetch the page, and typing doesn't fill the
+  // history with one entry per letter.
+  useEffect(() => {
+    const next = templatesSearch(query, category);
+    if (next !== window.location.search) window.history.replaceState(window.history.state, "", `${window.location.pathname}${next}`);
+  }, [query, category]);
   const [orientations, setOrientations] = useState<Record<string, Orientation>>({});
   const recentIds = useRecentTemplates();
   useEffect(() => pruneRecentTemplates(templates.map((template) => template.id)), []);

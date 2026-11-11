@@ -82,6 +82,11 @@ enforcement on changes that wording to "allows", and `/pricing` must say so too.
 `hidden?`); `templates` is the ones offered on the start page and here, without the `hidden` ones. A hidden template
 still builds, is tested, and is found by `getTemplate`; removing `hidden` brings it back.
 
+**Search and category in the address:** the page reads `?category=` and `?q=` when it opens and keeps them up to date
+as people filter (`templatesSearch` in `src/templates/filter.ts`, written with `history.replaceState`). **Why:** a
+refresh, Back from the editor, or a shared link opens the same filtered list; `replaceState` doesn't fetch the page
+again or add a history entry per letter typed.
+
 | Template | `build()` |
 | --- | --- |
 | `blank` | `createBlankDiagram("Untitled Diagram")` |
@@ -128,6 +133,16 @@ Shown by the proxy during maintenance (see [routing](03-routing.md#4-the-proxy-m
   `MAINTENANCE_UNTIL` is in the future: a passed time would only worry people), **Try again**, and an automatic
   check every 30 seconds. The check is a `HEAD` request to the page's own URL with `no-store`; anything other than
   503 means the site is back, and the page reloads.
+
+## Search engines and link previews
+
+- **`robots.txt`** (`src/app/robots.ts`) allows everything but `/editor` (empty until a file is opened) and
+  `/maintenance`, and names the sitemap.
+- **`sitemap.xml`** (`src/app/sitemap.ts`) lists `PUBLIC_PAGES` from `src/lib/site.ts`. Add a new public page there.
+- **Link preview image** (`src/app/opengraph-image.tsx`): 1200×630, drawn at build time with the brand mark, the
+  tagline and a small landscape. Every page uses it unless it has its own `opengraph-image`.
+- All three need the site's address: `SITE_URL`, else Vercel's production domain (see [operations](16-operations.md)).
+  The root layout sets it as `metadataBase`.
 
 ## Error pages
 

@@ -280,6 +280,10 @@ want to reverse.
 
 - `/pricing` shows Free today and planned paid tiers as *Coming soon*, from `src/lib/plans.ts`, with *Notify me* on
   the waitlist. Launching a plan is a price, a status and a payment link in that file; no payments code until then.
+- **Real-time editing together is a Team feature.** It needs a server to relay changes between people, which
+  principle 1 (no server) rules out for everyone else. **Decision:** list it on the paid Team plan as an opt-in that
+  only applies to diagrams a team chooses to share live; Free and Pro keep working with files on the device only.
+  Building it means updating the privacy notice (and `PRIVACY_VERSION`) for the diagrams that go through the server.
 
 ### One toast system with writing rules
 

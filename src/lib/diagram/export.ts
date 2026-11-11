@@ -60,7 +60,7 @@ async function loadLogo(branding: Branding | undefined): Promise<{ image: HTMLIm
 }
 
 /** Legend entries actually used in a section, in legend order. */
-export function legendUsedIn(diagram: Diagram, section: DiagramSection): LegendEntry[] {
+export function legendUsedIn(diagram: Diagram, section: Pick<DiagramSection, "nodes" | "sequence">): LegendEntry[] {
   const used = new Set(
     [...section.nodes.map((node) => node.data.colorKey), ...(section.sequence?.participants ?? []).map((participant) => participant.colorKey)].filter(Boolean),
   );

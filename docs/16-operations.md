@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | `NEXT_PUBLIC_WAITLIST_URL` | **Build time** | Shows the landing-page waitlist form, which POSTs JSON to this URL (e.g. a Formspree form) |
 | `NEXT_PUBLIC_CONTACT_EMAIL` | Build time | The address shown on `/contact` for people to write to; unset hides the email section |
+| `SITE_URL` | Build and run time | The site's public address for the sitemap, `robots.txt` and link previews (`src/lib/site.ts`); on Vercel the production domain is used when unset, elsewhere it falls back to `http://localhost:3000` |
 | `NEXT_PUBLIC_CF_ANALYTICS_TOKEN` | Build time | Turns on visit counting with Cloudflare Web Analytics ([monitoring visits](#monitoring-visits)) |
 | `MAINTENANCE_MODE` | **Per request** | `on` / `true` / `1` / `yes` turns maintenance mode on |
 | `MAINTENANCE_UNTIL` | Per request | Optional ISO time, e.g. `2026-10-08T18:00Z`. Shown in the visitor's time zone; sets `Retry-After` |

@@ -26,6 +26,8 @@ import { startEditingEdge } from "./edges/edgeEditing";
 import { useDetailsRequest } from "./detailsPanel";
 import { Icon } from "./Icon";
 import PanelToggle from "./PanelToggle";
+import { useDocumentTitle } from "./documentTitle";
+import { EDITOR_TITLE, editorTitle } from "@/lib/editorTitle";
 import ViewSheet from "./ViewSheet";
 import { ReadOnlyContext, useMediaQuery } from "./viewMode";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
@@ -68,6 +70,7 @@ export default function EditorApp() {
   const saving = useFileStore((state) => state.saving);
   const saveFailed = useFileStore((state) => state.error);
   const dirty = useIsDirty();
+  useDocumentTitle(opened ? editorTitle(diagram.name, dirty) : EDITOR_TITLE);
   const [helpOpen, setHelpOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   // Below the lg breakpoint the palette and properties panels are drawers over the canvas.

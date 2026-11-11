@@ -23,3 +23,15 @@ export function filterTemplates(
     return words.every((word) => haystack.includes(word));
   });
 }
+
+/**
+ * The templates page's address for a search and category: `?category=Process&q=swimlane`, or "" for everything.
+ * Kept in the address so a refresh, Back from the editor, or a shared link opens the page filtered the same way.
+ */
+export function templatesSearch(query: string, category: TemplateCategory | "All"): string {
+  const params = new URLSearchParams();
+  if (category !== "All") params.set("category", category);
+  if (query.trim()) params.set("q", query);
+  const search = params.toString();
+  return search ? `?${search}` : "";
+}

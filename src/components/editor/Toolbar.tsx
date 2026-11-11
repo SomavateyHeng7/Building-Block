@@ -608,6 +608,9 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
           diagram={diagram}
           currentViewId={section.id}
           prefs={readExportPrefs()}
+          markedViewIds={diagram.sections
+            .filter((tab) => changeMarksForView(diagram, useCompareView.getState().pair, tab)?.legend.length)
+            .map((tab) => tab.id)}
           onCancel={() => setExportOpen(false)}
           onExport={(choice) => void runExport(choice)}
         />

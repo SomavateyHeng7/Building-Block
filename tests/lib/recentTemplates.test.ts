@@ -83,4 +83,18 @@ describe("pruneRecentTemplates", () => {
     recent.pruneRecentTemplates(["z"]);
     expect(recent.readRecentTemplates()).toEqual([]);
   });
+
+  it("keeps moving the newest to the top when storage can be read but refuses writes", async () => {
+    const storage = memoryStorage(false, JSON.stringify(["a", "b"]));
+    storage.setItem = () => {
+      throw new Error("quota");
+    };
+    stubWindow(storage);
+    const recent = await import("@/lib/recentTemplates");
+    expect(recent.readRecentTemplates()).toEqual(["a", "b"]);
+    recent.recordRecentTemplate("c");
+    expect(recent.readRecentTemplates()).toEqual(["c", "a", "b"]);
+    recent.recordRecentTemplate("b");
+    expect(recent.readRecentTemplates()).toEqual(["b", "c", "a"]);
+  });
 });

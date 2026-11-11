@@ -1,3 +1,4 @@
+import { legendUsedIn } from "./export";
 import { fileBaseName } from "./file";
 import { componentsWithDetail } from "./store";
 import type { Diagram } from "./types";
@@ -40,6 +41,16 @@ export interface ExportPlan {
   files: PlannedFile[];
   /** Set when the files are bundled into one .zip. */
   zipName?: string;
+}
+
+/** Whether a view uses any legend category, so a picture of it would have a legend to show. */
+export function viewHasLegend(diagram: Diagram, view: ExportView): boolean {
+  const section = diagram.sections.find((candidate) => candidate.id === view.sectionId);
+  if (!section) return false;
+  if (!view.componentId) return legendUsedIn(diagram, section).length > 0;
+  const component = section.nodes.find((node) => node.id === view.componentId);
+  const nodes = component?.data.kind === "block" ? (component.data.detail?.nodes ?? []) : [];
+  return legendUsedIn(diagram, { nodes }).length > 0;
 }
 
 /** Every view, in order: each tab, followed by its components' internal designs. */

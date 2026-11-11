@@ -5,6 +5,8 @@ if (process.env.NODE_ENV === "production") {
   const unset = ["NEXT_PUBLIC_CONTACT_EMAIL", "NEXT_PUBLIC_WAITLIST_URL", "NEXT_PUBLIC_CF_ANALYTICS_TOKEN"].filter(
     (name) => !process.env[name],
   );
+  // The sitemap, robots.txt and link previews need the site's address; Vercel supplies one if this isn't set.
+  if (!process.env.SITE_URL && !process.env.VERCEL_PROJECT_PRODUCTION_URL) unset.push("SITE_URL");
   if (unset.length) console.warn(`[building-block] Not set for this build: ${unset.join(", ")}. See .env.example.`);
 }
 

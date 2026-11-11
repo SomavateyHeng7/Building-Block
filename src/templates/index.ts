@@ -54,5 +54,5 @@ export function getTemplate(id: string): TemplateDefinition | undefined {
 export { TEMPLATE_CATEGORIES } from "./types";
 export type { Orientation, TemplateCategory, TemplateDefinition, TemplateOptions } from "./types";
 
-export { filterTemplates } from "./filter";
+export { filterTemplates, templatesSearch } from "./filter";
 export { describeSummary, describeTemplate, summarizeDiagram } from "./summary";

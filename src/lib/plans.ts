@@ -83,6 +83,7 @@ export const PLANS: Plan[] = [
     audience: "For architecture teams",
     status: "coming-soon",
     features: [
+      "Real-time editing together: everyone's changes appear live on the same diagram",
       "A shared library of diagrams and templates",
       "Comments and review on diagrams",
       "Shared legends, so every diagram uses the same categories",

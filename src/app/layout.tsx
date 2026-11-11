@@ -8,6 +8,7 @@ import ToastViewport from "@/components/ToastViewport";
 import ConsentGate from "@/components/ConsentGate";
 import ServiceWorker from "@/components/ServiceWorker";
 import Analytics from "@/components/Analytics";
+import { siteUrl } from "@/lib/site";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,8 +21,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  // Makes the link-preview image (opengraph-image.tsx) an absolute address, which Slack, LinkedIn and others need.
+  metadataBase: siteUrl(),
   title: "Building Block",
   description: "Architecture diagrams for solution architects.",
+  openGraph: { siteName: "Building Block", type: "website" },
 };
 
 export const viewport: Viewport = {
