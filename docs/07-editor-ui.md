@@ -97,8 +97,8 @@ dialog doesn't belong inside a `tablist`). It works in view mode too: comparing 
 
 - **From / To** default to the tab before the open one and the open one (or, on the first tab, the first and
   the second), because tabs usually run from "current" to "target". A swap button reverses them.
-- The list comes from `compareSections` in `src/lib/diagram/compare.ts` (pure, tested in
-  `tests/lib/diagram/compare.test.ts`): **added**, **removed** and **changed** components and containers, then
+- The list comes from `compareSections` in `src/lib/diagram/features/compare.ts` (pure, tested in
+  `tests/lib/diagram/features/compare.test.ts`): **added**, **removed** and **changed** components and containers, then
   connections, with each changed field as "before → after".
 - **Matched by name, not id** (trimmed, case-insensitive). Duplicating a tab gives everything fresh ids, and to an
   architect "Billing" on both tabs is the same system. Connections match by their two ends and what flows; a
@@ -120,7 +120,7 @@ dialog doesn't belong inside a `tablist`). It works in view mode too: comparing 
 
 ### Find — `SearchDialog.tsx`
 
-Ctrl/⌘+F or the magnifier in the toolbar. `searchDiagram` (`src/lib/diagram/search.ts`, tested) looks through every
+Ctrl/⌘+F or the magnifier in the toolbar. `searchDiagram` (`src/lib/diagram/features/search.ts`, tested) looks through every
 tab and internal design: names starting with the query first, then names containing it, then technology, owner,
 category, icon, description, notes, and connections by what flows, protocol and description, each saying which field
 matched. Sequence tabs are searched too: participants by name, messages by what's sent and protocol, notes by their
@@ -308,7 +308,7 @@ See the [decision log](17-decision-log.md#import-drawio-for-architecture-mermaid
 
 ## Screen readers and keyboard focus on the canvas
 
-- **Live region** (`Announcer.tsx`, sentences in `src/lib/diagram/describe.ts`): out of sight, `role="status"`, polite. It says
+- **Live region** (`Announcer.tsx`, sentences in `src/lib/diagram/features/describe.ts`): out of sight, `role="status"`, polite. It says
   what a selection is ("Orders, component in Back office. Category: New. Technology: Java. 2 connections. 1 open
   comment."), what a connection joins and carries, what was added or removed with the new count, and which tab or
   internal design you arrived on. Moving a box and typing say nothing. Changes within 250 ms are said once.
@@ -344,7 +344,7 @@ See the [decision log](17-decision-log.md#import-drawio-for-architecture-mermaid
 
 ## Check before you share, and legend presets
 
-- **Check** (tab bar, with a count): `HintsDialog` lists, from `diagramHints` (`src/lib/diagram/hints.ts`), components
+- **Check** (tab bar, with a count): `HintsDialog` lists, from `diagramHints` (`src/lib/diagram/features/hints.ts`), components
   nothing connects to (only on a canvas that has connections at all), connections with no protocol, and L0 components
   with no owner, across every tab and internal design. A **flowchart** canvas (one with flowchart shapes,
   `isFlowchart` in `shapes.ts`) is a process, not a system, so it's only checked for steps nothing connects to and

@@ -1,6 +1,6 @@
 import { createBlankDiagram, createBlankSection } from "@/lib/diagram/factory";
-import { newMessage, newNote, newParticipant } from "@/lib/diagram/sequence";
-import { readSequenceCode } from "@/lib/diagram/exportMermaid";
+import { newMessage, newNote, newParticipant } from "@/lib/diagram/sequence/sequence";
+import { readSequenceCode } from "@/lib/diagram/export/exportMermaid";
 import type { Diagram, SequenceMessageKind, SequenceStep } from "@/lib/diagram/types";
 
 /** Who takes part, by name: [label, legend category, or "actor" for a person]. */

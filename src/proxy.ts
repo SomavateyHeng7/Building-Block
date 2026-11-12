@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { contentSecurityPolicy, NONCE_HEADER } from "@/lib/csp";
-import { BYPASS_COOKIE, BYPASS_PARAM, readMaintenanceConfig, retryAfterSeconds, safeEqual } from "@/lib/maintenance";
+import { contentSecurityPolicy, NONCE_HEADER } from "@/lib/site/csp";
+import { BYPASS_COOKIE, BYPASS_PARAM, readMaintenanceConfig, retryAfterSeconds, safeEqual } from "@/lib/site/maintenance";
 
 const MAINTENANCE_PATH = "/maintenance";
 

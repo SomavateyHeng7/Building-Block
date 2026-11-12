@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import BackLink from "@/components/BackLink";
+import BackLink from "@/components/app/BackLink";
 import Footer from "@/components/landing/Footer";
-import { SOCIAL_LINKS } from "@/lib/links";
+import { SOCIAL_LINKS } from "@/lib/site/links";
 
 export const metadata: Metadata = {
   title: "Contact · Building Block",

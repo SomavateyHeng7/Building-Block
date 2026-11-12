@@ -84,4 +84,4 @@ editor or run anything. Files are validated and repaired, and the user is told w
 | Vitest | 5 | Unit tests (`tests/`), in a Node environment. |
 
 No other runtime dependencies. The ZIP writer for "one file" exports is ~100 lines of our own code
-(`src/lib/zip.ts`) rather than a library; see the [decision log](17-decision-log.md#zip-without-a-dependency).
+(`src/lib/editor/zip.ts`) rather than a library; see the [decision log](17-decision-log.md#zip-without-a-dependency).

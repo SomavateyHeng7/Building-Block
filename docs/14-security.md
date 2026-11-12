@@ -58,7 +58,7 @@ policy here covers files (icons, the manifest); pages get the full policy below,
 
 ### Content-Security-Policy
 
-Pages get a full policy from the proxy (`src/proxy.ts`), built by `contentSecurityPolicy()` in `src/lib/csp.ts`
+Pages get a full policy from the proxy (`src/proxy.ts`), built by `contentSecurityPolicy()` in `src/lib/site/csp.ts`
 with a fresh random nonce per request:
 
 ```
@@ -97,7 +97,7 @@ Why each looser part is there:
   to check downloads; only script already running on the page can create one.
 
 **Adding something external** (a script, font, image host, form endpoint): add its origin to the matching
-directive in `src/lib/csp.ts` and check the browser console for `Refused to …` messages. A blocked resource fails
+directive in `src/lib/site/csp.ts` and check the browser console for `Refused to …` messages. A blocked resource fails
 quietly otherwise.
 
 ### Deliberately not done (yet)

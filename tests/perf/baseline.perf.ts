@@ -2,11 +2,11 @@ import { writeFileSync } from "node:fs";
 import { afterAll, describe, expect, it } from "vitest";
 import { applyNodeChanges, type NodeChange } from "@xyflow/react";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
-import { fromFlowNodes, historyKey, toFlowEdges, toFlowNodes, type FlowNode } from "@/lib/diagram/flowAdapter";
-import { dropIntoContainers } from "@/lib/diagram/layout";
+import { fromFlowNodes, historyKey, toFlowEdges, toFlowNodes, type FlowNode } from "@/lib/diagram/layout/flowAdapter";
+import { dropIntoContainers } from "@/lib/diagram/layout/layout";
 import { parseDiagram } from "@/lib/diagram/validate";
-import { searchDiagram } from "@/lib/diagram/search";
-import { compareSections } from "@/lib/diagram/compare";
+import { searchDiagram } from "@/lib/diagram/features/search";
+import { compareSections } from "@/lib/diagram/features/compare";
 import type { Diagram, DiagramNode } from "@/lib/diagram/types";
 import { stressDiagram, stressStats } from "./stressDiagram";
 

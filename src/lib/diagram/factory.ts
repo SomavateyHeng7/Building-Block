@@ -1,4 +1,4 @@
-import { DEFAULT_LEGEND } from "./defaultLegend";
+import { DEFAULT_LEGEND } from "./features/defaultLegend";
 import type { Diagram, DiagramSection } from "./types";
 
 export function createId(prefix: string): string {

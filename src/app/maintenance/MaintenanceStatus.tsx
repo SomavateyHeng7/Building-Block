@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useMounted } from "@/components/theme-toggle";
+import { useMounted } from "@/components/app/theme-toggle";
 
 /** How often to check whether the site is back. */
 const CHECK_EVERY_MS = 30_000;

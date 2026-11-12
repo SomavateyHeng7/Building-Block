@@ -1,12 +1,12 @@
 import { create } from "zustand";
 import { createBlankDiagram, createBlankSection, createId, isSequenceSection } from "./factory";
-import { hasBranding } from "./branding";
-import { MAX_CHECKPOINTS, snapshotOf, nextCheckpointName, type Checkpoint } from "./checkpoints";
-import { MAX_COMMENTS, commentTargets, mergeComments, type MergeResult } from "./comments";
+import { hasBranding } from "./export/branding";
+import { MAX_CHECKPOINTS, snapshotOf, nextCheckpointName, type Checkpoint } from "./persistence/checkpoints";
+import { MAX_COMMENTS, commentTargets, mergeComments, type MergeResult } from "./features/comments";
 import { nextLegendColor } from "./palette";
 import { isFlowchart, shapeInfo } from "./shapes";
-import { syncLinkedParticipants } from "./sequence";
-import { l1Neighbours, lastProtocol, withL1Context } from "./levelTools";
+import { syncLinkedParticipants } from "./sequence/sequence";
+import { l1Neighbours, lastProtocol, withL1Context } from "./features/levelTools";
 import {
   absolutePosition,
   arrangeNodes,
@@ -17,10 +17,10 @@ import {
   restyleContainer,
   tidyContainer,
   type ArrangeOp,
-} from "./layout";
-import { tidyLayout, type TidyDirection } from "./autoLayout";
-import { numberInFlowOrder } from "./flowOrder";
-import type { ComponentIconKey } from "./componentIcons";
+} from "./layout/layout";
+import { tidyLayout, type TidyDirection } from "./layout/autoLayout";
+import { numberInFlowOrder } from "./layout/flowOrder";
+import type { ComponentIconKey } from "./features/componentIcons";
 import type {
   BlockColorKey,
   BlockNodeData,

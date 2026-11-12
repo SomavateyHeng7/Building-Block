@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | `NEXT_PUBLIC_WAITLIST_URL` | **Build time** | Shows the landing-page waitlist form, which POSTs JSON to this URL (e.g. a Formspree form) |
 | `NEXT_PUBLIC_CONTACT_EMAIL` | Build time | The address shown on `/contact` for people to write to; unset hides the email section |
-| `SITE_URL` | Build and run time | The site's public address for the sitemap, `robots.txt` and link previews (`src/lib/site.ts`); on Vercel the production domain is used when unset, elsewhere it falls back to `http://localhost:3000` |
+| `SITE_URL` | Build and run time | The site's public address for the sitemap, `robots.txt` and link previews (`src/lib/site/site.ts`); on Vercel the production domain is used when unset, elsewhere it falls back to `http://localhost:3000` |
 | `NEXT_PUBLIC_CF_ANALYTICS_TOKEN` | Build time | Turns on visit counting with Cloudflare Web Analytics ([monitoring visits](#monitoring-visits)) |
 | `MAINTENANCE_MODE` | **Per request** | `on` / `true` / `1` / `yes` turns maintenance mode on |
 | `MAINTENANCE_UNTIL` | Per request | Optional ISO time, e.g. `2026-10-08T18:00Z`. Shown in the visitor's time zone; sets `Retry-After` |
@@ -52,7 +52,7 @@ devices, and page speed. There's no admin page in the app: the app has no server
 2. Copy the token from the snippet (`data-cf-beacon='{"token": "…"}'`).
 3. Set `NEXT_PUBLIC_CF_ANALYTICS_TOKEN` to it at the host and **rebuild** (it's compiled in).
 
-`src/components/Analytics.tsx` then adds the beacon in production on every page, counting moves between pages inside
+`src/components/app/Analytics.tsx` then adds the beacon in production on every page, counting moves between pages inside
 the app too. It isn't loaded in development, without the token, or for browsers that send Global Privacy Control or
 Do Not Track. Only page addresses are sent, never diagram content. To add other teammates as viewers, invite them to
 the Cloudflare account.
@@ -74,9 +74,9 @@ as usual.
 
 ## Changing the privacy notice
 
-1. Edit `src/app/privacy/page.tsx` (and the consent dialog's summary in `src/components/ConsentGate.tsx` if the
+1. Edit `src/app/privacy/page.tsx` (and the consent dialog's summary in `src/components/app/ConsentGate.tsx` if the
    short version changes).
-2. Set `PRIVACY_VERSION` in `src/lib/consent.ts` to today's date. Everyone is asked to accept again.
+2. Set `PRIVACY_VERSION` in `src/lib/site/consent.ts` to today's date. Everyone is asked to accept again.
 3. Update [Privacy, consent and forms](11-privacy-consent-and-forms.md).
 
 ## Browser storage keys

@@ -4,16 +4,16 @@ Files involved:
 
 | File | Role |
 | --- | --- |
-| `src/components/editor/ExportDialog.tsx` | The dialog: what, which views, style, one file or several |
-| `src/lib/diagram/exportPlan.ts` | Pure: which views exist, which files a choice produces, their names |
+| `src/components/editor/dialogs/ExportDialog.tsx` | The dialog: what, which views, style, one file or several |
+| `src/lib/diagram/export/exportPlan.ts` | Pure: which views exist, which files a choice produces, their names |
 | `src/components/editor/Toolbar.tsx` (`runExport`) | Orchestration: steps through views, renders, bundles, downloads |
-| `src/lib/diagram/export.ts` | Rendering pictures (PNG canvas, SVG), PDF, CSV rows |
-| `src/lib/diagram/branding.ts` | Reading, checking and scaling the logo and accent colour added to exports |
-| `src/lib/diagram/exportDocument.ts` | The solution document's Markdown |
-| `src/lib/diagram/exportCode.ts` | Mermaid flowchart and C4-PlantUML text for a view |
-| `src/lib/diagram/exportViewer.ts` | The interactive viewer: one HTML page from the SVG pictures |
-| `src/lib/zip.ts` | The `.zip` writer |
-| `src/lib/diagram/file.ts` (`downloadBlob`, `fileBaseName`) | Downloading and file names |
+| `src/lib/diagram/export/export.ts` | Rendering pictures (PNG canvas, SVG), PDF, CSV rows |
+| `src/lib/diagram/export/branding.ts` | Reading, checking and scaling the logo and accent colour added to exports |
+| `src/lib/diagram/export/exportDocument.ts` | The solution document's Markdown |
+| `src/lib/diagram/export/exportCode.ts` | Mermaid flowchart and C4-PlantUML text for a view |
+| `src/lib/diagram/export/exportViewer.ts` | The interactive viewer: one HTML page from the SVG pictures |
+| `src/lib/editor/zip.ts` | The `.zip` writer |
+| `src/lib/diagram/persistence/file.ts` (`downloadBlob`, `fileBaseName`) | Downloading and file names |
 
 ## What people can export
 
@@ -82,7 +82,7 @@ is "one file", so a PDF-only export never needs a zip.
 
 `describeFiles(files)` writes "3 PNG images, 1 PDF and the component list" for the dialog and the toast.
 
-This module is pure and fully tested (`tests/lib/diagram/exportPlan.test.ts`).
+This module is pure and fully tested (`tests/lib/diagram/export/exportPlan.test.ts`).
 
 ## Running an export — `runExport` in `Toolbar.tsx`
 
@@ -171,7 +171,7 @@ or cropped onto A4.
 
 The `*Rows` functions return arrays (tested); `componentsCsv`/`connectionsCsv` wrap them in Blobs.
 
-### The ZIP writer — `src/lib/zip.ts`
+### The ZIP writer — `src/lib/editor/zip.ts`
 
 `createZip(entries)` writes a standard `.zip`: local file headers, a central directory, and the end record. Files
 are **stored** (not compressed); names are flagged UTF-8 (bit 11) so "café.png" survives; CRC-32 is computed with

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { codeForView } from "@/lib/diagram/exportCode";
-import { solutionDocument } from "@/lib/diagram/exportDocument";
-import { exportViews } from "@/lib/diagram/exportPlan";
+import { codeForView } from "@/lib/diagram/export/exportCode";
+import { solutionDocument } from "@/lib/diagram/export/exportDocument";
+import { exportViews } from "@/lib/diagram/export/exportPlan";
 import { createBlankDiagram } from "@/lib/diagram/factory";
-import { MIN_BYPASS_TOKEN_LENGTH, readMaintenanceConfig, safeEqual } from "@/lib/maintenance";
+import { MIN_BYPASS_TOKEN_LENGTH, readMaintenanceConfig, safeEqual } from "@/lib/site/maintenance";
 import type { Diagram, DiagramNode } from "@/lib/diagram/types";
 
 /** Files come from anyone. What they say must stay text in everything the app writes out. */

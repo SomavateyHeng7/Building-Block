@@ -8,9 +8,9 @@ Building Block follows architecture *levels*. Each level adds detail and stays l
 | **L1** — interactions | Connections between components | `section.edges` | needs `addConnection`, `updateConnection`, `deleteConnections` |
 | **L2** — internal design | What one component is made of | `component.data.detail` | needs `openDetail`, `closeDetail` |
 
-The landing page's roadmap is computed from this table (`src/lib/levels.ts`): a level shows **"Available now"**
+The landing page's roadmap is computed from this table (`src/lib/editor/levels.ts`): a level shows **"Available now"**
 when every store action it needs exists, otherwise the first missing level is **"Coming next"** and the rest
-**"Planned"**. **Why:** the roadmap can't drift out of date; shipping the feature flips it. `tests/lib/levels.test.ts`
+**"Planned"**. **Why:** the roadmap can't drift out of date; shipping the feature flips it. `tests/lib/editor/levels.test.ts`
 is the reminder to update the expectations when a level ships.
 
 ## L1 — connections

@@ -51,14 +51,14 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 
 | File | Purpose |
 | --- | --- |
-| `ConsentGate.tsx` | Privacy-notice acceptance dialog on app pages ([consent](11-privacy-consent-and-forms.md#the-consent-gate)) |
-| `Analytics.tsx` | Cloudflare Web Analytics beacon, with a token, in production, unless the browser opts out ([operations](16-operations.md#monitoring-visits)) |
-| `ToastViewport.tsx` | Renders toasts; per-toast timers that pause ([notifications](12-notifications.md)) |
-| `BackLink.tsx` | The "← Home" / "← Start" button at the top of a page |
-| `TemplatePreview.tsx` | SVG preview of a template's first tab |
-| `Logo.tsx` | The brand mark (`LogoMark`) |
-| `theme-provider.tsx` | Client wrapper around `next-themes`' provider (server layouts can't import it directly) |
-| `theme-toggle.tsx` | Light/Dark toggle; `useMounted()` |
+| `app/ConsentGate.tsx` | Privacy-notice acceptance dialog on app pages ([consent](11-privacy-consent-and-forms.md#the-consent-gate)) |
+| `app/Analytics.tsx` | Cloudflare Web Analytics beacon, with a token, in production, unless the browser opts out ([operations](16-operations.md#monitoring-visits)) |
+| `app/ToastViewport.tsx` | Renders toasts; per-toast timers that pause ([notifications](12-notifications.md)) |
+| `app/BackLink.tsx` | The "← Home" / "← Start" button at the top of a page |
+| `templates/TemplatePreview.tsx` | SVG preview of a template's first tab |
+| `app/Logo.tsx` | The brand mark (`LogoMark`) |
+| `app/theme-provider.tsx` | Client wrapper around `next-themes`' provider (server layouts can't import it directly) |
+| `app/theme-toggle.tsx` | Light/Dark toggle; `useMounted()` |
 | `landing/HeroDiagram.tsx` | Static example diagram on the landing page |
 | `landing/Footer.tsx` | Site footer |
 | `landing/CurrentYear.tsx` | The year, rendered in the browser |
@@ -71,38 +71,38 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 | `EditorApp.tsx` | Editor shell: redirect, shortcuts, autosave, leave warning, layout, drawers, collapsed panels |
 | `Toolbar.tsx` | Back, name, save status, File menu, undo/redo, theme, Save, Export (and running exports) |
 | `SectionTabs.tsx` | Tabs: switch, rename, duplicate, delete, add, keyboard navigation, Compare tabs button |
-| `CompareDialog.tsx` | Compare two tabs: added, removed, changed; jump to an item; change list CSV |
-| `DetailBar.tsx` | "Back to tab / component · L2" bar |
-| `CompareBar.tsx` | Shown while a comparison is marked on the canvas: colours, the two tabs, Stop showing |
-| `compareView.ts` | Which two tabs are compared on the canvas (screen state, not saved) |
-| `SearchDialog.tsx` | Find (Ctrl/⌘+F) across tabs and internal designs |
-| `canvasFocus.ts` | `goTo`: open a view, select an item and ask the canvas to zoom to it |
-| `exportRendering.ts` | `useRenderEverything`: mounts off-screen nodes while an export pictures the canvas |
-| `edges/ConnectionEdge.tsx` | A connection line: right-angled, curved or straight, with the dot that bends it and the on-line caption editor |
-| `edges/edgeEditing.ts` | Which connection's caption is being typed on the canvas |
-| `Canvas.tsx` | React Flow canvas: changes → store, drops, connections, snapping drags and resizes to other boxes, 1 px nudges, the draw.io grid, empty state |
-| `PixelGuides.tsx` | Alignment guides, px gaps and the position/size readout while dragging or resizing; Alt + hover measuring (`useGuides`) |
-| `flowchartView.ts` | `useIsFlowchart`: whether the view on screen has flowchart shapes (so its shapes show quick-add arrows) |
+| `dialogs/CompareDialog.tsx` | Compare two tabs: added, removed, changed; jump to an item; change list CSV |
+| `panels/DetailBar.tsx` | "Back to tab / component · L2" bar |
+| `dialogs/CompareBar.tsx` | Shown while a comparison is marked on the canvas: colours, the two tabs, Stop showing |
+| `shared/compareView.ts` | Which two tabs are compared on the canvas (screen state, not saved) |
+| `dialogs/SearchDialog.tsx` | Find (Ctrl/⌘+F) across tabs and internal designs |
+| `canvas/canvasFocus.ts` | `goTo`: open a view, select an item and ask the canvas to zoom to it |
+| `shared/exportRendering.ts` | `useRenderEverything`: mounts off-screen nodes while an export pictures the canvas |
+| `canvas/edges/ConnectionEdge.tsx` | A connection line: right-angled, curved or straight, with the dot that bends it and the on-line caption editor |
+| `canvas/edges/edgeEditing.ts` | Which connection's caption is being typed on the canvas |
+| `canvas/Canvas.tsx` | React Flow canvas: changes → store, drops, connections, snapping drags and resizes to other boxes, 1 px nudges, the draw.io grid, empty state |
+| `canvas/PixelGuides.tsx` | Alignment guides, px gaps and the position/size readout while dragging or resizing; Alt + hover measuring (`useGuides`) |
+| `canvas/flowchartView.ts` | `useIsFlowchart`: whether the view on screen has flowchart shapes (so its shapes show quick-add arrows) |
 | `Sidebar.tsx` | Palette: drag or tap to add containers, text boxes, components and flowchart shapes; `ShapeIcon` |
-| `PropertiesPanel.tsx` | Details for the selection (component, container, text box, connection, several, diagram, internal design): X/Y/W/H, shape, look |
-| `LegendPanel.tsx` | Legend categories: colour, name, usage, add, remove |
-| `ColorPicker.tsx` | Named palette popover with custom colours |
-| `ExportDialog.tsx` | Export choices and summary ([export](10-export.md#the-export-dialog--exportdialogtsx)) |
-| `UnsavedChangesDialog.tsx` | Save / Don't save / Cancel, and the "Saved — Open…" step |
-| `useUnsavedGuard.tsx` | Hook that runs an action now or after the dialog |
-| `ShortcutsHelp.tsx` | Keyboard shortcuts dialog |
-| `DeleteContainerDialog.tsx` / `deletePrompt.ts` | Asks whether to keep a deleted container's components; `requestDelete` is the one way the UI deletes nodes; `ungroup` says when connections to a container were removed |
-| `detailsPanel.ts` | `showDetails`: asks EditorApp to show the details panel (drawer or collapsed) and focus a field in it |
-| `PanelToggle.tsx` | Collapse/expand button for side panels |
-| `Icon.tsx` | Editor icon set |
-| `SequenceCanvas.tsx` | A sequence tab: toolbar, SVG drawing with frames and activation bars, editing in place, zoom, drag between lifelines to add a message (`.bb-sequence-sheet` is what exports picture) |
-| `SequenceCode.tsx` | The left panel on a sequence tab: its Mermaid code, live both ways, highlighted, Copy, `.mmd` download |
-| `SequencePanel.tsx` | The right panel on a sequence tab: details for a participant, message (with activation), note, frame or divider |
-| `sequenceSelection.ts` | What's selected on a sequence tab |
-| `ImportDialog.tsx` | Import from a file or pasted text; used by the start page and File menu |
-| `nodes/BlockNode.tsx` | A component on the canvas: colour, flowchart shape, handles, rename, notes marker, L2 badge, quick-add arrows (flowchart tabs) |
-| `nodes/TextNode.tsx` | A text box: writing in place, font size, alignment, grows to fit its text |
-| `nodes/ContainerNode.tsx` | A container: header placement, outline, resize limits, Fit/Tidy toolbar |
+| `panels/PropertiesPanel.tsx` | Details for the selection (component, container, text box, connection, several, diagram, internal design): X/Y/W/H, shape, look |
+| `panels/LegendPanel.tsx` | Legend categories: colour, name, usage, add, remove |
+| `panels/ColorPicker.tsx` | Named palette popover with custom colours |
+| `dialogs/ExportDialog.tsx` | Export choices and summary ([export](10-export.md#the-export-dialog--exportdialogtsx)) |
+| `dialogs/UnsavedChangesDialog.tsx` | Save / Don't save / Cancel, and the "Saved — Open…" step |
+| `shared/useUnsavedGuard.tsx` | Hook that runs an action now or after the dialog |
+| `dialogs/ShortcutsHelp.tsx` | Keyboard shortcuts dialog |
+| `dialogs/DeleteContainerDialog.tsx` / `shared/deletePrompt.ts` | Asks whether to keep a deleted container's components; `requestDelete` is the one way the UI deletes nodes; `ungroup` says when connections to a container were removed |
+| `shared/detailsPanel.ts` | `showDetails`: asks EditorApp to show the details panel (drawer or collapsed) and focus a field in it |
+| `panels/PanelToggle.tsx` | Collapse/expand button for side panels |
+| `shared/Icon.tsx` | Editor icon set |
+| `sequence/SequenceCanvas.tsx` | A sequence tab: toolbar, SVG drawing with frames and activation bars, editing in place, zoom, drag between lifelines to add a message (`.bb-sequence-sheet` is what exports picture) |
+| `sequence/SequenceCode.tsx` | The left panel on a sequence tab: its Mermaid code, live both ways, highlighted, Copy, `.mmd` download |
+| `sequence/SequencePanel.tsx` | The right panel on a sequence tab: details for a participant, message (with activation), note, frame or divider |
+| `sequence/sequenceSelection.ts` | What's selected on a sequence tab |
+| `dialogs/ImportDialog.tsx` | Import from a file or pasted text; used by the start page and File menu |
+| `canvas/nodes/BlockNode.tsx` | A component on the canvas: colour, flowchart shape, handles, rename, notes marker, L2 badge, quick-add arrows (flowchart tabs) |
+| `canvas/nodes/TextNode.tsx` | A text box: writing in place, font size, alignment, grows to fit its text |
+| `canvas/nodes/ContainerNode.tsx` | A container: header placement, outline, resize limits, Fit/Tidy toolbar |
 
 ## `src/lib/`
 
@@ -110,38 +110,38 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 | --- | --- |
 | `diagram/types.ts` | The data model ([data model](04-data-model-and-file-format.md)) |
 | `diagram/store.ts` | Diagram store, active view, undo, clipboard ([store](05-diagram-store-and-undo.md)) |
-| `diagram/file.ts` | File store, open/save/autosave support, dirty tracking, downloads, file names ([files](06-files-saving-and-unsaved-changes.md)) |
+| `diagram/persistence/file.ts` | File store, open/save/autosave support, dirty tracking, downloads, file names ([files](06-files-saving-and-unsaved-changes.md)) |
 | `diagram/validate.ts` | Parsing and repairing files |
 | `diagram/factory.ts` | Ids, blank diagrams and tabs, default labels |
-| `diagram/defaultLegend.ts` | The default legend |
+| `diagram/features/defaultLegend.ts` | The default legend |
 | `diagram/palette.ts` | Named colours, colour names, next colour, parsing colour codes, readable text colour |
 | `diagram/shapes.ts` | The flowchart shapes: meaning, usual size, default name, SVG outline, label inset; `isFlowchart` |
-| `diagram/guides.ts` | Pixel guides: snapping moves and resizes to other boxes (including same width/height), alignment lines, gaps to neighbours, distances between two boxes |
-| `diagram/levelTools.ts` | L0 landscape summary, L1 connection suggestions, protocol chips, last protocol and async protocols, L2 neighbours and "Connected at L1" context |
-| `diagram/layout.ts` | Nesting, insets, minimum sizes, arrange, tidy, fit, nudge, re-parenting ([layout](08-layout-and-containers.md)) |
-| `diagram/flowAdapter.ts` | Our nodes/edges ↔ React Flow's; undo keys; connection captions; line geometry (`connectionPath`); change marks |
-| `diagram/search.ts` | Finding components, containers, connections and sequence steps across the diagram; highlighting matches |
-| `diagram/export.ts` | Rendering pictures, PDF, SVG, CSV rows, export titles ([export](10-export.md)) |
-| `diagram/exportPlan.ts` | Which files an export produces |
-| `diagram/componentIcons.ts` | The built-in component icons (key, label, SVG path); keys are stored in files |
-| `diagram/compare.ts` | Comparing two tabs by name; change counts and the change-list CSV rows |
+| `diagram/layout/guides.ts` | Pixel guides: snapping moves and resizes to other boxes (including same width/height), alignment lines, gaps to neighbours, distances between two boxes |
+| `diagram/features/levelTools.ts` | L0 landscape summary, L1 connection suggestions, protocol chips, last protocol and async protocols, L2 neighbours and "Connected at L1" context |
+| `diagram/layout/layout.ts` | Nesting, insets, minimum sizes, arrange, tidy, fit, nudge, re-parenting ([layout](08-layout-and-containers.md)) |
+| `diagram/layout/flowAdapter.ts` | Our nodes/edges ↔ React Flow's; undo keys; connection captions; line geometry (`connectionPath`); change marks |
+| `diagram/features/search.ts` | Finding components, containers, connections and sequence steps across the diagram; highlighting matches |
+| `diagram/export/export.ts` | Rendering pictures, PDF, SVG, CSV rows, export titles ([export](10-export.md)) |
+| `diagram/export/exportPlan.ts` | Which files an export produces |
+| `diagram/features/componentIcons.ts` | The built-in component icons (key, label, SVG path); keys are stored in files |
+| `diagram/features/compare.ts` | Comparing two tabs by name; change counts and the change-list CSV rows |
 | `diagram/legacy.ts` | Finds, downloads and removes diagrams left by earlier versions |
-| `diagram/sequence.ts` | Sequence diagrams: editing helpers (pure), frames (`frameOf`, `balanceSteps`, `wrapSteps`), `splitCaption`, and `layoutSequence` (frames and activation bars included) |
-| `diagram/importFile.ts` | Import entry point: picks draw.io or Mermaid, checks the result with `parseDiagram` |
-| `diagram/hints.ts` | "Check before you share": unconnected components, connections without a protocol, components without an owner (flowcharts: only unconnected steps) |
-| `diagram/importDrawio.ts` | draw.io (.drawio/.xml, compressed or not) → architecture tabs |
-| `diagram/importMermaid.ts` | Mermaid `sequenceDiagram` → a sequence (frames, activations); `tokenizeMermaidLine` for highlighting; `ImportError` |
-| `diagram/exportMermaid.ts` | A sequence → Mermaid code, and code applied back keeping colours, descriptions and links; `mermaidLineOf` / `mermaidIdAtLine` |
-| `diagram/xml.ts` | Small XML reader used by the draw.io import |
-| `zip.ts` | Minimal ZIP writer |
-| `toast.ts` | Toast store and API |
-| `consent.ts` | Privacy-notice acceptance, versioned |
-| `recentTemplates.ts` | The last three template ids started (a small preference); `useRecentTemplates`; `recentFirst` orders the start page cards; `pruneRecentTemplates` forgets ids that are no longer templates |
-| `startTemplate.ts` | `startFromTemplate`: builds and opens a template, records it as recent, and marks the tabs in its `compare` pair |
-| `csp.ts` | The pages' Content-Security-Policy for a nonce; `NONCE_HEADER` ([security](14-security.md#content-security-policy)) |
-| `levels.ts` | Roadmap levels computed from store actions |
-| `maintenance.ts` | Reads maintenance settings; `Retry-After`; upcoming end |
-| `plans.ts` | The plans on `/pricing`; `formatPrice`, `canSubscribe`; plan limits (`checkSequenceCodeLines`, not enforced while `LIMITS_ENFORCED` is false) |
+| `diagram/sequence/sequence.ts` | Sequence diagrams: editing helpers (pure), frames (`frameOf`, `balanceSteps`, `wrapSteps`), `splitCaption`, and `layoutSequence` (frames and activation bars included) |
+| `diagram/import/importFile.ts` | Import entry point: picks draw.io or Mermaid, checks the result with `parseDiagram` |
+| `diagram/features/hints.ts` | "Check before you share": unconnected components, connections without a protocol, components without an owner (flowcharts: only unconnected steps) |
+| `diagram/import/importDrawio.ts` | draw.io (.drawio/.xml, compressed or not) → architecture tabs |
+| `diagram/import/importMermaid.ts` | Mermaid `sequenceDiagram` → a sequence (frames, activations); `tokenizeMermaidLine` for highlighting; `ImportError` |
+| `diagram/export/exportMermaid.ts` | A sequence → Mermaid code, and code applied back keeping colours, descriptions and links; `mermaidLineOf` / `mermaidIdAtLine` |
+| `diagram/import/xml.ts` | Small XML reader used by the draw.io import |
+| `editor/zip.ts` | Minimal ZIP writer |
+| `editor/toast.ts` | Toast store and API |
+| `site/consent.ts` | Privacy-notice acceptance, versioned |
+| `editor/recentTemplates.ts` | The last three template ids started (a small preference); `useRecentTemplates`; `recentFirst` orders the start page cards; `pruneRecentTemplates` forgets ids that are no longer templates |
+| `editor/startTemplate.ts` | `startFromTemplate`: builds and opens a template, records it as recent, and marks the tabs in its `compare` pair |
+| `site/csp.ts` | The pages' Content-Security-Policy for a nonce; `NONCE_HEADER` ([security](14-security.md#content-security-policy)) |
+| `editor/levels.ts` | Roadmap levels computed from store actions |
+| `site/maintenance.ts` | Reads maintenance settings; `Retry-After`; upcoming end |
+| `site/plans.ts` | The plans on `/pricing`; `formatPrice`, `canSubscribe`; plan limits (`checkSequenceCodeLines`, not enforced while `LIMITS_ENFORCED` is false) |
 
 ## `src/templates/`
 
@@ -150,29 +150,29 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 | `types.ts` | `TemplateDefinition` (category, keywords, `orientable`, `hidden`, `build(options)`), `TEMPLATE_CATEGORIES` |
 | `index.ts` | `allTemplates`, `templates` (without the hidden ones), `getTemplate(id)`; re-exports `filterTemplates` |
 | `filter.ts` | `filterTemplates`: search words and category for the templates page |
-| `blank.ts` | Blank canvas |
+| `library/blank.ts` | Blank canvas |
 | `summary.ts` | `describeTemplate`: "1 tab · 14 components", or for several tabs "3 tabs: Current, Transition, Target · 3 to 6 components each", shown on template cards (participants for a sequence) |
 | `build.ts` | Lays out templates written as data (`CanvasSpec`), vertically or as horizontal lanes (steps placed by their place in the flow), and builds diagrams with fresh ids |
-| `l0-architecture.ts` | Four-layer L0 example with connections |
-| `three-tier.ts` | Three-tier web application, with an internal design (L2) |
-| `event-driven.ts` | Event-driven microservices, with an internal design (L2) |
-| `cross-functional.ts` | Swimlane process: one lane per team, hand-offs between lanes; vertical or horizontal |
-| `c4-context.ts` | System context: people, our system, external systems |
-| `data-pipeline.ts` | Sources, ingestion, lake and warehouse, consumption |
-| `cloud-landing-zone.ts` | Public, private and data subnets with shared services, with an internal design (L2) |
-| `migration-roadmap.ts` | Current, Transition and Target tabs |
-| `serverless.ts` | Serverless API on managed services, with an internal design (L2) |
-| `data-platform.ts` | Data and analytics platform |
-| `flowchart.ts` | Process flowchart: pills, steps, decision diamonds, a database and a title text box, placed by hand |
-| `current-vs-target.ts` | Two tabs, current and target, for Compare tabs (hidden for now) |
+| `library/l0-architecture.ts` | Four-layer L0 example with connections |
+| `library/three-tier.ts` | Three-tier web application, with an internal design (L2) |
+| `library/event-driven.ts` | Event-driven microservices, with an internal design (L2) |
+| `library/cross-functional.ts` | Swimlane process: one lane per team, hand-offs between lanes; vertical or horizontal |
+| `library/c4-context.ts` | System context: people, our system, external systems |
+| `library/data-pipeline.ts` | Sources, ingestion, lake and warehouse, consumption |
+| `library/cloud-landing-zone.ts` | Public, private and data subnets with shared services, with an internal design (L2) |
+| `library/migration-roadmap.ts` | Current, Transition and Target tabs |
+| `library/serverless.ts` | Serverless API on managed services, with an internal design (L2) |
+| `library/data-platform.ts` | Data and analytics platform |
+| `library/flowchart.ts` | Process flowchart: pills, steps, decision diamonds, a database and a title text box, placed by hand |
+| `library/current-vs-target.ts` | Two tabs, current and target, for Compare tabs (hidden for now) |
 | `sequence-build.ts` | Builds a one-tab sequence diagram from Mermaid code (`sequenceFromMermaid`) or from participants and steps written as data |
-| `sequence.ts` | A checkout flow as a sequence tab |
-| `org-chart.ts` | Reporting lines: leadership, directors, managers, teams |
-| `sequence-login.ts` | OAuth sign-in (authorisation code with PKCE) as a sequence tab |
-| `incident-escalation.ts` | Swimlane process for escalating a customer problem to an incident; vertical or horizontal |
-| `ci-cd-pipeline.ts` | Commit to production: build, tests, security scan, environments, monitoring |
-| `security-zones.ts` | Internet, DMZ, application and data zones with security operations |
-| `er-data-model.ts` | Entities by domain with key fields and relationship cardinality |
+| `library/sequence.ts` | A checkout flow as a sequence tab |
+| `library/org-chart.ts` | Reporting lines: leadership, directors, managers, teams |
+| `library/sequence-login.ts` | OAuth sign-in (authorisation code with PKCE) as a sequence tab |
+| `library/incident-escalation.ts` | Swimlane process for escalating a customer problem to an incident; vertical or horizontal |
+| `library/ci-cd-pipeline.ts` | Commit to production: build, tests, security scan, environments, monitoring |
+| `library/security-zones.ts` | Internet, DMZ, application and data zones with security operations |
+| `library/er-data-model.ts` | Entities by domain with key fields and relationship cardinality |
 
 ## `src/types/`
 

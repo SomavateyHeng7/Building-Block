@@ -48,7 +48,7 @@ flowchart TB
 | --- | --- | --- |
 | **Routes** | `src/app/` | Thin. A route renders a page component and declares metadata. Pages that need the browser are client components. |
 | **Components** | `src/components/` | UI only. They read state with store selectors and call store actions; they don't mutate diagrams themselves. |
-| **State** | `src/lib/diagram/store.ts`, `src/lib/diagram/file.ts`, `src/lib/toast.ts` | Zustand stores (or a tiny external store for toasts). The only place the open diagram changes. |
+| **State** | `src/lib/diagram/store.ts`, `src/lib/diagram/persistence/file.ts`, `src/lib/editor/toast.ts` | Zustand stores (or a tiny external store for toasts). The only place the open diagram changes. |
 | **Domain logic** | `src/lib/diagram/*.ts`, `src/lib/*.ts` | Pure functions: layout maths, validation, export planning, CSV, ZIP, palette, consent. No React. This is what the unit tests cover. |
 | **Templates** | `src/templates/` | Functions that build a starting diagram. |
 | **Types** | `src/lib/diagram/types.ts`, `src/types/` | The data model, plus type declarations for the File System Access API that TypeScript's DOM library doesn't have yet. |
@@ -64,7 +64,7 @@ components stay small.
 Holds the open diagram, the selection and undo history. Every edit is an action on this store. See
 [Diagram store and undo](05-diagram-store-and-undo.md).
 
-### `useFileStore` — `src/lib/diagram/file.ts`
+### `useFileStore` — `src/lib/diagram/persistence/file.ts`
 
 Holds what the diagram's *file* knows: whether a diagram is open at all (`opened`), the file handle Save writes
 to, the file name, the exact diagram object last saved (`saved`), and whether a save is running or failed.
@@ -72,7 +72,7 @@ to, the file name, the exact diagram object last saved (`saved`), and whether a 
 **Why separate from the diagram store:** file state isn't part of undo. Undoing an edit must not "un-save" the
 file or forget the handle. Keeping them apart means `commit()` in the diagram store never has to think about files.
 
-### The toast store — `src/lib/toast.ts`
+### The toast store — `src/lib/editor/toast.ts`
 
 A module-level list plus listeners, read with `useSyncExternalStore`. **Why not Zustand:** toasts are raised from
 plain functions (`saveDiagramToFile`, `openDiagramFile`) that run outside React, and this is ~20 lines with no
@@ -107,7 +107,7 @@ sequenceDiagram
 **Why React Flow is "controlled":** the store is the single source of truth. React Flow only *reports* changes
 (`onNodesChange`, `onEdgesChange`, `onConnect`); the Canvas turns them into store actions, and React Flow
 re-renders from the store. That is what makes undo, autosave and dirty tracking work for every kind of change.
-The translation between our `DiagramNode` and React Flow's `Node` lives in `src/lib/diagram/flowAdapter.ts`.
+The translation between our `DiagramNode` and React Flow's `Node` lives in `src/lib/diagram/layout/flowAdapter.ts`.
 
 ## How the diagram reaches the file
 
@@ -168,5 +168,5 @@ pickers, `localStorage`. Server components are used where nothing interactive is
 **Trap — reading browser state during render:** a client component is still rendered on the server once (for the
 static HTML). Anything that reads `window`, `localStorage` or `navigator` must not change the first render, or
 React reports a hydration mismatch. The codebase uses `useSyncExternalStore(subscribe, getSnapshot,
-getServerSnapshot)` with a safe server value for this: see `useMounted()` in `src/components/theme-toggle.tsx`,
+getServerSnapshot)` with a safe server value for this: see `useMounted()` in `src/components/app/theme-toggle.tsx`,
 the consent gate, the legacy-diagram finder on the start page, and `CurrentYear`.

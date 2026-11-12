@@ -9,12 +9,12 @@ renders it, and every rule that sends a visitor somewhere else.
 | --- | --- | --- | --- | --- |
 | `/` | `src/app/page.tsx` | Per request | Landing page: product pitch, features, roadmap, waitlist | No |
 | `/diagrams` | `src/app/diagrams/page.tsx` | Per request, client | Start page: new diagram, open a file (or drop one), templates, old-version leftovers | **Yes** |
-| `/changelog` | `src/app/changelog/page.tsx` | Per request | What's new: `CHANGELOG` from `src/lib/changelog.ts`, newest first | No |
+| `/changelog` | `src/app/changelog/page.tsx` | Per request | What's new: `CHANGELOG` from `src/lib/site/changelog.ts`, newest first | No |
 | `/templates` | `src/app/templates/page.tsx` | Per request, client | All templates with previews | **Yes** |
 | `/editor` | `src/app/editor/page.tsx` → `EditorApp` | Per request, client | The editor. Only works when a diagram is open in memory | **Yes** |
 | `/privacy` | `src/app/privacy/page.tsx` | Per request | Privacy notice, acceptance status, withdraw button | No |
 | `/contact` | `src/app/contact/page.tsx` | Per request | The address to email, self-help cards, the address to email | No |
-| `/pricing` | `src/app/pricing/page.tsx` | Per request | Plans: Free today, paid plans to come (from `src/lib/plans.ts`) | No |
+| `/pricing` | `src/app/pricing/page.tsx` | Per request | Plans: Free today, paid plans to come (from `src/lib/site/plans.ts`) | No |
 | `/maintenance` | `src/app/maintenance/page.tsx` | **Dynamic** (per request) | "We're updating" page, shown by the proxy | No |
 | anything else | `src/app/not-found.tsx` | Per request | 404 page | No |
 
@@ -78,7 +78,7 @@ blank diagram" silently discarded work.
 
 ### 3. The consent gate
 
-`src/components/ConsentGate.tsx` is mounted once in the root layout and reads `usePathname()`. On `/diagrams`,
+`src/components/app/ConsentGate.tsx` is mounted once in the root layout and reads `usePathname()`. On `/diagrams`,
 `/templates` and `/editor` (and any sub-path) it shows the privacy notice until it has been accepted. **Not now**
 goes to `/`. See [consent](11-privacy-consent-and-forms.md#the-consent-gate).
 
@@ -119,7 +119,7 @@ Design details and why:
   its own URL and checking for anything other than 503. Before this rule, someone who landed on `/maintenance`
   directly got 200, so the page thought the site was back and reloaded every 30 seconds.
 - **`Retry-After`** tells crawlers and clients when to try again: the seconds until `MAINTENANCE_UNTIL`, or 300 if
-  that is unset or past (`retryAfterSeconds()` in `src/lib/maintenance.ts`).
+  that is unset or past (`retryAfterSeconds()` in `src/lib/site/maintenance.ts`).
 - **`no-store`** so a CDN doesn't cache the maintenance page as the real page.
 - **The token is removed from the URL** after setting the cookie, so it isn't left in history or shared links.
 

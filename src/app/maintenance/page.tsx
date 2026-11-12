@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
-import { LogoMark } from "@/components/Logo";
-import { readMaintenanceConfig, upcomingEnd } from "@/lib/maintenance";
+import { LogoMark } from "@/components/app/Logo";
+import { readMaintenanceConfig, upcomingEnd } from "@/lib/site/maintenance";
 import MaintenanceStatus from "./MaintenanceStatus";
 
 export const metadata: Metadata = {

@@ -1,5 +1,5 @@
-import { DEFAULT_LEGEND } from "../../src/lib/diagram/defaultLegend";
-import { CONTAINER_HEADER, CONTAINER_PADDING, LAYOUT_GAP } from "../../src/lib/diagram/layout";
+import { DEFAULT_LEGEND } from "@/lib/diagram/features/defaultLegend";
+import { CONTAINER_HEADER, CONTAINER_PADDING, LAYOUT_GAP } from "@/lib/diagram/layout/layout";
 import type { Diagram, DiagramEdge, DiagramNode, DiagramSection } from "../../src/lib/diagram/types";
 
 /**

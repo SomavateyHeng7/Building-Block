@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { allTemplates as templates, templates as listed } from "@/templates";
 import { parseDiagram } from "@/lib/diagram/validate";
-import { growContainerToFit } from "@/lib/diagram/layout";
+import { growContainerToFit } from "@/lib/diagram/layout/layout";
 import { buildCanvas } from "@/templates/build";
-import { diagramHints } from "@/lib/diagram/hints";
+import { diagramHints } from "@/lib/diagram/features/hints";
 
 describe("templates", () => {
   it("have unique ids", () => {
@@ -124,7 +124,7 @@ describe("templates", () => {
     expect(
       built["event-driven"].sections[0].nodes.some((node) => node.data.kind === "block" && node.data.detail?.nodes.length),
     ).toBe(true);
-    // The loop-back leaves over the top, so it doesn't lie on top of the forward line between the same two lanes.
+    // The loop-back leaves from under its step and is bent off the forward line between the same two lanes.
     const flow = built["cross-functional"].sections[0];
     expect(flow.nodes.filter((node) => node.type === "container").map((node) => node.data.label)).toEqual([
       "Requester", "Manager", "Finance", "Procurement", "Supplier",
@@ -132,9 +132,37 @@ describe("templates", () => {
     const loop = flow.edges?.find((edge) => edge.label === "Rejected, revise");
     const forward = flow.edges?.find((edge) => edge.label === "Request");
     expect(flow.nodes.filter((node) => node.type === "block").length).toBe(13);
-    expect(loop && forward && [loop.sourceSide, loop.targetSide]).toEqual(["top", "top"]);
-    expect(forward?.sourceSide).toBe("right");
+    expect(loop && forward && [loop.sourceSide, loop.targetSide]).toEqual(["bottom", "top"]);
+    expect([forward?.sourceSide, forward?.targetSide]).toEqual(["right", "left"]);
+    expect(loop?.bend?.x).not.toBe(0);
+    expect(forward?.bend).toBeUndefined();
     expect(built["current-vs-target"].sections.map((section) => section.name)).toEqual(["Current", "Target"]);
+  });
+});
+
+describe("cross-functional loop-backs", () => {
+  const template = templates.find((candidate) => candidate.id === "cross-functional")!;
+
+  for (const orientation of ["vertical", "horizontal"] as const) {
+    it(`${orientation}: never share an end with a forward line`, () => {
+      const edges = template.build({ orientation }).sections[0].edges ?? [];
+      const ends = (edge: (typeof edges)[number]) => [`${edge.source}:${edge.sourceSide}`, `${edge.target}:${edge.targetSide}`];
+      const forwardEnds = new Set(edges.filter((edge) => edge.style !== "dashed").flatMap(ends));
+      const loops = edges.filter((edge) => edge.style === "dashed");
+      expect(loops.length).toBe(2);
+      for (const loop of loops) expect(ends(loop).filter((end) => forwardEnds.has(end))).toEqual([]);
+    });
+  }
+
+  it("route each layout its own way", () => {
+    const sidesOf = (orientation: "vertical" | "horizontal") =>
+      Object.fromEntries(
+        (template.build({ orientation }).sections[0].edges ?? [])
+          .filter((edge) => edge.style === "dashed")
+          .map((edge) => [edge.label, [edge.sourceSide, edge.targetSide]]),
+      );
+    expect(sidesOf("vertical")).toEqual({ "Rejected, revise": ["bottom", "top"], "Over budget": ["top", "top"] });
+    expect(sidesOf("horizontal")).toEqual({ "Rejected, revise": ["top", "top"], "Over budget": ["bottom", "bottom"] });
   });
 });
 

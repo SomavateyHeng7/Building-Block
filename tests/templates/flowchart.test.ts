@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { flowchartTemplate } from "@/templates/flowchart";
-import { l0ArchitectureTemplate } from "@/templates/l0-architecture";
+import { flowchartTemplate } from "@/templates/library/flowchart";
+import { l0ArchitectureTemplate } from "@/templates/library/l0-architecture";
 import { isFlowchart } from "@/lib/diagram/shapes";
 import { templates } from "@/templates";
 import { parseDiagram } from "@/lib/diagram/validate";
-import { flowchartMermaid } from "@/lib/diagram/exportCode";
+import { flowchartMermaid } from "@/lib/diagram/export/exportCode";
 import { createBlankDiagram } from "@/lib/diagram/factory";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 

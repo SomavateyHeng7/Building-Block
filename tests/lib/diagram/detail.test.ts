@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createBlankDiagram } from "@/lib/diagram/factory";
-import { isDirty, startDiagram, useFileStore } from "@/lib/diagram/file";
-import { componentRows, connectionRows, exportTitle } from "@/lib/diagram/export";
+import { isDirty, startDiagram, useFileStore } from "@/lib/diagram/persistence/file";
+import { componentRows, connectionRows, exportTitle } from "@/lib/diagram/export/export";
 import { everyNode, getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { parseDiagram } from "@/lib/diagram/validate";
 

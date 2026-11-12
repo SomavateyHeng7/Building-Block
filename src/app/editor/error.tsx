@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { useDiagramStore } from "@/lib/diagram/store";
-import { downloadDiagramJson, hasContent } from "@/lib/diagram/file";
+import { downloadDiagramJson, hasContent } from "@/lib/diagram/persistence/file";
 
 /**
  * The editor crashed. The diagram is still in memory (the store lives outside React),

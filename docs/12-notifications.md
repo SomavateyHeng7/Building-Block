@@ -1,4 +1,4 @@
-# 12. Notifications — `src/lib/toast.ts` and `src/components/ToastViewport.tsx`
+# 12. Notifications — `src/lib/editor/toast.ts` and `src/components/app/ToastViewport.tsx`
 
 ## API
 
@@ -67,4 +67,4 @@ of `toast.ts`.
 | Export failed | error | Couldn't export |
 | Old copies removed (start page) | success | Removed the old copies |
 
-Tests: `tests/lib/toast.test.ts` (durations, replacing repeats, the three-toast limit, empty details).
+Tests: `tests/lib/editor/toast.test.ts` (durations, replacing repeats, the three-toast limit, empty details).

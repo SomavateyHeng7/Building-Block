@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { PRIVACY_VERSION } from "@/lib/consent";
+import { PRIVACY_VERSION } from "@/lib/site/consent";
 
 /**
  * Form endpoint that accepts a JSON POST of `{ email }`, e.g. a Formspree form URL.

@@ -278,7 +278,7 @@ want to reverse.
 
 ### A plans page before anything is for sale
 
-- `/pricing` shows Free today and planned paid tiers as *Coming soon*, from `src/lib/plans.ts`, with *Notify me* on
+- `/pricing` shows Free today and planned paid tiers as *Coming soon*, from `src/lib/site/plans.ts`, with *Notify me* on
   the waitlist. Launching a plan is a price, a status and a payment link in that file; no payments code until then.
 - **Real-time editing together is a Team feature.** It needs a server to relay changes between people, which
   principle 1 (no server) rules out for everyone else. **Decision:** list it on the paid Team plan as an opt-in that
@@ -331,7 +331,7 @@ want to reverse.
   policy is for); Next.js's experimental SRI (covers bundled scripts only, so the inline ones would still be
   blocked); hashing each page's inline scripts after the build (fragile, custom tooling).
 - **Consequences:** pages are no longer pre-rendered; a few ms of server rendering per page view. Styles keep
-  `'unsafe-inline'` (React's `style` attributes). Each new external origin must be added in `src/lib/csp.ts`.
+  `'unsafe-inline'` (React's `style` attributes). Each new external origin must be added in `src/lib/site/csp.ts`.
   HSTS (host-dependent, hard to undo) is still left for later.
 
 ### Reusing your own work without storing anything

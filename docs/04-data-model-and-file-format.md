@@ -320,5 +320,5 @@ explicitly and checked (`text()`, `finite()`, `oneOf()`, `hexColor()`), so unexp
 export escapes it again).
 
 The rules are covered by `tests/lib/diagram/validate.test.ts`, `tests/lib/diagram/detail.test.ts`,
-`tests/lib/diagram/textBox.test.ts`, `tests/lib/diagram/sequenceFrames.test.ts` and
+`tests/lib/diagram/textBox.test.ts`, `tests/lib/diagram/sequence/sequenceFrames.test.ts` and
 `tests/templates/flowchart.test.ts` (shapes and flowchart tabs).

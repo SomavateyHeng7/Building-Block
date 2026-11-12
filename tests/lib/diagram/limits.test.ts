@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createBlankDiagram } from "@/lib/diagram/factory";
-import { parseDiagramFile } from "@/lib/diagram/file";
-import { ImportError, importDiagramText, readImportText } from "@/lib/diagram/importFile";
+import { parseDiagramFile } from "@/lib/diagram/persistence/file";
+import { ImportError, importDiagramText, readImportText } from "@/lib/diagram/import/importFile";
 import { MAX_FILE_BYTES, MAX_NAME_LENGTH, MAX_NODES, MAX_SECTIONS, MAX_TEXT_LENGTH } from "@/lib/diagram/limits";
 import { DiagramFileError, parseDiagram } from "@/lib/diagram/validate";
 

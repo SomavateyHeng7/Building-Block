@@ -23,7 +23,7 @@ in TesterArmy, against a deployed copy of the app (see [Browser tests](#browser-
 Tests live in **`tests/`**, in folders that mirror `src/`: `src/lib/diagram/store.ts` is tested in
 `tests/lib/diagram/…`. They import the code with the `@/` alias (`import { parseDiagram } from
 "@/lib/diagram/validate"`). Vitest only looks in `tests/` (`vitest.config.mts`), and runs in a **Node**
-environment, so most tests cover the pure logic and the stores. Component tests live in `tests/components/*.test.tsx`
+environment, so most tests cover the pure logic and the stores. Component tests live in `tests/components/…`, mirroring `src/components/` (`tests/components/editor/dialogs/ExportDialog.test.tsx`),
 and opt in to a browser-like environment with `// @vitest-environment jsdom` on their first line (React Testing
 Library and jsdom are dev dependencies).
 
@@ -32,42 +32,42 @@ Library and jsdom are dev dependencies).
 | File | Tests | What it proves |
 | --- | --- | --- |
 | `tests/lib/diagram/validate.test.ts` | 24 | File parsing: rejects non-diagrams and newer versions; every repair rule; short colours; size caps |
-| `tests/lib/diagram/file.test.ts` | 21 | Dirty tracking (incl. tab switches, undo-to-saved, and a never-saved sequence diagram counting as something to lose); save via picker, reuse of the handle, Save As, cancel, failure; `fileBaseName` cases |
+| `tests/lib/diagram/persistence/file.test.ts` | 21 | Dirty tracking (incl. tab switches, undo-to-saved, and a never-saved sequence diagram counting as something to lose); save via picker, reuse of the handle, Save As, cancel, failure; `fileBaseName` cases |
 | `tests/lib/diagram/connections.test.ts` | 27 | Connections: creating, refusing, editing, deleting with components, copying; paste/duplicate growing containers; no-op renames; `historyKey`; `defaultLabel` |
-| `tests/lib/diagram/layout.test.ts` | 22 | Container content extents (computed once per nodes array); align/distribute/size (incl. containers carrying children and leaving containers), grow/fit, next slot, nudging, `dropIntoContainers` |
+| `tests/lib/diagram/layout/layout.test.ts` | 22 | Container content extents (computed once per nodes array); align/distribute/size (incl. containers carrying children and leaving containers), grow/fit, next slot, nudging, `dropIntoContainers` |
 | `tests/lib/diagram/detail.test.ts` | 15 | L2: drawing inside a component, back, navigation isn't an edit, undo, emptying, one level deep, copying, legend removal, stable view objects, file round-trip, nested-design repair, CSV "Part of", export titles |
-| `tests/lib/diagram/levelTools.test.ts` | 14 | L0 landscape summary by category, L1 suggestions (used first, case-insensitive, inside designs), async protocols, protocol chips, newest protocol on new connections (not on flowcharts), L2 neighbours, "Connected at L1" context (one undo step, once only, reused container, fits, clean file) |
-| `tests/lib/diagram/exportPlan.test.ts` | 8 | Views and file names; single file vs zip; PDF pages vs files; empty views skipped; name collisions; descriptions |
-| `tests/lib/diagram/export.test.ts` | 6 | CSV quoting and formula injection; BOM and CRLF; pixel ratio within iOS canvas limits |
+| `tests/lib/diagram/features/levelTools.test.ts` | 14 | L0 landscape summary by category, L1 suggestions (used first, case-insensitive, inside designs), async protocols, protocol chips, newest protocol on new connections (not on flowcharts), L2 neighbours, "Connected at L1" context (one undo step, once only, reused container, fits, clean file) |
+| `tests/lib/diagram/export/exportPlan.test.ts` | 8 | Views and file names; single file vs zip; PDF pages vs files; empty views skipped; name collisions; descriptions |
+| `tests/lib/diagram/export/export.test.ts` | 6 | CSV quoting and formula injection; BOM and CRLF; pixel ratio within iOS canvas limits |
 | `tests/lib/diagram/palette.test.ts` | 14 | WCAG contrast; every default legend colour has 4.5:1 text; palette has no duplicates; default legend colours are named; next colour; parsing typed colour codes; draw.io outlines for its fills, darkened outlines for others |
-| `tests/lib/zip.test.ts` | 3 | CRC-32 against the standard value; the zip passes `unzip -t` and Python's `zipfile` (UTF-8 names, contents); empty zip |
-| `tests/lib/consent.test.ts` | 4 | Needed until accepted; version mismatch asks again; withdraw; blocked storage lasts for the session |
-| `tests/lib/toast.test.ts` | 4 | Durations by kind; repeats replace; at most three; empty details |
-| `tests/lib/maintenance.test.ts` | 6 | Reading the environment; `Retry-After`; upcoming end time |
+| `tests/lib/editor/zip.test.ts` | 3 | CRC-32 against the standard value; the zip passes `unzip -t` and Python's `zipfile` (UTF-8 names, contents); empty zip |
+| `tests/lib/site/consent.test.ts` | 4 | Needed until accepted; version mismatch asks again; withdraw; blocked storage lasts for the session |
+| `tests/lib/editor/toast.test.ts` | 4 | Durations by kind; repeats replace; at most three; empty details |
+| `tests/lib/site/maintenance.test.ts` | 6 | Reading the environment; `Retry-After`; upcoming end time |
 | `tests/proxy.test.ts` | 4 | 503 on every page during maintenance (incl. `/maintenance`); redirect home afterwards; a fresh CSP nonce per page, handed to the page, maintenance page included |
-| `tests/lib/csp.test.ts` | 3 | The policy: nonce and `'strict-dynamic'` scripts; eval only in development; HTTPS upgrade; waitlist and analytics hosts, ignoring endpoints that aren't `https://` |
-| `tests/lib/levels.test.ts` | 2 | Roadmap statuses and heading wording |
-| `tests/lib/diagram/compare.test.ts` | 13 | Compare tabs: matching by name across ids, added/removed/changed fields, container moves, ignoring layout, connection matching (incl. two-way), internal designs, change-list rows |
+| `tests/lib/site/csp.test.ts` | 3 | The policy: nonce and `'strict-dynamic'` scripts; eval only in development; HTTPS upgrade; waitlist and analytics hosts, ignoring endpoints that aren't `https://` |
+| `tests/lib/editor/levels.test.ts` | 2 | Roadmap statuses and heading wording |
+| `tests/lib/diagram/features/compare.test.ts` | 13 | Compare tabs: matching by name across ids, added/removed/changed fields, container moves, ignoring layout, connection matching (incl. two-way), internal designs, change-list rows |
 | `tests/templates/templates.test.ts` | 96 | Every template opens without repairs, mints fresh ids, connects real components (every component has a connection), fits its containers; the builder throws on an unknown component name; horizontal lanes (valid, fit, in flow order, one step per spot); the richer templates have connections, an L2 design and several tabs; L2 designs on the larger architecture templates (and only the roadmap's Target tab, so Compare tabs shows it); the incident escalation is orientable; the data model's relationships say how many; the sign-in sequence |
 | `tests/templates/crossings.test.ts` | 22 | No template connection runs straight through a component that isn't one of its ends (vertical and horizontal builds; loop-backs that leave and return on the same side are routed around, so skipped) |
-| `tests/components/PropertiesPanelFlow.test.tsx` | 2 | The nothing-selected panel offers Number in flow order, both Tidy buttons and the step-numbers switch, and they act on the diagram |
+| `tests/components/editor/panels/PropertiesPanelFlow.test.tsx` | 2 | The nothing-selected panel offers Number in flow order, both Tidy buttons and the step-numbers switch, and they act on the diagram |
 | `tests/templates/filter.test.ts` | 5 | Template search (any order, case and accents ignored, every word must match), category filter, every template has a known category |
 | `tests/templates/summary.test.ts` | 6 | Card summaries (one tab, or tab names and a range of sizes; participants for a sequence; none for Blank); a template's `compare` tabs exist |
-| `tests/lib/startTemplate.test.ts` | 3 | Starting a template opens it and records it; the roadmap opens with Current and Target marked; no comparison carries over to the next diagram |
-| `tests/lib/recentTemplates.test.ts` | 8 | Newest first, no repeats, at most three; damaged values ignored; blocked storage lasts for the tab; recent ones first on the start page; ids that are no longer templates are forgotten |
-| `tests/lib/diagram/search.test.ts` | 9 | Names first, then details; several words in any order; accents ignored; a changed diagram is searched afresh; highlighting; sequence participants, messages and notes |
-| `tests/lib/diagram/sequence.test.ts` | 11 | Editing and laying out sequences; sequence tabs (undo, duplicate, save, picture); picking a component for a participant, tab-safe |
-| `tests/lib/diagram/flowAdapter.test.ts` | 6 | Line paths and bends; change marks; unchanged nodes keep their objects (undo history shares them) |
+| `tests/lib/editor/startTemplate.test.ts` | 3 | Starting a template opens it and records it; the roadmap opens with Current and Target marked; no comparison carries over to the next diagram |
+| `tests/lib/editor/recentTemplates.test.ts` | 8 | Newest first, no repeats, at most three; damaged values ignored; blocked storage lasts for the tab; recent ones first on the start page; ids that are no longer templates are forgotten |
+| `tests/lib/diagram/features/search.test.ts` | 9 | Names first, then details; several words in any order; accents ignored; a changed diagram is searched afresh; highlighting; sequence participants, messages and notes |
+| `tests/lib/diagram/sequence/sequence.test.ts` | 11 | Editing and laying out sequences; sequence tabs (undo, duplicate, save, picture); picking a component for a participant, tab-safe |
+| `tests/lib/diagram/layout/flowAdapter.test.ts` | 6 | Line paths and bends; change marks; unchanged nodes keep their objects (undo history shares them) |
 | `tests/lib/diagram/grouping.test.ts` | 11 | Grouping into a container and ungrouping, as one undo step; deleting a container asks about its components |
-| `tests/lib/diagram/exportMermaid.test.ts` | 7 | Sequence → Mermaid (aliases, arrows, protocol, escapes, autonumber, indented frames, activation marks) and back to the same sequence; which line each item is on; applying keeps colours, descriptions and links; errors |
-| `tests/lib/diagram/import.test.ts` | 14 | XML reading (incl. very deep nesting); draw.io shapes, swimlanes, arrows and compressed pages; parents that loop or nest deep; Mermaid sequences with frames and activations; character codes past Unicode; refusals with reasons |
-| `tests/lib/diagram/sequenceFrames.test.ts` | 13 | Frames: wrapping steps, finding a frame from any marker, removing it whole, pairing markers up, moving within bounds, nested layout; activation bars and arrow ends; Mermaid round trip with nested frames, unclosed frames, colour boxes, activate lines, saved files; the code tokenizer; caption splitting |
-| `tests/lib/diagram/hints.test.ts` | 6 | Check before you share: quiet when complete; missing owners, protocols and unconnected components; no "unconnected" flood before any connections; internal designs without owners; flowcharts checked only for unconnected steps; the Flowchart template has nothing to flag |
+| `tests/lib/diagram/export/exportMermaid.test.ts` | 7 | Sequence → Mermaid (aliases, arrows, protocol, escapes, autonumber, indented frames, activation marks) and back to the same sequence; which line each item is on; applying keeps colours, descriptions and links; errors |
+| `tests/lib/diagram/import/import.test.ts` | 14 | XML reading (incl. very deep nesting); draw.io shapes, swimlanes, arrows and compressed pages; parents that loop or nest deep; Mermaid sequences with frames and activations; character codes past Unicode; refusals with reasons |
+| `tests/lib/diagram/sequence/sequenceFrames.test.ts` | 13 | Frames: wrapping steps, finding a frame from any marker, removing it whole, pairing markers up, moving within bounds, nested layout; activation bars and arrow ends; Mermaid round trip with nested frames, unclosed frames, colour boxes, activate lines, saved files; the code tokenizer; caption splitting |
+| `tests/lib/diagram/features/hints.test.ts` | 6 | Check before you share: quiet when complete; missing owners, protocols and unconnected components; no "unconnected" flood before any connections; internal designs without owners; flowcharts checked only for unconnected steps; the Flowchart template has nothing to flag |
 | `tests/lib/diagram/textBox.test.ts` | 8 | Text boxes: adding, line breaks and style, a saved file, no connections, not in the component list; in containers (dropped in, carried, dragged out, added in, left alone by Tidy, kept in a file, released when the container goes); exact position and size, minimum size, container growth |
-| `tests/lib/diagram/guides.test.ts` | 15 | Pixel guides: snapping edges and middles within a threshold, resize snapping to edges and same width/height (with minimum sizes and Alt), guide lines, gaps to the nearest facing boxes, distances between and inside boxes, bounding boxes |
+| `tests/lib/diagram/layout/guides.test.ts` | 15 | Pixel guides: snapping edges and middles within a threshold, resize snapping to edges and same width/height (with minimum sizes and Alt), guide lines, gaps to the nearest facing boxes, distances between and inside boxes, bounding boxes |
 | `tests/templates/flowchart.test.ts` | 9 | The Flowchart template (pills, decisions with Yes/No, a title, Mermaid shapes, a saved file); shapes on blocks; the app's palette, quick add only on tabs with flowchart shapes, an old `look` ignored; dropping flowchart shapes in their categories; quick add (placement, stepping past boxes, one undo, Yes/No, "End") |
 | `tests/lib/diagram/legend.test.ts` | 3 | Reordering entries; removing one moves its items to another, inside internal designs too |
-| `tests/lib/diagram/recovery.test.ts` | 6 | Recovery copy: off by default, read back like a file, cleared, full or blocked storage reported |
+| `tests/lib/diagram/persistence/recovery.test.ts` | 6 | Recovery copy: off by default, read back like a file, cleared, full or blocked storage reported |
 
 `zip.test.ts` shells out to `unzip` and `python3`, which are present on macOS and most Linux CI images.
 

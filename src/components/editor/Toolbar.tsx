@@ -15,9 +15,9 @@ import {
   useFileStore,
   useIsDirty,
   useUntouchedNewDiagram,
-} from "@/lib/diagram/file";
+} from "@/lib/diagram/persistence/file";
 import { createBlankDiagram } from "@/lib/diagram/factory";
-import { setRecoveryEnabled, useRecoveryEnabled } from "@/lib/diagram/recovery";
+import { setRecoveryEnabled, useRecoveryEnabled } from "@/lib/diagram/persistence/recovery";
 import {
   canvasToPng,
   componentsCsv,
@@ -28,24 +28,24 @@ import {
   renderComposite,
   renderSvg,
   type RenderedComposite,
-} from "@/lib/diagram/export";
-import { DATA_FORMATS, IMAGE_FORMATS, describeFiles, planExport, type ExportFormat, type ExportView } from "@/lib/diagram/exportPlan";
-import HistoryDialog from "./HistoryDialog";
-import { buildViewerHtml } from "@/lib/diagram/exportViewer";
-import { solutionDocument } from "@/lib/diagram/exportDocument";
-import { codeForView } from "@/lib/diagram/exportCode";
-import { createZip } from "@/lib/zip";
-import ExportDialog, { type ExportChoice, type ExportPrefs } from "./ExportDialog";
-import ImportDialog, { describeImport } from "./ImportDialog";
-import { toast } from "@/lib/toast";
-import { useUnsavedGuard } from "./useUnsavedGuard";
-import { Icon } from "./Icon";
-import { useReadOnly } from "./viewMode";
-import { useCompareView } from "./compareView";
-import { useRenderEverything } from "./exportRendering";
-import { changeMarksForView } from "@/lib/diagram/compare";
-import { LogoMark } from "@/components/Logo";
-import { ThemeToggle } from "@/components/theme-toggle";
+} from "@/lib/diagram/export/export";
+import { DATA_FORMATS, IMAGE_FORMATS, describeFiles, planExport, type ExportFormat, type ExportView } from "@/lib/diagram/export/exportPlan";
+import HistoryDialog from "./dialogs/HistoryDialog";
+import { buildViewerHtml } from "@/lib/diagram/export/exportViewer";
+import { solutionDocument } from "@/lib/diagram/export/exportDocument";
+import { codeForView } from "@/lib/diagram/export/exportCode";
+import { createZip } from "@/lib/editor/zip";
+import ExportDialog, { type ExportChoice, type ExportPrefs } from "./dialogs/ExportDialog";
+import ImportDialog, { describeImport } from "./dialogs/ImportDialog";
+import { toast } from "@/lib/editor/toast";
+import { useUnsavedGuard } from "./shared/useUnsavedGuard";
+import { Icon } from "./shared/Icon";
+import { useReadOnly } from "./shared/viewMode";
+import { useCompareView } from "./shared/compareView";
+import { useRenderEverything } from "./shared/exportRendering";
+import { changeMarksForView } from "@/lib/diagram/features/compare";
+import { LogoMark } from "@/components/app/Logo";
+import { ThemeToggle } from "@/components/app/theme-toggle";
 
 const SECONDARY_BUTTON =
   "inline-flex h-8 items-center gap-1.5 rounded-md border border-zinc-300 px-2.5 text-sm font-medium transition-colors hover:bg-zinc-50 disabled:opacity-60 sm:px-3 dark:border-zinc-700 dark:hover:bg-zinc-900";

@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { LogoMark } from "@/components/Logo";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { LogoMark } from "@/components/app/Logo";
+import { ThemeToggle } from "@/components/app/theme-toggle";
 import Footer from "@/components/landing/Footer";
 import HeroDiagram from "@/components/landing/HeroDiagram";
 import WaitlistForm from "@/components/landing/WaitlistForm";
-import { getLevels, roadmapHeading } from "@/lib/levels";
+import { getLevels, roadmapHeading } from "@/lib/editor/levels";
 
 export const metadata: Metadata = {
   title: "Building Block — L0 architecture diagrams for solution architects",

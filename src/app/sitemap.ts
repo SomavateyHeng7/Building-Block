@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { PUBLIC_PAGES, siteUrl } from "@/lib/site";
+import { PUBLIC_PAGES, siteUrl } from "@/lib/site/site";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const base = siteUrl();

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
-import { hasConsent, readConsent, subscribeConsent, withdrawConsent } from "@/lib/consent";
-import { useMounted } from "@/components/theme-toggle";
+import { hasConsent, readConsent, subscribeConsent, withdrawConsent } from "@/lib/site/consent";
+import { useMounted } from "@/components/app/theme-toggle";
 
 /** Shows when this browser accepted the notice, and lets people take it back. */
 export default function WithdrawConsent() {

@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type DragEvent, type ReactNode } from "react";
-import { LogoMark } from "@/components/Logo";
+import { LogoMark } from "@/components/app/Logo";
 import Footer from "@/components/landing/Footer";
-import { ThemeToggle, useMounted } from "@/components/theme-toggle";
+import { ThemeToggle, useMounted } from "@/components/app/theme-toggle";
 import { createBlankDiagram } from "@/lib/diagram/factory";
 import type { Diagram } from "@/lib/diagram/types";
-import { useUnsavedGuard } from "@/components/editor/useUnsavedGuard";
+import { useUnsavedGuard } from "@/components/editor/shared/useUnsavedGuard";
 import {
   openDiagramFromDevice,
   openDroppedDiagram,
@@ -16,8 +16,8 @@ import {
   startDiagram,
   supportsFilePicker,
   takeDroppedFile,
-} from "@/lib/diagram/file";
-import { pruneRecentTemplates, recentFirst, useRecentTemplates } from "@/lib/recentTemplates";
+} from "@/lib/diagram/persistence/file";
+import { pruneRecentTemplates, recentFirst, useRecentTemplates } from "@/lib/editor/recentTemplates";
 import {
   clearRecoveryCopy,
   setRecoveryEnabled,
@@ -25,14 +25,14 @@ import {
   useRecoveryCopy,
   useRecoveryEnabled,
   type RecoveryCopy,
-} from "@/lib/diagram/recovery";
+} from "@/lib/diagram/persistence/recovery";
 import { downloadLegacyItem, readLegacyItems, removeLegacyItems, type LegacyItem } from "@/lib/diagram/legacy";
-import { toast } from "@/lib/toast";
+import { toast } from "@/lib/editor/toast";
 import { TEMPLATE_CATEGORIES, describeTemplate, templates } from "@/templates";
-import { startFromTemplate } from "@/lib/startTemplate";
-import ImportDialog, { describeImport } from "@/components/editor/ImportDialog";
-import TemplatePreview from "@/components/TemplatePreview";
-import { ImportError, diagramFromImport, importDiagramText, isImportable, readImportText, type ImportResult } from "@/lib/diagram/importFile";
+import { startFromTemplate } from "@/lib/editor/startTemplate";
+import ImportDialog, { describeImport } from "@/components/editor/dialogs/ImportDialog";
+import TemplatePreview from "@/components/templates/TemplatePreview";
+import { ImportError, diagramFromImport, importDiagramText, isImportable, readImportText, type ImportResult } from "@/lib/diagram/import/importFile";
 
 const noopSubscribe = () => () => {};
 const NO_ITEMS: LegacyItem[] = [];

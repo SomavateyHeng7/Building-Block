@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { CONTAINER_HEADER, CONTAINER_MIN, CONTAINER_PADDING, absolutePosition, groupIntoContainer } from "@/lib/diagram/layout";
+import { CONTAINER_HEADER, CONTAINER_MIN, CONTAINER_PADDING, absolutePosition, groupIntoContainer } from "@/lib/diagram/layout/layout";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { createBlankDiagram } from "@/lib/diagram/factory";
-import { requestDelete, resolveDelete, ungroup, useDeletePrompt } from "@/components/editor/deletePrompt";
-import { currentToasts } from "@/lib/toast";
+import { requestDelete, resolveDelete, ungroup, useDeletePrompt } from "@/components/editor/shared/deletePrompt";
+import { currentToasts } from "@/lib/editor/toast";
 import type { DiagramNode } from "@/lib/diagram/types";
 
 const store = () => useDiagramStore.getState();

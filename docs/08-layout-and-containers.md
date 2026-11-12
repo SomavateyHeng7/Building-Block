@@ -1,7 +1,7 @@
-# 8. Layout and containers — `src/lib/diagram/layout.ts`
+# 8. Layout and containers — `src/lib/diagram/layout/layout.ts`
 
 Pure functions that take a node list and return a new one. The store and the canvas call them; the tests in
-`tests/lib/diagram/layout.test.ts` cover them.
+`tests/lib/diagram/layout/layout.test.ts` cover them.
 
 ## Nesting rules
 

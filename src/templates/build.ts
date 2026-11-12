@@ -1,6 +1,6 @@
-import type { ComponentIconKey } from "@/lib/diagram/componentIcons";
+import type { ComponentIconKey } from "@/lib/diagram/features/componentIcons";
 import { createId } from "@/lib/diagram/factory";
-import { DEFAULT_LEGEND } from "@/lib/diagram/defaultLegend";
+import { DEFAULT_LEGEND } from "@/lib/diagram/features/defaultLegend";
 import type {
   BlockColorKey,
   ConnectionSide,
@@ -9,6 +9,7 @@ import type {
   DiagramNode,
   DiagramSection,
   NodeDetails,
+  Position,
 } from "@/lib/diagram/types";
 
 /**
@@ -41,8 +42,13 @@ export interface ConnectionSpec {
   /** The usual convention for asynchronous calls. */
   dashed?: boolean;
   both?: boolean;
-  /** Override the facing sides, e.g. to route a loop-back over the top instead of along the forward line. */
+  /** Override the facing sides in every orientation, e.g. to route a loop-back over the top instead of along the forward line. */
   sides?: [ConnectionSide, ConnectionSide];
+  /**
+   * Routing for one orientation only, since sides that keep a line clear in one layout can cross another;
+   * wins over `sides`. `bend` moves the middle of the line, as dragging its dot does.
+   */
+  route?: Partial<Record<Orientation, { sides?: [ConnectionSide, ConnectionSide]; bend?: Position }>>;
 }
 
 /** Which way lanes run: "vertical" lanes are columns left to right, "horizontal" lanes are rows top to bottom. */
@@ -185,7 +191,7 @@ export function buildCanvas(
         nodes.push(block);
       }
     });
-    return { nodes, edges: buildEdges(spec, placed, sidesBetweenRows) };
+    return { nodes, edges: buildEdges(spec, placed, sidesBetweenRows, orientation) };
   }
 
   spec.columns.forEach((column, columnIndex) => {
@@ -214,13 +220,14 @@ export function buildCanvas(
     }
   });
 
-  return { nodes, edges: buildEdges(spec, placed, sidesBetween) };
+  return { nodes, edges: buildEdges(spec, placed, sidesBetween, orientation) };
 }
 
 function buildEdges(
   spec: CanvasSpec,
   placed: Map<string, Placed>,
   sidesFor: (source: Placed, target: Placed) => [ConnectionSide, ConnectionSide],
+  orientation: Orientation,
 ): DiagramEdge[] {
   return (spec.connections ?? []).flatMap((connection): DiagramEdge[] => {
     const source = placed.get(connection.from);
@@ -229,7 +236,8 @@ function buildEdges(
       // A typo in a template would otherwise lose the connection without a word.
       throw new Error(`Template connection "${connection.label}" names an unknown component: "${connection.from}" → "${connection.to}"`);
     }
-    const [sourceSide, targetSide] = connection.sides ?? sidesFor(source, target);
+    const route = connection.route?.[orientation];
+    const [sourceSide, targetSide] = route?.sides ?? connection.sides ?? sidesFor(source, target);
     return [
       {
         id: createId("edge"),
@@ -242,6 +250,7 @@ function buildEdges(
         ...(connection.description ? { description: connection.description } : {}),
         ...(connection.both ? { direction: "both" as const } : {}),
         ...(connection.dashed ? { style: "dashed" as const } : {}),
+        ...(route?.bend ? { bend: { ...route.bend } } : {}),
       },
     ];
   });

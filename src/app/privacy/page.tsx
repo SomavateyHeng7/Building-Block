@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import BackLink from "@/components/BackLink";
-import { PRIVACY_VERSION } from "@/lib/consent";
+import BackLink from "@/components/app/BackLink";
+import { PRIVACY_VERSION } from "@/lib/site/consent";
 import WithdrawConsent from "./WithdrawConsent";
 
 export const metadata: Metadata = {

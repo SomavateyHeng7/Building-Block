@@ -5,7 +5,7 @@ Recipes for common changes, with the files to touch and the rules to keep. After
 
 ## Add a template
 
-1. Create `src/templates/<id>.ts` exporting a `TemplateDefinition` (`id`, `name`, `description`, `category`, `build`).
+1. Create `src/templates/library/<id>.ts` exporting a `TemplateDefinition` (`id`, `name`, `description`, `category`, `build`).
    Add `keywords` for words people might search for. Set `orientable: true` and read `build({ orientation })` if
    its lanes can run vertically or horizontally (pass `{ orientation }` on to `buildDiagram`).
    The easy way is a `CanvasSpec` per tab (columns of containers, components, connections by name; a component's
@@ -69,12 +69,12 @@ those tabs' differences marked, as the Migration roadmap does; start templates t
 
 ## Add an export format
 
-1. Add it to `ExportFormat` and `IMAGE_FORMATS` or `DATA_FORMATS` in `src/lib/diagram/exportPlan.ts`, plus its
+1. Add it to `ExportFormat` and `IMAGE_FORMATS` or `DATA_FORMATS` in `src/lib/diagram/export/exportPlan.ts`, plus its
    extension and file naming in `planExport`, and its wording in `describeFiles`.
 2. Add a label and hint to `FORMAT_INFO` in `ExportDialog.tsx`.
-3. Produce its Blob in `runExport` (`Toolbar.tsx`). Put the actual conversion in `src/lib/diagram/export.ts` as a
+3. Produce its Blob in `runExport` (`Toolbar.tsx`). Put the actual conversion in `src/lib/diagram/export/export.ts` as a
    function returning a Blob.
-4. Add cases to `tests/lib/diagram/exportPlan.test.ts`.
+4. Add cases to `tests/lib/diagram/export/exportPlan.test.ts`.
 
 ## Add a keyboard shortcut
 
@@ -89,7 +89,7 @@ title, "Couldn't…" for failures, one-sentence description with the next step.
 ## Add a page
 
 1. Create `src/app/<name>/page.tsx`; export `metadata`.
-2. If it is part of the app (needs consent), add the path to `GATED` in `src/components/ConsentGate.tsx`.
+2. If it is part of the app (needs consent), add the path to `GATED` in `src/components/app/ConsentGate.tsx`.
 3. If it must stay reachable during maintenance, it can't: every page is rewritten. Make it a static file instead.
 4. Link it from the footer if public; document it in [routing](03-routing.md).
 
@@ -106,12 +106,12 @@ See [operations](16-operations.md#changing-the-privacy-notice).
 
 ## Ship a new architecture level
 
-Add its store actions, then list them in `requires` for that level in `src/lib/levels.ts`. The landing page updates
-itself; update `tests/lib/levels.test.ts`.
+Add its store actions, then list them in `requires` for that level in `src/lib/editor/levels.ts`. The landing page updates
+itself; update `tests/lib/editor/levels.test.ts`.
 
 ## Change the default legend or palette
 
-- `src/lib/diagram/defaultLegend.ts` affects new diagrams only (existing files keep their own legend).
+- `src/lib/diagram/features/defaultLegend.ts` affects new diagrams only (existing files keep their own legend).
 - `src/lib/diagram/palette.ts`: keep every default legend colour in the palette (a test checks this) and keep colours
   `#rrggbb`, lower-case, unique.
 

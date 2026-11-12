@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_LEGEND } from "@/lib/diagram/defaultLegend";
+import { DEFAULT_LEGEND } from "@/lib/diagram/features/defaultLegend";
 import { PALETTE, colorName, contrastRatio, nextLegendColor, parseHexColor, readableTextOn } from "@/lib/diagram/palette";
 
 describe("palette", () => {

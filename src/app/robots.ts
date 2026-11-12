@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { siteUrl, UNLISTED_PAGES } from "@/lib/site";
+import { siteUrl, UNLISTED_PAGES } from "@/lib/site/site";
 
 export default function robots(): MetadataRoute.Robots {
   return {

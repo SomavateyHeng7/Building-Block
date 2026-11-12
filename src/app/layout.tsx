@@ -2,13 +2,13 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
-import { NONCE_HEADER } from "@/lib/csp";
-import { ThemeProvider } from "@/components/theme-provider";
-import ToastViewport from "@/components/ToastViewport";
-import ConsentGate from "@/components/ConsentGate";
-import ServiceWorker from "@/components/ServiceWorker";
-import Analytics from "@/components/Analytics";
-import { siteUrl } from "@/lib/site";
+import { NONCE_HEADER } from "@/lib/site/csp";
+import { ThemeProvider } from "@/components/app/theme-provider";
+import ToastViewport from "@/components/app/ToastViewport";
+import ConsentGate from "@/components/app/ConsentGate";
+import ServiceWorker from "@/components/app/ServiceWorker";
+import Analytics from "@/components/app/Analytics";
+import { siteUrl } from "@/lib/site/site";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

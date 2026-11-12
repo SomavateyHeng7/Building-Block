@@ -3,12 +3,12 @@
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { useDiagramStore } from "@/lib/diagram/store";
-import CompareDialog from "./CompareDialog";
-import HintsDialog from "./HintsDialog";
-import { diagramHints } from "@/lib/diagram/hints";
-import { useUntouchedNewDiagram } from "@/lib/diagram/file";
-import { Icon } from "./Icon";
-import { useReadOnly } from "./viewMode";
+import CompareDialog from "./dialogs/CompareDialog";
+import HintsDialog from "./dialogs/HintsDialog";
+import { diagramHints } from "@/lib/diagram/features/hints";
+import { useUntouchedNewDiagram } from "@/lib/diagram/persistence/file";
+import { Icon } from "./shared/Icon";
+import { useReadOnly } from "./shared/viewMode";
 
 const TAB_ACTION =
   "inline-flex min-h-0 items-center justify-center rounded p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-900 pointer-coarse:p-2 dark:hover:bg-zinc-800 dark:hover:text-zinc-100";

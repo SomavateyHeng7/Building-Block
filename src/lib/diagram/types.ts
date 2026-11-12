@@ -1,5 +1,5 @@
-import type { Checkpoint } from "./checkpoints";
-import type { ComponentIconKey } from "./componentIcons";
+import type { Checkpoint } from "./persistence/checkpoints";
+import type { ComponentIconKey } from "./features/componentIcons";
 
 /** Key of a LegendEntry. Legends are user-defined, so any string is valid. */
 export type BlockColorKey = string;

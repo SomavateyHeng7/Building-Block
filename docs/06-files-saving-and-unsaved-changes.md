@@ -1,4 +1,4 @@
-# 6. Files, saving and unsaved changes — `src/lib/diagram/file.ts`
+# 6. Files, saving and unsaved changes — `src/lib/diagram/persistence/file.ts`
 
 Diagrams are never stored by the app. A diagram exists in memory while it is open, and the user's `.json` file is
 the only copy, like draw.io's "Device" storage. This module opens files, writes them, decides whether there are
@@ -60,7 +60,7 @@ older object, so the diagram is still dirty and autosave writes again. Nothing i
 **File names — `fileBaseName(name)`:** lower-case, spaces and dashes become `-`, characters Windows or macOS forbid
 (`<>:"/\|?*` and control characters) are removed, leading/trailing dots and dashes trimmed, at most 100 characters,
 Windows reserved names (`CON`, `NUL`, `COM1`…) get `-diagram` appended, and an empty result becomes `diagram`.
-Accented letters are kept. Examples are in `tests/lib/diagram/file.test.ts`.
+Accented letters are kept. Examples are in `tests/lib/diagram/persistence/file.test.ts`.
 
 **Downloads — `downloadBlob(blob, name)`:** an `<a download>` click. The object URL is revoked **60 seconds later**,
 not immediately, because Safari can still be starting the download after `click()` returns.
@@ -145,7 +145,7 @@ The Save button is highlighted amber while there are changes and no file.
 
 ### The unsaved-changes guard
 
-In `src/components/editor/useUnsavedGuard.tsx`.
+In `src/components/editor/shared/useUnsavedGuard.tsx`.
 
 ```ts
 const { guard, dialog } = useUnsavedGuard();

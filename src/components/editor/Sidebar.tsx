@@ -2,11 +2,11 @@
 
 import { useReactFlow } from "@xyflow/react";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
-import { nextSlotInContainer } from "@/lib/diagram/layout";
+import { nextSlotInContainer } from "@/lib/diagram/layout/layout";
 import { SHAPES, type ShapeInfo } from "@/lib/diagram/shapes";
 import type { BlockColorKey, BlockShape } from "@/lib/diagram/types";
-import { Icon } from "./Icon";
-import PanelToggle from "./PanelToggle";
+import { Icon } from "./shared/Icon";
+import PanelToggle from "./panels/PanelToggle";
 
 export const PALETTE_DATA_FORMAT = "application/building-block-node";
 

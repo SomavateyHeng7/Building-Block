@@ -1,4 +1,4 @@
-import { DEFAULT_LEGEND } from "@/lib/diagram/defaultLegend";
+import { DEFAULT_LEGEND } from "@/lib/diagram/features/defaultLegend";
 import { readableTextOn } from "@/lib/diagram/palette";
 import type { BlockColorKey } from "@/lib/diagram/types";
 

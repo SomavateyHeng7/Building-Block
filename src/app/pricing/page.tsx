@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Footer from "@/components/landing/Footer";
 import WaitlistForm from "@/components/landing/WaitlistForm";
-import { PLANS, canSubscribe, formatPrice, type Plan } from "@/lib/plans";
+import { PLANS, canSubscribe, formatPrice, type Plan } from "@/lib/site/plans";
 
 export const metadata: Metadata = {
   title: "Pricing · Building Block",

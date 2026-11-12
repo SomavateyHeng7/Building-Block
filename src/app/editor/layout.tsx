@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { EDITOR_TITLE } from "@/lib/editorTitle";
+import { EDITOR_TITLE } from "@/lib/editor/editorTitle";
 
 // The title shown until a diagram is open; then the editor shows the diagram's name (see editorTitle.ts).
 export const metadata: Metadata = {

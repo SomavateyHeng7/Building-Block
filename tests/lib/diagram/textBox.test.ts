@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createBlankDiagram } from "@/lib/diagram/factory";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { parseDiagram } from "@/lib/diagram/validate";
-import { componentRows } from "@/lib/diagram/export";
-import { absolutePosition, dropIntoContainers, nudgeNodes } from "@/lib/diagram/layout";
+import { componentRows } from "@/lib/diagram/export/export";
+import { absolutePosition, dropIntoContainers, nudgeNodes } from "@/lib/diagram/layout/layout";
 
 const store = () => useDiagramStore.getState();
 const nodes = () => getActiveSection(store().diagram).nodes;

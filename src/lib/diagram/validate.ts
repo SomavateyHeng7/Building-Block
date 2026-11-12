@@ -1,12 +1,12 @@
-import { COMPONENT_ICON_KEYS } from "./componentIcons";
-import { DEFAULT_LEGEND } from "./defaultLegend";
+import { COMPONENT_ICON_KEYS } from "./features/componentIcons";
+import { DEFAULT_LEGEND } from "./features/defaultLegend";
 import { createBlankSection, createId } from "./factory";
 import { MAX_EDGES, MAX_NAME_LENGTH, MAX_NODES, MAX_PARTICIPANTS, MAX_SECTIONS, MAX_STEPS, MAX_TEXT_LENGTH } from "./limits";
-import { parseBranding } from "./branding";
-import { MAX_CHECKPOINTS, snapshotOf, type Checkpoint } from "./checkpoints";
-import { MAX_COMMENTS, commentTargets } from "./comments";
-import { safeWebAddress } from "./webAddress";
-import { balanceSteps, syncLinkedParticipants } from "./sequence";
+import { parseBranding } from "./export/branding";
+import { MAX_CHECKPOINTS, snapshotOf, type Checkpoint } from "./persistence/checkpoints";
+import { MAX_COMMENTS, commentTargets } from "./features/comments";
+import { safeWebAddress } from "./features/webAddress";
+import { balanceSteps, syncLinkedParticipants } from "./sequence/sequence";
 import type {
   ConnectionSide,
   ContainerStyle,

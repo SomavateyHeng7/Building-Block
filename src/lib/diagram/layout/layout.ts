@@ -1,0 +1,472 @@
+import type { ConnectionSide, ContainerStyle, DiagramNode, Position, Size } from "../types";
+
+/** Inner spacing of a container; the side with the header leaves room for it. */
+export const CONTAINER_PADDING = 16;
+export const CONTAINER_HEADER = 40;
+export const LAYOUT_GAP = 12;
+export const CONTAINER_MIN: Size = { width: 200, height: 120 };
+/** The smallest each kind of box can be resized to (a container also fits around what's in it). */
+export const MIN_NODE_SIZE: Record<DiagramNode["type"], Size> = {
+  container: CONTAINER_MIN,
+  block: { width: 80, height: 32 },
+  text: { width: 24, height: 16 },
+};
+
+export interface Insets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+/** Where a container's children may start and end, depending on which side its header is on. */
+export function containerInsets(style?: ContainerStyle): Insets {
+  const side = style?.headerPosition ?? "top";
+  const inset = (edge: keyof Insets) => (edge === side ? CONTAINER_HEADER : CONTAINER_PADDING);
+  return { top: inset("top"), right: inset("right"), bottom: inset("bottom"), left: inset("left") };
+}
+
+function insetsOf(nodes: DiagramNode[], containerId: string): Insets {
+  const container = nodes.find((node) => node.id === containerId);
+  return containerInsets(container?.data.kind === "container" ? container.data : undefined);
+}
+
+export type ArrangeOp =
+  | "align-left"
+  | "align-center"
+  | "align-right"
+  | "align-top"
+  | "align-middle"
+  | "align-bottom"
+  | "distribute-horizontal"
+  | "distribute-vertical"
+  | "same-width"
+  | "same-height";
+
+/** Canvas position, adding the parent container's offset for nested nodes. */
+const extentsCache = new WeakMap<DiagramNode[], Map<string, { right: number; bottom: number }>>();
+
+/**
+ * How far each container's components reach (right and bottom edges, relative to the container), by container id.
+ * Worked out once per nodes array: every container asks on every edit, so scanning the nodes per container made
+ * each drag frame cost containers × nodes.
+ */
+export function contentExtents(nodes: DiagramNode[]): ReadonlyMap<string, { right: number; bottom: number }> {
+  let extents = extentsCache.get(nodes);
+  if (extents) return extents;
+  extents = new Map();
+  for (const node of nodes) {
+    if (!node.parentId) continue;
+    const current = extents.get(node.parentId) ?? { right: 0, bottom: 0 };
+    current.right = Math.max(current.right, node.position.x + node.size.width);
+    current.bottom = Math.max(current.bottom, node.position.y + node.size.height);
+    extents.set(node.parentId, current);
+  }
+  extentsCache.set(nodes, extents);
+  return extents;
+}
+
+export function absolutePosition(node: DiagramNode, nodes: DiagramNode[]): Position {
+  const parent = node.parentId ? nodes.find((candidate) => candidate.id === node.parentId) : undefined;
+  return parent
+    ? { x: node.position.x + parent.position.x, y: node.position.y + parent.position.y }
+    : node.position;
+}
+
+/**
+ * Which sides a connection from one component to another should use: the sides facing each other,
+ * horizontally when they are further apart across than down.
+ */
+export function suggestConnectionSides(
+  nodes: DiagramNode[],
+  sourceId: string,
+  targetId: string,
+): { sourceSide: ConnectionSide; targetSide: ConnectionSide } {
+  const source = nodes.find((node) => node.id === sourceId);
+  const target = nodes.find((node) => node.id === targetId);
+  if (!source || !target) return { sourceSide: "right", targetSide: "left" };
+  const from = absolutePosition(source, nodes);
+  const to = absolutePosition(target, nodes);
+  const dx = to.x + target.size.width / 2 - (from.x + source.size.width / 2);
+  const dy = to.y + target.size.height / 2 - (from.y + source.size.height / 2);
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return dx >= 0 ? { sourceSide: "right", targetSide: "left" } : { sourceSide: "left", targetSide: "right" };
+  }
+  return dy >= 0 ? { sourceSide: "bottom", targetSide: "top" } : { sourceSide: "top", targetSide: "bottom" };
+}
+
+/**
+ * Aligns, distributes or matches the size of the given nodes, working in canvas coordinates.
+ * A selected container carries its children, so they aren't arranged separately. A component that
+ * ends up over a different container (or none) moves into it, as if it had been dragged there.
+ */
+export function arrangeNodes(nodes: DiagramNode[], ids: string[], op: ArrangeOp): DiagramNode[] {
+  const targets = nodes
+    .filter((node) => ids.includes(node.id) && !(node.parentId && ids.includes(node.parentId)))
+    .map((node) => ({ node, abs: absolutePosition(node, nodes) }));
+  if (targets.length < 2) return nodes;
+
+  const left = Math.min(...targets.map((t) => t.abs.x));
+  const top = Math.min(...targets.map((t) => t.abs.y));
+  const right = Math.max(...targets.map((t) => t.abs.x + t.node.size.width));
+  const bottom = Math.max(...targets.map((t) => t.abs.y + t.node.size.height));
+  const widest = Math.max(...targets.map((t) => t.node.size.width));
+  const tallest = Math.max(...targets.map((t) => t.node.size.height));
+
+  const next = new Map<string, { abs: Position; size: Size }>();
+  const place = (id: string, abs: Position, size: Size) => next.set(id, { abs, size });
+
+  if (op === "distribute-horizontal" || op === "distribute-vertical") {
+    const horizontal = op === "distribute-horizontal";
+    const sorted = [...targets].sort((a, b) => (horizontal ? a.abs.x - b.abs.x : a.abs.y - b.abs.y));
+    const span = horizontal ? right - left : bottom - top;
+    const occupied = sorted.reduce(
+      (sum, t) => sum + (horizontal ? t.node.size.width : t.node.size.height),
+      0,
+    );
+    const gap = (span - occupied) / (sorted.length - 1);
+    let cursor = horizontal ? left : top;
+    for (const t of sorted) {
+      place(t.node.id, horizontal ? { x: cursor, y: t.abs.y } : { x: t.abs.x, y: cursor }, t.node.size);
+      cursor += (horizontal ? t.node.size.width : t.node.size.height) + gap;
+    }
+  } else {
+    for (const { node, abs } of targets) {
+      const { width, height } = node.size;
+      switch (op) {
+        case "align-left":
+          place(node.id, { x: left, y: abs.y }, node.size);
+          break;
+        case "align-center":
+          place(node.id, { x: (left + right) / 2 - width / 2, y: abs.y }, node.size);
+          break;
+        case "align-right":
+          place(node.id, { x: right - width, y: abs.y }, node.size);
+          break;
+        case "align-top":
+          place(node.id, { x: abs.x, y: top }, node.size);
+          break;
+        case "align-middle":
+          place(node.id, { x: abs.x, y: (top + bottom) / 2 - height / 2 }, node.size);
+          break;
+        case "align-bottom":
+          place(node.id, { x: abs.x, y: bottom - height }, node.size);
+          break;
+        case "same-width":
+          place(node.id, abs, { width: widest, height });
+          break;
+        case "same-height":
+          place(node.id, abs, { width, height: tallest });
+          break;
+      }
+    }
+  }
+
+  const arranged = nodes.map((node) => {
+    const placed = next.get(node.id);
+    if (!placed) return node;
+    const parent = node.parentId ? nodes.find((candidate) => candidate.id === node.parentId) : undefined;
+    const position = parent
+      ? { x: placed.abs.x - parent.position.x, y: placed.abs.y - parent.position.y }
+      : placed.abs;
+    return { ...node, position: snap(position), size: placed.size };
+  });
+  return dropIntoContainers(
+    arranged,
+    arranged.filter((node) => next.has(node.id)).map((node) => ({ id: node.id, position: node.position })),
+  );
+}
+
+function childrenOf(nodes: DiagramNode[], containerId: string) {
+  return nodes.filter((node) => node.parentId === containerId);
+}
+
+function snap(position: Position): Position {
+  return { x: Math.round(position.x), y: Math.round(position.y) };
+}
+
+/** Grows (never shrinks) a container so all of its children fit inside. */
+export function growContainerToFit(nodes: DiagramNode[], containerId: string): DiagramNode[] {
+  const children = childrenOf(nodes, containerId);
+  if (!children.length) return nodes;
+  const insets = insetsOf(nodes, containerId);
+  const needWidth = Math.max(...children.map((c) => c.position.x + c.size.width)) + insets.right;
+  const needHeight = Math.max(...children.map((c) => c.position.y + c.size.height)) + insets.bottom;
+  return nodes.map((node) =>
+    node.id === containerId && (needWidth > node.size.width || needHeight > node.size.height)
+      ? {
+          ...node,
+          size: {
+            width: Math.max(node.size.width, needWidth),
+            height: Math.max(node.size.height, needHeight),
+          },
+        }
+      : node,
+  );
+}
+
+/** Shrinks or grows a container to wrap its children with standard padding. */
+export function fitContainerToContents(nodes: DiagramNode[], containerId: string): DiagramNode[] {
+  const children = childrenOf(nodes, containerId);
+  if (!children.length) return nodes;
+  const insets = insetsOf(nodes, containerId);
+  const minX = Math.min(...children.map((c) => c.position.x));
+  const minY = Math.min(...children.map((c) => c.position.y));
+  const dx = insets.left - minX;
+  const dy = insets.top - minY;
+  const maxX = Math.max(...children.map((c) => c.position.x + c.size.width)) + dx;
+  const maxY = Math.max(...children.map((c) => c.position.y + c.size.height)) + dy;
+
+  return nodes.map((node) => {
+    if (node.parentId === containerId) {
+      return { ...node, position: { x: node.position.x + dx, y: node.position.y + dy } };
+    }
+    if (node.id === containerId) {
+      return {
+        ...node,
+        // Keep children where they are on screen by moving the container by the same offset.
+        position: { x: node.position.x - dx, y: node.position.y - dy },
+        size: {
+          width: Math.max(CONTAINER_MIN.width, maxX + insets.right),
+          height: Math.max(CONTAINER_MIN.height, maxY + insets.bottom),
+        },
+      };
+    }
+    return node;
+  });
+}
+
+/**
+ * Lays a container's children out in a grid (reading order is kept) using the
+ * container's current width, then fits the container's height to the grid.
+ */
+export function tidyContainer(nodes: DiagramNode[], containerId: string): DiagramNode[] {
+  const container = nodes.find((node) => node.id === containerId);
+  // Only components are laid out in the grid: a text box (a caption, a note) stays where it was put.
+  const children = childrenOf(nodes, containerId).filter((node) => node.type === "block").sort(
+    (a, b) => a.position.y - b.position.y || a.position.x - b.position.x,
+  );
+  if (!container || !children.length) return nodes;
+  const insets = insetsOf(nodes, containerId);
+
+  const cellWidth = Math.max(...children.map((c) => c.size.width));
+  const cellHeight = Math.max(...children.map((c) => c.size.height));
+  const usableWidth = container.size.width - insets.left - insets.right;
+  const columns = Math.max(1, Math.floor((usableWidth + LAYOUT_GAP) / (cellWidth + LAYOUT_GAP)));
+  const rows = Math.ceil(children.length / columns);
+
+  const positions = new Map(
+    children.map((child, index) => [
+      child.id,
+      {
+        x: insets.left + (index % columns) * (cellWidth + LAYOUT_GAP),
+        y: insets.top + Math.floor(index / columns) * (cellHeight + LAYOUT_GAP),
+      },
+    ]),
+  );
+
+  return nodes.map((node) => {
+    const position = positions.get(node.id);
+    if (position) return { ...node, position };
+    if (node.id === containerId) {
+      return {
+        ...node,
+        size: {
+          width: Math.max(node.size.width, insets.left + cellWidth + insets.right),
+          height: Math.max(
+            CONTAINER_MIN.height,
+            insets.top + rows * (cellHeight + LAYOUT_GAP) - LAYOUT_GAP + insets.bottom,
+          ),
+        },
+      };
+    }
+    return node;
+  });
+}
+
+/**
+ * Re-arranges, in a grid, every container whose components overlap one another, and reports how many it did.
+ * Imports can pile shapes on top of each other (a draw.io layer, a coarse grid); containers whose components
+ * already sit clear of each other keep their layout.
+ */
+export function tidyOverlappingContainers(nodes: DiagramNode[]): { nodes: DiagramNode[]; tidied: number } {
+  const overlaps = (a: DiagramNode, b: DiagramNode) =>
+    a.position.x < b.position.x + b.size.width &&
+    b.position.x < a.position.x + a.size.width &&
+    a.position.y < b.position.y + b.size.height &&
+    b.position.y < a.position.y + a.size.height;
+  let result = nodes;
+  let tidied = 0;
+  for (const container of nodes.filter((node) => node.type === "container")) {
+    const children = childrenOf(nodes, container.id);
+    if (!children.some((child, index) => children.slice(index + 1).some((other) => overlaps(child, other)))) continue;
+    result = tidyContainer(result, container.id);
+    tidied += 1;
+  }
+  return { nodes: result, tidied };
+}
+
+/**
+ * Settles components and text boxes after a drag. `moved` gives each dragged node's new position (relative to
+ * its current container, if any). One belongs to the top-most container its centre is over, or to none: so it can be dragged into a container, out of one, or into another. Inside, it is kept clear of
+ * the header and padding, and the container grows to fit it. Children moving with their container
+ * are left alone.
+ */
+export function dropIntoContainers(nodes: DiagramNode[], moved: { id: string; position: Position }[]): DiagramNode[] {
+  const movedIds = new Set(moved.map((entry) => entry.id));
+  const containers = nodes.filter((node) => node.type === "container");
+  const grow = new Set<string>();
+  let next = nodes;
+  for (const { id, position } of moved) {
+    const node = nodes.find((candidate) => candidate.id === id);
+    // Containers aren't nested; components and text boxes go wherever they're dropped.
+    if (!node || node.type === "container" || (node.parentId && movedIds.has(node.parentId))) continue;
+    const oldParent = node.parentId ? containers.find((candidate) => candidate.id === node.parentId) : undefined;
+    const absolute = { x: position.x + (oldParent?.position.x ?? 0), y: position.y + (oldParent?.position.y ?? 0) };
+    const centre = { x: absolute.x + node.size.width / 2, y: absolute.y + node.size.height / 2 };
+    const parent = containers.findLast(
+      (container) =>
+        centre.x >= container.position.x &&
+        centre.x <= container.position.x + container.size.width &&
+        centre.y >= container.position.y &&
+        centre.y <= container.position.y + container.size.height,
+    );
+    let settled = absolute;
+    if (parent) {
+      const insets = insetsOf(nodes, parent.id);
+      settled = {
+        x: Math.max(insets.left, absolute.x - parent.position.x),
+        y: Math.max(insets.top, absolute.y - parent.position.y),
+      };
+      grow.add(parent.id);
+    }
+    if (parent?.id === node.parentId && settled.x === node.position.x && settled.y === node.position.y) continue;
+    next = next.map((candidate) =>
+      candidate.id === id
+        ? {
+            ...candidate,
+            position: settled,
+            parentId: parent?.id,
+            data: candidate.data.kind === "block" ? { ...candidate.data, containerId: parent?.id ?? null } : candidate.data,
+          }
+        : candidate,
+    );
+  }
+  for (const containerId of grow) next = growContainerToFit(next, containerId);
+  return next;
+}
+
+/**
+ * Wraps components in a new container drawn around them, so nothing moves on screen; they leave any
+ * container they were in. Containers among the ids are ignored (containers can't be nested). Returns the
+ * same nodes when there is no component to group. The container is added last, so it is the top-most one
+ * where it overlaps another.
+ */
+export function groupIntoContainer(
+  nodes: DiagramNode[],
+  ids: string[],
+  container: { id: string; label: string },
+): DiagramNode[] {
+  const members = nodes
+    .filter((node) => node.type === "block" && ids.includes(node.id))
+    .map((node) => ({ node, abs: absolutePosition(node, nodes) }));
+  if (!members.length) return nodes;
+  const insets = containerInsets();
+  const position = snap({
+    x: Math.min(...members.map((m) => m.abs.x)) - insets.left,
+    y: Math.min(...members.map((m) => m.abs.y)) - insets.top,
+  });
+  const right = Math.max(...members.map((m) => m.abs.x + m.node.size.width));
+  const bottom = Math.max(...members.map((m) => m.abs.y + m.node.size.height));
+  const placed = new Map(members.map(({ node, abs }) => [node.id, { x: abs.x - position.x, y: abs.y - position.y }]));
+
+  const wrapped = nodes.map((node) => {
+    const at = placed.get(node.id);
+    if (!at) return node;
+    return {
+      ...node,
+      position: at,
+      parentId: container.id,
+      data: node.data.kind === "block" ? { ...node.data, containerId: container.id } : node.data,
+    };
+  });
+  return [
+    ...wrapped,
+    {
+      id: container.id,
+      type: "container",
+      position,
+      size: {
+        width: Math.max(CONTAINER_MIN.width, Math.ceil(right - position.x + insets.right)),
+        height: Math.max(CONTAINER_MIN.height, Math.ceil(bottom - position.y + insets.bottom)),
+      },
+      data: { kind: "container", label: container.label },
+    },
+  ];
+}
+
+/** Where a new block should go inside a container: below its lowest child. */
+export function nextSlotInContainer(nodes: DiagramNode[], containerId: string): Position {
+  const children = childrenOf(nodes, containerId);
+  const insets = insetsOf(nodes, containerId);
+  if (!children.length) return { x: insets.left, y: insets.top };
+  const lowest = Math.max(...children.map((c) => c.position.y + c.size.height));
+  return { x: insets.left, y: lowest + LAYOUT_GAP };
+}
+
+/**
+ * Applies a style change to a container. Moving the header to another side shifts the
+ * children and resizes the container, so nothing ends up under the header.
+ */
+export function restyleContainer(nodes: DiagramNode[], containerId: string, patch: ContainerStyle): DiagramNode[] {
+  const container = nodes.find((node) => node.id === containerId);
+  if (!container || container.data.kind !== "container") return nodes;
+  const before = containerInsets(container.data);
+  const after = containerInsets({ ...container.data, ...patch });
+  const dx = after.left - before.left;
+  const dy = after.top - before.top;
+  const hasChildren = nodes.some((node) => node.parentId === containerId);
+
+  return nodes.map((node) => {
+    if (node.id === containerId) {
+      return {
+        ...node,
+        data: { ...node.data, ...patch },
+        size: hasChildren
+          ? {
+              width: Math.max(CONTAINER_MIN.width, node.size.width + dx + after.right - before.right),
+              height: Math.max(CONTAINER_MIN.height, node.size.height + dy + after.bottom - before.bottom),
+            }
+          : node.size,
+      };
+    }
+    if (node.parentId === containerId && (dx || dy)) {
+      return { ...node, position: { x: node.position.x + dx, y: node.position.y + dy } };
+    }
+    return node;
+  });
+}
+
+/**
+ * Moves the given nodes by (dx, dy). A container carries its children, so a child is only moved
+ * when its container isn't. Children stay inside their container's header/padding on the top and
+ * left, and the container grows to fit them on the bottom and right (as when dragging).
+ */
+export function nudgeNodes(nodes: DiagramNode[], ids: string[], dx: number, dy: number): DiagramNode[] {
+  const moving = new Set(ids);
+  const touchedParents = new Set<string>();
+  let next = nodes.map((node) => {
+    if (!moving.has(node.id) || (node.parentId && moving.has(node.parentId))) return node;
+    let x = node.position.x + dx;
+    let y = node.position.y + dy;
+    if (node.parentId) {
+      const insets = insetsOf(nodes, node.parentId);
+      x = Math.max(insets.left, x);
+      y = Math.max(insets.top, y);
+      touchedParents.add(node.parentId);
+    }
+    return { ...node, position: { x, y } };
+  });
+  for (const parentId of touchedParents) next = growContainerToFit(next, parentId);
+  return next;
+}

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { everyNode, getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { createBlankDiagram } from "@/lib/diagram/factory";
-import { LEGEND_PRESETS } from "@/lib/diagram/defaultLegend";
+import { LEGEND_PRESETS } from "@/lib/diagram/features/defaultLegend";
 
 const store = () => useDiagramStore.getState();
 const keys = () => store().diagram.legend.map((entry) => entry.key);

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LogoMark } from "@/components/Logo";
+import { LogoMark } from "@/components/app/Logo";
 import CurrentYear from "./CurrentYear";
 
 // Anchors are absolute ("/#…") so the footer works on pages other than the landing page.

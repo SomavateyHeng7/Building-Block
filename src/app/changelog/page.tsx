@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Footer from "@/components/landing/Footer";
-import { CHANGELOG } from "@/lib/changelog";
+import { CHANGELOG } from "@/lib/site/changelog";
 
 export const metadata: Metadata = {
   title: "What's new · Building Block",

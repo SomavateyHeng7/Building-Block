@@ -1,4 +1,4 @@
-import { downloadDiagramJson } from "./file";
+import { downloadDiagramJson } from "./persistence/file";
 import type { Diagram } from "./types";
 import { parseDiagram } from "./validate";
 

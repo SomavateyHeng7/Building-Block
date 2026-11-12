@@ -11,13 +11,13 @@ import {
   type Orientation,
   type TemplateCategory,
 } from "@/templates";
-import { openDiagramFromDevice } from "@/lib/diagram/file";
-import { pruneRecentTemplates, useRecentTemplates } from "@/lib/recentTemplates";
-import { startFromTemplate } from "@/lib/startTemplate";
-import { ThemeToggle } from "@/components/theme-toggle";
-import BackLink from "@/components/BackLink";
-import TemplatePreview from "@/components/TemplatePreview";
-import { useUnsavedGuard } from "@/components/editor/useUnsavedGuard";
+import { openDiagramFromDevice } from "@/lib/diagram/persistence/file";
+import { pruneRecentTemplates, useRecentTemplates } from "@/lib/editor/recentTemplates";
+import { startFromTemplate } from "@/lib/editor/startTemplate";
+import { ThemeToggle } from "@/components/app/theme-toggle";
+import BackLink from "@/components/app/BackLink";
+import TemplatePreview from "@/components/templates/TemplatePreview";
+import { useUnsavedGuard } from "@/components/editor/shared/useUnsavedGuard";
 
 const CARD =
   "flex h-full flex-col rounded-lg border border-zinc-200 transition-colors hover:border-zinc-400 focus-within:border-zinc-400 dark:border-zinc-800 dark:hover:border-zinc-600 dark:focus-within:border-zinc-600";

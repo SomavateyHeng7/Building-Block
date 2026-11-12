@@ -64,7 +64,7 @@ device, like draw.io's device storage. The app holds the diagram in memory only 
 - Works on desktop, tablet and phone (see [Devices](#devices))
 - Keyboard shortcuts (press `?` in the editor)
 
-The landing page's roadmap works out which levels exist from the editor's code (`src/lib/levels.ts`), so it stays current: L0 (landscape), L1 (connections) and L2 (a component's internal design) are all built.
+The landing page's roadmap works out which levels exist from the editor's code (`src/lib/editor/levels.ts`), so it stays current: L0 (landscape), L1 (connections) and L2 (a component's internal design) are all built.
 
 ## Where your diagrams live
 
@@ -101,7 +101,7 @@ comment and privacy-notice acceptance use `localStorage`, never diagram data, un
 
 The app pages (`/diagrams`, `/templates`, `/editor`) ask people to accept the privacy notice once before use;
 the landing, privacy and contact pages stay open. The acceptance records the notice's version
-(`PRIVACY_VERSION` in `src/lib/consent.ts`): **change it whenever the notice changes**, and everyone is asked
+(`PRIVACY_VERSION` in `src/lib/site/consent.ts`): **change it whenever the notice changes**, and everyone is asked
 again. People can withdraw it on `/privacy`. The waitlist form asks for its own agreement; the contact page gives an email address rather than a form.
 
 ### Diagrams from an earlier version
@@ -149,9 +149,9 @@ leave the browser:
 | `src/app/` | Routes: `/` landing, `/diagrams` start page, `/templates`, `/editor` |
 | `src/components/editor/` | Editor UI: canvas, toolbar, palette, details panel, dialogs |
 | `src/lib/diagram/store.ts` | Diagram state and undo history (Zustand) |
-| `src/lib/diagram/file.ts` | Open, Save, Save as, autosave and unsaved-change tracking |
+| `src/lib/diagram/persistence/file.ts` | Open, Save, Save as, autosave and unsaved-change tracking |
 | `src/lib/diagram/legacy.ts` | Reads and clears diagrams left in `localStorage` by earlier versions |
-| `src/lib/diagram/export.ts` | PNG, PDF, SVG, CSV and JSON export |
+| `src/lib/diagram/export/export.ts` | PNG, PDF, SVG, CSV and JSON export |
 | `src/templates/` | Built-in templates |
 | `tests/` | Unit tests, in folders mirroring `src/` |
 
