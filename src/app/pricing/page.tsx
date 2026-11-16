@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Footer from "@/components/landing/Footer";
 import WaitlistForm from "@/components/landing/WaitlistForm";
-import { PLANS, canSubscribe, formatPrice, type Plan } from "@/lib/site/plans";
+import { COMPANY, salesReplyTime } from "@/lib/site/contact";
+import { PLANS, canSubscribe, formatPrice, isContactSales, type Plan } from "@/lib/site/plans";
 
 export const metadata: Metadata = {
   title: "Pricing · Building Block",
-  description: "Building Block is free. Paid plans for sharing and teams are on the way.",
+  description: "Building Block is free. Plans for companies and enterprises are arranged with us directly.",
 };
 
 /** How people hear about plans that aren't out yet: the waitlist if it's on, else the contact address. */
@@ -24,6 +25,18 @@ function PlanAction({ plan }: { plan: Plan }) {
       <Link href="/diagrams" className={plan.featured ? PRIMARY : SECONDARY}>
         Start drawing
       </Link>
+    );
+  }
+  if (isContactSales(plan)) {
+    return (
+      <div className="flex flex-col gap-2">
+        <Link href={`/contact?plan=${plan.id}`} className={plan.featured ? PRIMARY : SECONDARY}>
+          Contact sales<span className="sr-only"> about {plan.name}: email {COMPANY}</span>
+        </Link>
+        <p className="text-center text-xs text-zinc-500 dark:text-zinc-400" aria-hidden>
+          By email to {COMPANY} · same-day reply
+        </p>
+      </div>
     );
   }
   if (canSubscribe(plan)) {
@@ -64,6 +77,11 @@ function PlanCard({ plan }: { plan: Plan }) {
           <h2 id={`plan-${plan.id}`} className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">
             {plan.name}
           </h2>
+          {isContactSales(plan) && (
+            <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-medium text-sky-900 dark:bg-sky-400/15 dark:text-sky-200">
+              For companies
+            </span>
+          )}
           {comingSoon && (
             <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-400/15 dark:text-amber-200">
               Coming soon
@@ -73,7 +91,13 @@ function PlanCard({ plan }: { plan: Plan }) {
         <p className="text-sm text-zinc-600 dark:text-zinc-400">{plan.audience}</p>
       </div>
       <p className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-        {comingSoon && !plan.price ? <span className="text-xl text-zinc-600 dark:text-zinc-400">Price to be announced</span> : formatPrice(plan)}
+        {isContactSales(plan) ? (
+          <span className="text-xl">{formatPrice(plan)}</span>
+        ) : comingSoon && !plan.price ? (
+          <span className="text-xl text-zinc-600 dark:text-zinc-400">Price to be announced</span>
+        ) : (
+          formatPrice(plan)
+        )}
       </p>
       <ul className="flex flex-1 flex-col gap-2 text-sm text-zinc-700 dark:text-zinc-300">
         {plan.id !== "free" && <li className="font-medium text-zinc-900 dark:text-zinc-100">Everything in Free, plus:</li>}
@@ -91,6 +115,55 @@ function PlanCard({ plan }: { plan: Plan }) {
   );
 }
 
+/** Pro or Team, side by side as "pick this if…", and what Contact sales actually involves. */
+function ChoosePlan() {
+  const paid = PLANS.filter(isContactSales);
+  if (!paid.length) return null;
+  return (
+    <section id="choose" aria-labelledby="choose-title" className="flex scroll-mt-20 flex-col gap-5 rounded-2xl border border-zinc-200 p-6 dark:border-zinc-800">
+      <div className="flex flex-col gap-1">
+        <h2 id="choose-title" className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">
+          {paid.map((plan) => plan.name).join(" or ")}?
+        </h2>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">The question is whether your people work on the same diagrams at the same time.</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {paid.map((plan) => (
+          <div key={plan.id} className="flex flex-col gap-2 rounded-xl bg-zinc-50 p-4 text-sm dark:bg-zinc-900">
+            <p className="font-semibold text-zinc-900 dark:text-zinc-100">Choose {plan.name} if…</p>
+            <p className="flex-1 text-zinc-700 dark:text-zinc-300">{plan.bestFor}</p>
+            <Link href={`/contact?plan=${plan.id}`} className="font-medium text-blue-600 hover:underline dark:text-blue-400">
+              Contact sales about {plan.name} →
+            </Link>
+          </div>
+        ))}
+      </div>
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">Still not sure? Contact sales about either and say so: we&apos;ll suggest one.</p>
+
+      <div className="flex flex-col gap-3 border-t border-zinc-200 pt-5 dark:border-zinc-800">
+        <h3 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">How Contact sales works</h3>
+        <ol className="grid gap-3 text-sm sm:grid-cols-3">
+          {[
+            ["Email " + COMPANY, "Contact sales opens an email to " + COMPANY + " with a few questions filled in: your company, team size and needs."],
+            ["A reply the same working day", salesReplyTime()],
+            ["Your plan and price", "The reply suggests the plan that fits and a price for your company, and answers your questions."],
+          ].map(([title, body], index) => (
+            <li key={title} className="flex gap-3">
+              <span aria-hidden className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background">
+                {index + 1}
+              </span>
+              <span className="flex flex-col gap-0.5">
+                <span className="font-medium text-zinc-900 dark:text-zinc-100">{title}</span>
+                <span className="text-zinc-600 dark:text-zinc-400">{body}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </section>
+  );
+}
+
 export default function PricingPage() {
   const upcoming = PLANS.some((plan) => plan.status === "coming-soon");
   return (
@@ -102,8 +175,11 @@ export default function PricingPage() {
         <header className="flex max-w-2xl flex-col gap-3">
           <h1 className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Pricing</h1>
           <p className="text-zinc-600 dark:text-zinc-400">
-            Everything Building Block does today is free, and stays free. We&apos;re planning paid plans for sharing work and for
-            teams; what&apos;s in them, and the prices, may change before they launch.
+            Everything Building Block does today is free, and stays free. Pro and Team are for companies and enterprises. There&apos;s
+            no checkout: you email {COMPANY}, the company behind Building Block, and we set up a plan and a price for your organisation.{" "}
+            <a href="#choose" className="font-medium text-zinc-900 underline underline-offset-2 dark:text-zinc-100">
+              Pro or Team: which fits?
+            </a>
           </p>
         </header>
 
@@ -112,6 +188,8 @@ export default function PricingPage() {
             <PlanCard key={plan.id} plan={plan} />
           ))}
         </div>
+
+        <ChoosePlan />
 
         {upcoming && WAITLIST_ON && (
           <section id="notify" aria-labelledby="notify-title" className="flex scroll-mt-20 flex-col gap-3 rounded-2xl bg-zinc-50 p-6 dark:bg-zinc-950">

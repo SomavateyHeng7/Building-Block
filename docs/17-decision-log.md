@@ -278,6 +278,11 @@ want to reverse.
 
 ### A plans page before anything is for sale
 
+- **Update, November 2026:** Pro and Team are now sold to companies and enterprises directly (`status:
+  "contact-sales"`): no public price, *Contact sales* opens `/contact?plan=<id>`. **Why:** the buyers are
+  organisations whose needs (team size, live sharing, branding) set the price, and talking to them first avoids
+  building payments, accounts and invoicing before there are customers. Self-serve checkout is still one config change.
+
 - `/pricing` shows Free today and planned paid tiers as *Coming soon*, from `src/lib/site/plans.ts`, with *Notify me* on
   the waitlist. Launching a plan is a price, a status and a payment link in that file; no payments code until then.
 - **Real-time editing together is a Team feature.** It needs a server to relay changes between people, which

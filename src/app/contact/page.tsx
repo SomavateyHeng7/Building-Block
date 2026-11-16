@@ -1,13 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import BackLink from "@/components/app/BackLink";
+import CopyText from "@/components/app/CopyText";
 import Footer from "@/components/landing/Footer";
 import { SOCIAL_LINKS } from "@/lib/site/links";
+import { COMPANY, SALES_QUESTIONS, salesMailto, salesReplyTime } from "@/lib/site/contact";
+import { PLANS, contactSalesPlan, isContactSales, type Plan } from "@/lib/site/plans";
 
-export const metadata: Metadata = {
-  title: "Contact · Building Block",
-  description: "Questions, problems, ideas or privacy requests: get in touch with the Building Block team.",
-};
+type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
+
+export async function generateMetadata({ searchParams }: { searchParams: SearchParams }): Promise<Metadata> {
+  const plan = contactSalesPlan((await searchParams).plan);
+  return plan
+    ? { title: `Contact sales: ${plan.name} · Building Block`, description: `Email ${COMPANY} to set up the ${plan.name} plan for your company.` }
+    : { title: "Contact · Building Block", description: "Questions, problems, ideas or privacy requests: get in touch with the Building Block team." };
+}
 
 /** The address people write to, set at build time. Without it the page points to the website and social pages instead. */
 const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL;
@@ -65,6 +72,100 @@ function ElsewhereLinks() {
   );
 }
 
+/**
+ * For companies and enterprises asking about a paid plan (from Contact sales on /pricing, `?plan=<id>`). Contact
+ * sales means emailing Somatech, so the section says so first, then: which plan (with the other one a click away),
+ * when we reply, what to tell us, and the email itself, with the address to copy for people without a mail app.
+ * Without an address, the page's other channels apply.
+ */
+function SalesSection({ plan }: { plan: Plan }) {
+  const paid = PLANS.filter(isContactSales);
+  return (
+    <section aria-labelledby="sales-title" className="flex flex-col gap-5 rounded-2xl border border-zinc-900 p-5 dark:border-zinc-100">
+      <div className="flex flex-col gap-1">
+        <h2 id="sales-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          Email {COMPANY} about {plan.name}
+        </h2>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          Contact sales means sending an email to {COMPANY}, the company behind Building Block. There&apos;s no form, sign-up or
+          checkout: you write from your own email, and a person at {COMPANY} replies with a plan and a price for your company.
+        </p>
+      </div>
+
+      {paid.length > 1 && (
+        <div role="group" aria-label="Which plan" className="grid gap-2 sm:grid-cols-2">
+          {paid.map((option) => {
+            const current = option.id === plan.id;
+            return (
+              <Link
+                key={option.id}
+                href={`/contact?plan=${option.id}`}
+                aria-current={current ? "page" : undefined}
+                className={`flex flex-col gap-1 rounded-xl border p-3 text-sm transition-colors ${
+                  current
+                    ? "border-zinc-900 bg-zinc-50 dark:border-zinc-100 dark:bg-zinc-900"
+                    : "border-zinc-200 hover:border-zinc-400 dark:border-zinc-800 dark:hover:border-zinc-600"
+                }`}
+              >
+                <span className="flex items-center justify-between gap-2 font-semibold text-zinc-900 dark:text-zinc-100">
+                  {option.name}
+                  <span className={`text-xs font-medium ${current ? "text-emerald-700 dark:text-emerald-400" : "text-blue-600 dark:text-blue-400"}`}>
+                    {current ? "Asking about this" : `Ask about ${option.name} instead`}
+                  </span>
+                </span>
+                <span className="text-zinc-600 dark:text-zinc-400">{option.bestFor}</span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+
+      <p className="flex gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900 dark:bg-emerald-400/10 dark:text-emerald-200">
+        <svg viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2" />
+        </svg>
+        {salesReplyTime()}
+      </p>
+
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">What to tell us (already in the email):</p>
+        <ol className="flex list-decimal flex-col gap-1 pl-5 text-sm text-zinc-700 dark:text-zinc-300">
+          {SALES_QUESTIONS.map((question) => (
+            <li key={question}>{question}</li>
+          ))}
+        </ol>
+      </div>
+
+      {CONTACT_EMAIL ? (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            To:{" "}
+            <span className="font-medium wrap-anywhere text-zinc-900 select-all dark:text-zinc-100">{CONTACT_EMAIL}</span> ({COMPANY})
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <a
+              href={salesMailto(CONTACT_EMAIL, plan)}
+              className="inline-flex items-center gap-2 rounded-full bg-foreground px-6 py-2.5 text-sm font-medium text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc]"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M4 6h16v12H4zM4 7l8 6 8-6" />
+              </svg>
+              Email {COMPANY} about {plan.name}
+            </a>
+            <CopyText text={CONTACT_EMAIL} label="Copy address" />
+          </div>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            The button opens your mail app with the email ready. Using webmail such as Gmail or Outlook on the web? Copy the
+            address and write to it there.
+          </p>
+        </div>
+      ) : (
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">Send these to {COMPANY} through the website or social pages above.</p>
+      )}
+    </section>
+  );
+}
+
 /** The address to write to, and what helps us reply. There's no form: people write from their own email. */
 function EmailSection() {
   if (!CONTACT_EMAIL) {
@@ -105,6 +206,14 @@ function EmailSection() {
           expected and what happened, and which browser you use. Please don&apos;t paste confidential diagram content.
         </li>
         <li>
+          <span className="font-medium text-zinc-800 dark:text-zinc-200">A paid plan for your company?</span> Pro and Team are
+          arranged directly:{" "}
+          <Link href="/contact?plan=team" className="font-medium text-zinc-900 underline underline-offset-2 dark:text-zinc-100">
+            contact sales
+          </Link>
+          .
+        </li>
+        <li>
           <span className="font-medium text-zinc-800 dark:text-zinc-200">A privacy or data request?</span> For example, removing your
           email from the waitlist. We don&apos;t hold any diagrams, so there are none to delete.
         </li>
@@ -127,32 +236,50 @@ const HELP = [
   { title: "What happens to my data?", body: "Your diagrams never leave your device. The privacy notice explains the rest.", href: "/privacy", link: "Privacy notice" },
 ];
 
-export default function ContactPage() {
+export default async function ContactPage({ searchParams }: { searchParams: SearchParams }) {
+  const plan = contactSalesPlan((await searchParams).plan);
   return (
     <div className="flex min-h-full w-full flex-1 flex-col">
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-10 px-4 py-12 sm:px-6 sm:py-16">
-        <BackLink href="/">Home</BackLink>
+        {plan ? <BackLink href="/pricing">Pricing</BackLink> : <BackLink href="/">Home</BackLink>}
         <header className="flex flex-col gap-3">
-          <h1 className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Contact us</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">{plan ? "Contact sales" : "Contact us"}</h1>
           <p className="text-zinc-600 dark:text-zinc-400">
-            Questions, problems, ideas or privacy requests: email us and we&apos;ll reply. Some answers are right here too.
+            {plan
+              ? `Pro and Team are bought by emailing ${COMPANY}. Here's how, and when to expect an answer.`
+              : "Questions, problems, ideas, privacy requests or a plan for your company: email us and we'll reply. Some answers are right here too."}
           </p>
-          <ElsewhereLinks />
+          {/* On the sales page the email is the way to reach us; the other channels only stand in when there's no address. */}
+          {(!plan || !CONTACT_EMAIL) && <ElsewhereLinks />}
         </header>
 
-        <section aria-label="Before you write" className="grid gap-3 sm:grid-cols-2">
-          {HELP.map((item) => (
-            <div key={item.title} className="rounded-xl border border-zinc-200 p-4 text-sm dark:border-zinc-800">
-              <p className="font-semibold text-zinc-900 dark:text-zinc-100">{item.title}</p>
-              <p className="mt-1 text-zinc-600 dark:text-zinc-400">{item.body}</p>
-              <Link href={item.href} className="mt-2 inline-block font-medium text-blue-600 hover:underline dark:text-blue-400">
-                {item.link} →
-              </Link>
-            </div>
-          ))}
-        </section>
+        {plan && <SalesSection plan={plan} />}
 
-        <EmailSection />
+        {!plan && (
+          <section aria-label="Before you write" className="grid gap-3 sm:grid-cols-2">
+            {HELP.map((item) => (
+              <div key={item.title} className="rounded-xl border border-zinc-200 p-4 text-sm dark:border-zinc-800">
+                <p className="font-semibold text-zinc-900 dark:text-zinc-100">{item.title}</p>
+                <p className="mt-1 text-zinc-600 dark:text-zinc-400">{item.body}</p>
+                <Link href={item.href} className="mt-2 inline-block font-medium text-blue-600 hover:underline dark:text-blue-400">
+                  {item.link} →
+                </Link>
+              </div>
+            ))}
+          </section>
+        )}
+
+        {plan ? (
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            Not about a plan?{" "}
+            <Link href="/contact" className="font-medium text-zinc-900 underline underline-offset-2 dark:text-zinc-100">
+              Contact us about anything else
+            </Link>
+            .
+          </p>
+        ) : (
+          <EmailSection />
+        )}
 
       </main>
       <Footer />

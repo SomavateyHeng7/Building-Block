@@ -1,6 +1,6 @@
 /**
- * The plans on /pricing, in one place. Today only Free exists; the others are ideas for later, shown as
- * "Coming soon" with a way to be told when they launch.
+ * The plans on /pricing, in one place. Free is self-serve; the paid plans are sold to companies and enterprises
+ * directly (`status: "contact-sales"`): no public price, and a Contact sales button that opens /contact?plan=<id>.
  *
  * **Going live with a plan:** give it a `price`, set `status: "available"` and a `checkoutUrl` (e.g. a Stripe
  * Payment Link). The page then shows the price and a Subscribe button instead of "Coming soon". Taking money also
@@ -29,7 +29,13 @@ export interface Plan {
   audience: string;
   /** Unset for a plan without a price yet. Free has `amount: 0`. */
   price?: PlanPrice;
-  status: "available" | "coming-soon";
+  /**
+   * `available`: self-serve (Start drawing, or Subscribe once priced). `contact-sales`: sold directly to companies,
+   * so the page shows "Custom pricing" and Contact sales. `coming-soon`: not out yet, with Notify me.
+   */
+  status: "available" | "contact-sales" | "coming-soon";
+  /** One line on who should pick it, so Pro and Team are easy to tell apart. */
+  bestFor?: string;
   /** What it adds; for paid plans, on top of the plan before it. */
   features: string[];
   /** Where Subscribe goes once the plan is available (an https link to the payment provider). */
@@ -68,8 +74,9 @@ export const PLANS: Plan[] = [
   {
     id: "pro",
     name: "Pro",
-    audience: "For architects who share their work",
-    status: "coming-soon",
+    audience: "For companies whose architects share their work",
+    status: "contact-sales",
+    bestFor: "Architects who each work on their own diagrams and share the results: reused templates, your branding on exports, and history. Diagrams stay on each person's device.",
     featured: true,
     features: [
       "Your own templates and colour legends, reused across diagrams",
@@ -80,8 +87,9 @@ export const PLANS: Plan[] = [
   {
     id: "team",
     name: "Team",
-    audience: "For architecture teams",
-    status: "coming-soon",
+    audience: "For architecture teams and enterprises",
+    status: "contact-sales",
+    bestFor: "Teams who work on the same diagrams together: live editing, a shared library, comments and review, and one set of categories for everyone.",
     features: [
       "Real-time editing together: everyone's changes appear live on the same diagram",
       "A shared library of diagrams and templates",
@@ -91,9 +99,10 @@ export const PLANS: Plan[] = [
   },
 ];
 
-/** "Free", "$9 / month", "$12 per person / month", or "Coming soon" without a price. */
+/** "Free", "$9 / month", "$12 per person / month", "Custom pricing" for contact-sales, or "Coming soon" without a price. */
 export function formatPrice(plan: Plan): string {
   const { price } = plan;
+  if (plan.status === "contact-sales") return "Custom pricing";
   if (!price) return "Coming soon";
   if (price.amount === 0) return "Free";
   const amount = new Intl.NumberFormat("en", {
@@ -107,6 +116,17 @@ export function formatPrice(plan: Plan): string {
 /** A plan people can subscribe to now: available, priced above zero, with an https checkout link. */
 export function canSubscribe(plan: Plan): boolean {
   return plan.status === "available" && !!plan.price && plan.price.amount > 0 && !!plan.checkoutUrl?.startsWith("https://");
+}
+
+/** A plan sold directly to companies, by talking to us rather than checking out. */
+export function isContactSales(plan: Plan): boolean {
+  return plan.status === "contact-sales";
+}
+
+/** The contact-sales plan a `?plan=` value names, if any (so /contact can say which plan someone asked about). */
+export function contactSalesPlan(id: string | string[] | undefined): Plan | undefined {
+  if (typeof id !== "string") return undefined;
+  return PLANS.find((plan) => plan.id === id && isContactSales(plan));
 }
 
 /** The plan this browser is on. There are no accounts yet, so everyone is on Free. */

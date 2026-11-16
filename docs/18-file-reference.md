@@ -36,8 +36,8 @@ Every file in the repository and what it is for. Details are in the linked pages
 | `not-found.tsx` | 404 page |
 | `privacy/page.tsx` | Privacy notice and acceptance box |
 | `privacy/WithdrawConsent.tsx` | Shows when consent was given; withdraw button |
-| `contact/page.tsx` | Contact page: self-help cards, the address to email |
-| `pricing/page.tsx` | Plans page: Free and coming-soon plans, Notify me, Subscribe once a plan is live |
+| `contact/page.tsx` | Contact page: self-help cards, the address to email; with `?plan=` from Contact sales, a Contact sales page for that plan |
+| `pricing/page.tsx` | Plans page: Free, Contact sales for Pro and Team (to `/contact?plan=`), Notify me for coming-soon plans, Subscribe once a plan is self-serve |
 | `maintenance/page.tsx` | Maintenance page (dynamic) |
 | `maintenance/MaintenanceStatus.tsx` | Expected end time, Try again, 30-second check |
 | `favicon.ico`, `icon.svg`, `apple-icon.png` | Site icons (Next.js file conventions) |
@@ -55,6 +55,7 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 | `app/Analytics.tsx` | Cloudflare Web Analytics beacon, with a token, in production, unless the browser opts out ([operations](16-operations.md#monitoring-visits)) |
 | `app/ToastViewport.tsx` | Renders toasts; per-toast timers that pause ([notifications](12-notifications.md)) |
 | `app/BackLink.tsx` | The "← Home" / "← Start" button at the top of a page |
+| `app/CopyText.tsx` | A Copy button that says "Copied" in place (the contact address, for people without a mail app) |
 | `templates/TemplatePreview.tsx` | SVG preview of a template's first tab |
 | `app/Logo.tsx` | The brand mark (`LogoMark`) |
 | `app/theme-provider.tsx` | Client wrapper around `next-themes`' provider (server layouts can't import it directly) |
@@ -141,7 +142,8 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 | `site/csp.ts` | The pages' Content-Security-Policy for a nonce; `NONCE_HEADER` ([security](14-security.md#content-security-policy)) |
 | `editor/levels.ts` | Roadmap levels computed from store actions |
 | `site/maintenance.ts` | Reads maintenance settings; `Retry-After`; upcoming end |
-| `site/plans.ts` | The plans on `/pricing`; `formatPrice`, `canSubscribe`; plan limits (`checkSequenceCodeLines`, not enforced while `LIMITS_ENFORCED` is false) |
+| `site/contact.ts` | The Contact sales email: `SALES_QUESTIONS`, `salesEmail`, `salesMailto` |
+| `site/plans.ts` | The plans on `/pricing`; `formatPrice`, `canSubscribe`, `isContactSales`, `contactSalesPlan`; plan limits (`checkSequenceCodeLines`, not enforced while `LIMITS_ENFORCED` is false) |
 
 ## `src/templates/`
 

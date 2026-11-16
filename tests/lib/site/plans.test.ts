@@ -5,9 +5,11 @@ import {
   PLANS,
   canSubscribe,
   checkSequenceCodeLines,
+  contactSalesPlan,
   countCodeLines,
   currentPlan,
   formatPrice,
+  isContactSales,
   type Plan,
 } from "@/lib/site/plans";
 
@@ -32,6 +34,29 @@ describe("plans", () => {
     expect(canSubscribe(base)).toBe(false);
     expect(canSubscribe({ ...base, checkoutUrl: "http://buy.example.com/pro" })).toBe(false);
     expect(canSubscribe({ ...base, status: "coming-soon", checkoutUrl: "https://buy.example.com/pro" })).toBe(false);
+  });
+
+  it("sell the paid plans to companies directly, with Contact sales and no public price", () => {
+    const paid = PLANS.filter((plan) => plan.id !== "free");
+    expect(paid.map((plan) => plan.id)).toEqual(["pro", "team"]);
+    for (const plan of paid) {
+      expect(isContactSales(plan)).toBe(true);
+      expect(formatPrice(plan)).toBe("Custom pricing");
+      expect(canSubscribe(plan)).toBe(false);
+    }
+    expect(isContactSales(PLANS[0])).toBe(false);
+    // Each says who should pick it, and they say different things, so buyers can tell them apart.
+    expect(paid.every((plan) => plan.bestFor)).toBe(true);
+    expect(new Set(paid.map((plan) => plan.bestFor)).size).toBe(paid.length);
+  });
+
+  it("find the plan /contact?plan= asks about, only for contact-sales plans", () => {
+    expect(contactSalesPlan("team")?.name).toBe("Team");
+    expect(contactSalesPlan("pro")?.name).toBe("Pro");
+    expect(contactSalesPlan("free")).toBeUndefined();
+    expect(contactSalesPlan("nope")).toBeUndefined();
+    expect(contactSalesPlan(undefined)).toBeUndefined();
+    expect(contactSalesPlan(["team", "pro"])).toBeUndefined();
   });
 
   it("count lines of code without the blank ones", () => {

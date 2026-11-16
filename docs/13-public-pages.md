@@ -28,13 +28,26 @@ year would be stale until the next deploy.
 ## Pricing — `src/app/pricing/page.tsx` and `src/lib/site/plans.ts`
 
 A server component, pre-rendered, not behind the consent gate. One card per plan in `PLANS`: today **Free** (the whole
-app) and **Pro** and **Team**, marked *Coming soon* with "Price to be announced". The intro says what's free stays
-free and that plans and prices may change.
+app) and **Pro** and **Team**, which are sold to companies and enterprises directly (`status: "contact-sales"`):
+marked *For companies*, priced "Custom pricing", with no public price. The intro says what's free stays free and that
+Pro and Team are arranged with us.
 
-- **Buttons:** Free → *Start drawing* (`/diagrams`). A plan that isn't out yet → *Notify me*, which jumps to a
-  waitlist form at the bottom (`WaitlistForm` with `source: "pricing"`, so those signups can be told apart); without
-  a waitlist URL, *Ask about …* emails the contact address; with neither, no button.
-- **Going live with a plan:** in `plans.ts`, give it a `price`, `status: "available"` and a `checkoutUrl` (e.g. a
+- **Buttons:** Free → *Start drawing* (`/diagrams`). A contact-sales plan → *Contact sales*, which opens
+  `/contact?plan=<id>`. **Contact sales means emailing Somatech** (`COMPANY` in `src/lib/site/contact.ts`), and both
+  pages say so: under the button ("By email to Somatech · same-day reply"), in the intro, and in "How
+  Contact sales works". A **"Pro or Team?"** section (`#choose`, linked from the intro) puts each plan's `bestFor`
+  (in `plans.ts`) side by side (the deciding question: do people work on the same diagrams at the same time?).
+- **Reply time:** the same working day, Monday to Friday 9:00–17:00 GMT+7 (`SALES_HOURS`, worded by
+  `salesReplyTime()`); change the hours or time zone there only. The general contact email still says two working days.
+- **Contact sales page** (`/contact?plan=<id>`; `contactSalesPlan` ignores unknown or free ids, so those get the normal
+  page): title and back link point to Pricing; "Email Somatech about <Plan>" says what Contact sales is, lets you
+  switch between Pro and Team, shows the reply time, lists what to tell us (`SALES_QUESTIONS`), and the email
+  pre-filled with them (`salesMailto`), "To:" the address, plus **Copy address** (`CopyText`) because a mailto link
+  does nothing without a mail app. Help cards, social links and the general email are hidden, with a link to the
+  normal contact page. The normal page's email tips link to Contact sales. A `coming-soon` plan → *Notify me*, which
+  jumps to a waitlist form at the bottom (`WaitlistForm` with `source: "pricing"`); without a waitlist URL, *Ask about
+  …* emails the contact address; with neither, no button. The waitlist form only shows while a plan is coming soon.
+- **Self-serve checkout instead:** in `plans.ts`, give a plan a `price`, `status: "available"` and a `checkoutUrl` (e.g. a
   Stripe Payment Link). The card then shows the price and **Subscribe** (`canSubscribe` checks all three, and that the
   link is https). Before taking money: terms of sale, the privacy notice (the payment provider becomes a processor;
   bump `PRIVACY_VERSION`), and tax and invoicing for where you sell.
