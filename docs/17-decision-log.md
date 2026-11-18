@@ -91,9 +91,16 @@ want to reverse.
   (`useRenderEverything`) and waits for the nodes and connections to be on the page, not for React Flow's
   measurements (sizes are known up front now).
 
-### One level of container nesting
+### Containers nest in containers
 
-- L0 groups systems into domains; deeper structure belongs in L2. Keeps every layout calculation simple.
+- **Before:** one level only (L0 groups systems into domains; deeper structure was left to L2).
+- **Decision:** containers can sit in containers, any depth. People group by more than one thing at once (a region
+  holding accounts holding VPCs; a domain holding sub-domains), and L2 is about what one component is made of, not
+  how the landscape is grouped.
+- **How:** positions stay relative to the direct parent; `absolutePosition` adds up the chain. Every function that
+  could make a box poke out grows its container and then each one around it. A drop never puts a box into
+  anything moving with the drag, so a container can't end up inside its own contents; the validator breaks any
+  loop a file has. React Flow needs parents listed first, so `toFlowNodes` orders containers with `parentsFirst`.
 
 ### Components can leave containers
 
@@ -178,7 +185,7 @@ want to reverse.
 - **Why split by type:** draw.io files carry positions, containers and colours, so architecture keeps its layout;
   Mermaid flowcharts have no positions and would need an auto-layout step. Mermaid's `sequenceDiagram` is how most
   people already write sequences, and maps directly onto steps.
-- **Lossy on purpose, and says so:** nested containers are lifted (one level here), groups dissolved, free text and
+- **Lossy on purpose, and says so:** nested containers are lifted (draw.io import still keeps one level), groups dissolved, free text and
   loose arrows left out, Mermaid's colour boxes (`rect`, `box`) dropped (their `loop`/`alt`/`opt` frames are kept,
   since [sequence frames](#sequence-tabs-live-like-mermaid-with-frames-and-editable-without-code)). Each import
   lists what it changed in its toast.
@@ -404,6 +411,16 @@ want to reverse.
   inspiration for editing (shapes and quick add), not for drawing. The look switch, `DiagramSection.look`, draw.io's
   palette row and its outline colours were removed; a `look` in a file from that version is ignored.
 - **Consequences:** quick add needed a new trigger: it shows on tabs with flowchart shapes (`isFlowchart`).
+
+### Quick add and following sides on every tab, as in Visio
+
+- **Context:** asked for after comparing with Visio: architecture tabs had no one-step way to add a connected
+  component, and a connection's sides were fixed when drawn, so moving a component left lines looping round it.
+- **Decision:** the quick-add arrows show on every tab, and can be dragged onto a component to connect it or onto
+  the canvas to place the new one. Connections drawn onto the facing sides follow their components (`autoSides`);
+  ones drawn to other sides keep them. This replaces the earlier "quick add only on flowchart tabs", whose reason
+  (changing how L0 is edited without being asked) no longer holds.
+- **Consequences:** files from before keep fixed sides; the details panel's *Sides* switch turns following on.
 
 ### Flowchart editing modelled on draw.io
 

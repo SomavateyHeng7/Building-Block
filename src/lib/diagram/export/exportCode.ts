@@ -44,6 +44,17 @@ function caption(edge: DiagramEdge): string {
 
 const mermaidText = (value: string) => oneLine(value).replace(/"/g, "#quot;");
 
+/**
+ * The containers directly in `parentId` (on the canvas when undefined). A container whose parent is missing
+ * counts as on the canvas, so nothing is left out.
+ */
+function innerContainers(nodes: readonly DiagramNode[], parentId: string | undefined): DiagramNode[] {
+  const has = (id: string | undefined) => !!id && nodes.some((node) => node.id === id && node.type === "container");
+  return nodes.filter(
+    (node) => node.type === "container" && (parentId ? node.parentId === parentId : !has(node.parentId)),
+  );
+}
+
 /** A Mermaid `flowchart LR`. */
 export function flowchartMermaid(canvas: Canvas): string {
   const ids = codeIds(canvas.nodes);
@@ -62,11 +73,14 @@ export function flowchartMermaid(canvas: Canvas): string {
       : `[${text}]`;
     lines.push(`${indent}${ids.get(item.id)}${drawn}`);
   };
-  for (const container of canvas.nodes.filter((item) => item.type === "container")) {
-    lines.push(`  subgraph ${ids.get(container.id)}["${mermaidText(container.data.label)}"]`);
-    for (const child of canvas.nodes.filter((item) => item.parentId === container.id && item.type === "block")) node(child, "    ");
-    lines.push("  end");
-  }
+  // Containers become subgraphs, nested as they are on the canvas.
+  const subgraph = (container: DiagramNode, indent: string) => {
+    lines.push(`${indent}subgraph ${ids.get(container.id)}["${mermaidText(container.data.label)}"]`);
+    for (const inner of innerContainers(canvas.nodes, container.id)) subgraph(inner, `${indent}  `);
+    for (const child of canvas.nodes.filter((item) => item.parentId === container.id && item.type === "block")) node(child, `${indent}  `);
+    lines.push(`${indent}end`);
+  };
+  for (const container of innerContainers(canvas.nodes, undefined)) subgraph(container, "  ");
   for (const item of canvas.nodes.filter((candidate) => candidate.type === "block" && !canvas.nodes.some((parent) => parent.id === candidate.parentId))) {
     node(item, "  ");
   }
@@ -98,11 +112,14 @@ export function plantUml(canvas: Canvas): string {
     const technology = item.data.technology ?? "";
     lines.push(`${indent}Container(${ids.get(item.id)}, "${pumlText(item.data.label)}", "${pumlText(technology)}", "${pumlText(item.data.description ?? "")}")`);
   };
-  for (const container of canvas.nodes.filter((item) => item.type === "container")) {
-    lines.push(`Boundary(${ids.get(container.id)}, "${pumlText(container.data.label)}") {`);
-    for (const child of canvas.nodes.filter((item) => item.parentId === container.id && item.type === "block")) box(child, "  ");
-    lines.push("}");
-  }
+  // Containers become boundaries, nested as they are on the canvas.
+  const boundary = (container: DiagramNode, indent: string) => {
+    lines.push(`${indent}Boundary(${ids.get(container.id)}, "${pumlText(container.data.label)}") {`);
+    for (const inner of innerContainers(canvas.nodes, container.id)) boundary(inner, `${indent}  `);
+    for (const child of canvas.nodes.filter((item) => item.parentId === container.id && item.type === "block")) box(child, `${indent}  `);
+    lines.push(`${indent}}`);
+  };
+  for (const container of innerContainers(canvas.nodes, undefined)) boundary(container, "");
   for (const item of canvas.nodes.filter((candidate) => candidate.type === "block" && !canvas.nodes.some((parent) => parent.id === candidate.parentId))) {
     box(item, "");
   }

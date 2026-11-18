@@ -40,7 +40,7 @@ New to the codebase? Read 1 → 4 first, then whichever area you're working on.
 | --- | --- |
 | **Diagram** | One document: a name, a legend and one or more tabs. Saved as one `.json` file. |
 | **Tab** / **section** | One canvas inside a diagram (e.g. "Current" and "Target"). The code calls it a *section*; the UI calls it a *tab*. |
-| **Container** | A box that groups components (e.g. "Core Systems"). Containers can't be nested. |
+| **Container** | A box that groups components (e.g. "Core Systems"). Containers can hold other containers. |
 | **Component** / **block** | A box for a system or service. The code calls it a *block*; the UI calls it a *component*. |
 | **Node** | A container or a component: anything drawn on the canvas as a box. |
 | **Connection** / **edge** | A line between two components. The code calls it an *edge* (React Flow's word). |

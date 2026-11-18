@@ -284,7 +284,7 @@ button, a, summary, [role="button"], [role="tab"], [role="menuitem"], label {
   }
 }
 
-/* Quick-add arrows on flowchart tabs (as in draw.io): shown while a shape is hovered or selected. */
+/* Quick-add arrows (as in Visio and draw.io): shown while a component is hovered or selected. */
 .bb-quick-add {
   opacity: 0;
   pointer-events: none;
@@ -297,4 +297,10 @@ button, a, summary, [role="button"], [role="tab"], [role="menuitem"], label {
 }
 .react-flow__node.dragging .bb-quick-add {
   opacity: 0;
+}
+
+/* An arrow being dragged stays visible (and keeps getting the pointer) after the pointer leaves its component. */
+.react-flow__node .bb-quick-add.bb-quick-add-dragging {
+  opacity: 1;
+  pointer-events: all;
 }

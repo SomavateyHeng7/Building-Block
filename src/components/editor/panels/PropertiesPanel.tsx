@@ -744,6 +744,11 @@ const SHAPE_OPTIONS: { value: ConnectionShape; label: string; icon: string }[] =
   { value: "straight", label: "Straight", icon: "M4 18 20 6" },
 ];
 
+const SIDE_OPTIONS: { value: "auto" | "fixed"; label: string }[] = [
+  { value: "auto", label: "Follow components" },
+  { value: "fixed", label: "Stay put" },
+];
+
 const LINE_OPTIONS: { value: ConnectionLineStyle; label: string }[] = [
   { value: "solid", label: "Solid" },
   { value: "dashed", label: "Dashed" },
@@ -892,21 +897,34 @@ function ConnectionPanel({ edge, action }: { edge: DiagramEdge; action?: ReactNo
         <span className="text-[11px] font-normal text-zinc-400">
           Drag the blue dot on the line to move it clear of other boxes; double-click the dot to put it back.
         </span>
-        <div className="flex flex-wrap gap-1.5">
-          <button
-            type="button"
-            className={ACTION_BUTTON}
-            title="Attach both ends to the sides that face each other"
-            onClick={() => updateConnection(edge.id, { ...suggestConnectionSides(section.nodes, edge.source, edge.target), bend: undefined })}
-          >
-            Attach to nearest sides
-          </button>
-          {edge.bend && (
+        {edge.bend && (
+          <div className="flex flex-wrap gap-1.5">
             <button type="button" className={ACTION_BUTTON} onClick={() => updateConnection(edge.id, { bend: undefined })}>
               Reset line
             </button>
-          )}
-        </div>
+          </div>
+        )}
+      </div>
+      <div className={FIELD_LABEL}>
+        Sides
+        <Segmented
+          label="Sides"
+          options={SIDE_OPTIONS}
+          value={edge.autoSides ? "auto" : "fixed"}
+          onChange={(sides) =>
+            updateConnection(
+              edge.id,
+              sides === "auto"
+                ? { autoSides: true, ...suggestConnectionSides(section.nodes, edge.source, edge.target) }
+                : { autoSides: undefined },
+            )
+          }
+        />
+        <span className="text-[11px] font-normal text-zinc-400">
+          {edge.autoSides
+            ? "The ends move to the sides that face each other as you move the components."
+            : "The ends stay on the sides they're on. Drag an end onto the facing side to make it follow again."}
+        </span>
       </div>
       <div className={FIELD_LABEL}>
         Line
@@ -942,7 +960,7 @@ function MultiSelectionPanel({ ids, action }: { ids: string[]; action?: ReactNod
   const groupNodes = useDiagramStore((state) => state.groupNodes);
   const nodes = useDiagramStore((state) => getActiveSection(state.diagram).nodes);
   const selected = nodes.filter((node) => ids.includes(node.id));
-  const canGroup = selected.some((node) => node.type === "block");
+  const canGroup = selected.some((node) => node.type !== "text");
   const canUngroup = selected.some((node) => node.type === "container" || node.parentId);
 
   return (

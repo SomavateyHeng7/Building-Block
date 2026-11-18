@@ -95,11 +95,33 @@ describe("parseDiagram", () => {
     expect(block.data.kind === "block" && block.data.containerId).toBe("c1");
   });
 
-  it("keeps a container-in-container on screen by detaching it with an absolute position", () => {
+  it("keeps a container nested in another container", () => {
     const outer = node({ id: "o", type: "container", position: { x: 100, y: 100 }, data: { kind: "container", label: "O" } });
     const inner = node({ id: "i", type: "container", parentId: "o", position: { x: 5, y: 6 }, data: { kind: "container", label: "I" } });
-    const { diagram } = parseDiagram(diagramWith([outer, inner]));
-    const result = diagram.sections[0].nodes.find((n) => n.id === "i")!;
+    const { diagram, fixes } = parseDiagram(diagramWith([inner, outer]));
+    const nodes = diagram.sections[0].nodes;
+    const result = nodes.find((n) => n.id === "i")!;
+    expect(result.parentId).toBe("o");
+    expect(result.position).toEqual({ x: 5, y: 6 });
+    // Listed after the container it's in, as React Flow needs.
+    expect(nodes.map((n) => n.id)).toEqual(["o", "i"]);
+    expect(fixes.join()).not.toMatch(/out of a container/);
+  });
+
+  it("breaks a loop of containers inside each other", () => {
+    const a = node({ id: "a", type: "container", parentId: "b", data: { kind: "container", label: "A" } });
+    const b = node({ id: "b", type: "container", parentId: "a", data: { kind: "container", label: "B" } });
+    const { diagram, fixes } = parseDiagram(diagramWith([a, b]));
+    const nodes = diagram.sections[0].nodes;
+    expect(nodes.filter((n) => n.parentId)).toHaveLength(1);
+    expect(fixes.join()).toMatch(/out of a container/);
+  });
+
+  it("takes a box out of a component it claims to be in", () => {
+    const parent = node({ id: "p", position: { x: 100, y: 100 } });
+    const child = node({ id: "k", parentId: "p", position: { x: 5, y: 6 } });
+    const { diagram } = parseDiagram(diagramWith([parent, child]));
+    const result = diagram.sections[0].nodes.find((n) => n.id === "k")!;
     expect(result.parentId).toBeUndefined();
     expect(result.position).toEqual({ x: 105, y: 106 });
   });

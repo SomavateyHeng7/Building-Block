@@ -11,6 +11,7 @@ const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: "C", action: "Add a container" },
   { keys: "T", action: "Add a text box; double-click it (or press Enter) to write, Ctrl/⌘ + Enter or Esc to finish" },
   { keys: "Drag from a dot", action: "Connect a component to another (dots appear on hover, selection or touch)" },
+  { keys: "Click / drag a blue arrow", action: "Add a connected component that way, or drag it onto another component to connect them" },
   { keys: "Double-click a line", action: "Type what flows and the protocol on the line (or select it and press Enter)" },
   { keys: "Arrow keys", action: "Nudge the selection by 1 px (hold Shift for 10 px)" },
   { keys: "Drag a box", action: "Snaps to other boxes' edges and middles, showing guides and gaps in px (hold Alt to move freely)" },

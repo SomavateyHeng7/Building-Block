@@ -22,11 +22,26 @@ the canvas and the file reader all refuse a line to one.
 **Creating one:**
 
 - Drag from one of a component's four dots (handles) to another component. `ConnectionMode.Loose` means any dot can
-  start or end a connection; the sides are stored (`sourceSide`, `targetSide`) so the line keeps its route.
+  start or end a connection. The sides are stored (`sourceSide`, `targetSide`); see **Sides** below for when they
+  change.
 - Or select a component and use **Connect to…** in the details panel, which picks facing sides
   (`suggestConnectionSides`).
-- On a flowchart tab, click one of a shape's blue quick-add arrows to add a new shape that way, already connected
-  (`addConnectedBlock`, see [flowcharts](07-editor-ui.md#flowcharts)).
+- Click one of a component's blue quick-add arrows to add a new one that way, already connected; drag the arrow
+  onto another component to connect the two, or onto empty canvas (or into a container) to add the new one there
+  (`addConnectedBlock`, see [quick add](07-editor-ui.md#flowcharts)).
+
+**Sides (Visio's dynamic glue):** a connection with `autoSides` follows its components: whenever either end moves,
+`commit` runs `withAutoSides` (`layout/autoSides.ts`), which sets both sides to the ones facing each other
+(`facingSides`), in canvas coordinates, on every tab and inside internal designs. Unchanged canvases and connections
+keep their objects, so it costs nothing on most edits. A connection gets `autoSides` when it's drawn, or an end is
+moved, onto the facing sides (or without sides, as Connect to… and quick add do); drawn onto any other sides on
+purpose (a line round the back, a loop), it keeps them. The details panel's **Sides** switch (*Follow components* /
+*Stay put*) changes it either way. Files from before keep their sides as they were.
+
+- **Why decided by the sides drawn, not always on:** most lines join facing sides, and those should follow; a line
+  drawn to other sides was drawn that way on purpose, and turning it the moment it's let go would undo the choice.
+- **Why stored, not worked out while drawing:** exports, previews, the code exports and parallel-line spacing all
+  read `sourceSide`/`targetSide`, so the saved file says what's on screen.
 
 `addConnection` refuses self-connections, text boxes, and an *exact* duplicate (same ends **and** sides). Two
 connections between the same components on different sides are allowed (e.g. a request and a separate event
@@ -40,8 +55,8 @@ caption is "What flows · Protocol" (`connectionCaption`).
 just above its label (`edges/ConnectionEdge.tsx`): dragging it stores `bend`, the offset of the line's middle from
 its default position, in whole pixels, coalesced into one undo step per drag. Double-clicking the dot, or **Reset
 line**, removes it. The geometry is `connectionPath` in `flowAdapter.ts` (tested): a right-angled line moves its
-middle segment to the point, and curved and straight lines pass through it. **Attach to nearest sides** sets the
-facing sides (`suggestConnectionSides`) and clears the bend.
+middle segment to the point, and curved and straight lines pass through it. A line whose sides follow its
+components keeps its bend when they turn.
 
 - **Why an offset, not a fixed waypoint:** a waypoint in canvas coordinates is left behind when a component moves;
   an offset from the default middle moves with the line.

@@ -5,20 +5,24 @@ Pure functions that take a node list and return a new one. The store and the can
 
 ## Nesting rules
 
-- Only **components and text boxes** sit inside containers, and only **one level** deep (no containers in
-  containers). A text box goes in and out the same way a component does (dropped on one, dragged off it), so a
-  caption moves with its container. **Tidy layout** arranges only the components; text boxes stay where they were put.
-- A nested component's `position` is **relative to its container**; `absolutePosition(node, nodes)` adds the
-  container's position to get canvas coordinates.
+- **Components, text boxes and containers** sit inside containers, and containers **nest to any depth**. Each goes
+  in and out the same way (dropped on one, dragged off it), so a caption or a sub-group moves with its container.
+  **Tidy layout** arranges the components and nested containers; text boxes stay where they were put.
+- A nested box's `position` is **relative to its direct container**; `absolutePosition(node, nodes)` adds up the
+  positions of every container around it to get canvas coordinates. `ancestorIds`, `nestingDepth` and
+  `hasAncestorIn` answer "what is it in?" (all stop at a loop or a missing parent).
 - Inside a container, components stay clear of the **header** and **padding**. `containerInsets(style)` gives
   the space on each side: `CONTAINER_HEADER = 40` on the header's side, `CONTAINER_PADDING = 16` on the others.
   Moving the header to another side changes which side is 40.
 - Containers grow to fit their components; they **never clip** them. The resize handles have minimum sizes worked
   out from the components inside (`ContainerNode`), and every operation that could push a component past an edge
-  calls `growContainerToFit` afterwards.
+  calls `growContainerToFit` afterwards, which grows each container up the chain in turn.
+- A box moving with a container it's in (directly or further out) is carried, never moved again on its own: drags,
+  nudges and arrange all check `hasAncestorIn`.
+- Deleting or ungrouping a container hands what was in it to the next container out (or the canvas), where it is
+  on screen.
 
-**Why one level only:** L0 diagrams group systems into domains or layers; deeper nesting is what L2 (internal
-designs) is for. It also keeps every algorithm here simple: a node's canvas position is at most one addition away.
+See the [decision log](17-decision-log.md#containers-nest-in-containers) for why nesting is allowed.
 
 ## Constants
 
@@ -34,8 +38,9 @@ designs) is for. It also keeps every algorithm here simple: a node's canvas posi
 
 ### `growContainerToFit(nodes, containerId)`
 
-Grows (never shrinks) a container so its components fit, with padding on the right and bottom. Returns the same
-node objects when nothing needs to grow, which lets callers detect "no change" by identity.
+Grows (never shrinks) a container so its contents fit, with padding on the right and bottom, then does the same for
+the container it's in, and so on up. Returns the same node objects when nothing needs to grow, which lets callers
+detect "no change" by identity.
 
 ### `fitContainerToContents(nodes, containerId)`
 
@@ -91,9 +96,10 @@ components are further apart across than down, otherwise vertical.
 
 ### `groupIntoContainer(nodes, ids, container)`
 
-Group (Ctrl/⌘+G). Wraps the components among `ids` in a new container drawn around them with standard insets,
-so **nothing moves on screen**; they leave any container they were in. Containers among `ids` are ignored (no
-nesting). Never smaller than `CONTAINER_MIN`. The container is added last, so where it overlaps another it is the
+Group (Ctrl/⌘+G). Wraps the components and containers among `ids` in a new container drawn around them with
+standard insets, so **nothing moves on screen**. A box selected with a container it's in moves with that container.
+When every grouped box shared a container, the new one goes inside it (which grows to fit); otherwise it goes on
+the canvas and they leave the containers they were in. Never smaller than `CONTAINER_MIN`. The container is added last, so where it overlaps another it is the
 top-most one (what `dropIntoContainers` picks). Returns the same array when there is nothing to group.
 
 Ungroup (Ctrl/⌘+Shift+G, `ungroupNodes` in the store) is deleting the container while keeping its components:
@@ -101,10 +107,13 @@ they stay where they are on screen, out of any container. Connections to the con
 
 ### Drag-and-drop re-parenting — `dropIntoContainers`
 
-Called when a drag ends (and by `arrangeNodes`). For each moved **component** whose container isn't also moving:
+Called when a drag ends (and by `arrangeNodes`). For each moved **box** (component, text box or container) with no
+container around it also moving:
 
 1. Work out its canvas position from its new position and its *old* container.
-2. Find the **top-most container under the component's centre** (later containers render on top, so `findLast`).
+2. Find the **innermost container under the box's centre** (the deepest; among equally deep ones the later, which
+   renders on top). Containers that are moving, or inside one that is, don't count, so a container never lands in
+   its own contents.
 3. Inside one: position it relative to that container, kept clear of the header/padding (top/left), and mark the
    container to grow (bottom/right). Outside all: canvas coordinates, no parent.
 4. Update `parentId` and `data.containerId`, and grow every affected container.

@@ -28,7 +28,16 @@ import { useTheme } from "next-themes";
 import { useMounted } from "@/components/app/theme-toggle";
 import { getActiveSection, useDiagramStore, type NodesChangeOptions } from "@/lib/diagram/store";
 import { fromFlowNodes, historyKey, toFlowEdges, toFlowNodes, type FlowNode } from "@/lib/diagram/layout/flowAdapter";
-import { MIN_NODE_SIZE, absolutePosition, containerInsets, dropIntoContainers, growContainerToFit, nudgeNodes } from "@/lib/diagram/layout/layout";
+import {
+  MIN_NODE_SIZE,
+  absolutePosition,
+  containerAt,
+  containerInsets,
+  dropIntoContainers,
+  growContainerToFit,
+  hasAncestorIn,
+  nudgeNodes,
+} from "@/lib/diagram/layout/layout";
 import { alignmentLines, boxOf, nearestGaps, snapResize, snapToBoxes, unionBox, type Box } from "@/lib/diagram/layout/guides";
 import { changeMarksForView } from "@/lib/diagram/features/compare";
 import ContainerNode from "./nodes/ContainerNode";
@@ -76,11 +85,11 @@ function snapDrag(changes: NodePositionChange[], nodes: DiagramNode[], zoom: num
   const moving = new Set(changes.map((change) => change.id));
   const parentOffset = (node: DiagramNode) => {
     const parent = node.parentId ? byId.get(node.parentId) : undefined;
-    return parent ? parent.position : { x: 0, y: 0 };
+    return parent ? absolutePosition(parent, nodes) : { x: 0, y: 0 };
   };
   const leading = changes.filter((change) => {
     const node = byId.get(change.id);
-    return node && !(node.parentId && moving.has(node.parentId));
+    return node && !hasAncestorIn(node, nodes, moving);
   });
   for (const change of leading) {
     change.position = { x: Math.round(change.position!.x), y: Math.round(change.position!.y) };
@@ -93,7 +102,7 @@ function snapDrag(changes: NodePositionChange[], nodes: DiagramNode[], zoom: num
   const moved = unionBox(boxes);
   if (!moved) return null;
   const others = nodes
-    .filter((node) => !moving.has(node.id) && !(node.parentId && moving.has(node.parentId)))
+    .filter((node) => !moving.has(node.id) && !hasAncestorIn(node, nodes, moving))
     .map((node) => boxOf(absolutePosition(node, nodes), node.size));
   const snap = free ? { dx: 0, dy: 0, lines: alignmentLines(moved, others) } : snapToBoxes(moved, others, SNAP_DISTANCE / zoom);
   const dx = Math.round(snap.dx);
@@ -202,20 +211,6 @@ function snapResizeChanges(
 }
 
 const edgeTypes = { connection: ConnectionEdge };
-
-/** The top-most container under the point (later containers render above earlier ones). */
-function findContainerAtPoint(containers: FlowNode[], point: { x: number; y: number }) {
-  return containers.findLast((container) => {
-    const width = container.width ?? 0;
-    const height = container.height ?? 0;
-    return (
-      point.x >= container.position.x &&
-      point.x <= container.position.x + width &&
-      point.y >= container.position.y &&
-      point.y <= container.position.y + height
-    );
-  });
-}
 
 /**
  * Decides how a batch of React Flow changes is recorded in undo history.
@@ -415,8 +410,12 @@ export default function Canvas() {
     async ({ nodes, edges }) => {
       // React Flow adds a deleted container's children to the list; only delete those that were selected themselves.
       const listed = new Set(nodes.map((node) => node.id));
+      const all = section.nodes;
       const ids = nodes
-        .filter((node) => !node.parentId || !listed.has(node.parentId) || selectedNodeIds.includes(node.id))
+        .filter((node) => {
+          const own = all.find((candidate) => candidate.id === node.id);
+          return !own || !hasAncestorIn(own, all, listed) || selectedNodeIds.includes(node.id);
+        })
         .map((node) => node.id);
       // Returning false cancels React Flow's own delete, edges included, so a selected connection is deleted here.
       // Only selected ones: the list also has the kept components' connections.
@@ -424,7 +423,7 @@ export default function Canvas() {
       requestDelete(ids, edgeIds);
       return false;
     },
-    [selectedNodeIds],
+    [selectedNodeIds, section.nodes],
   );
 
   // Dragging an end of a selected connection onto another box or side moves that end.
@@ -540,30 +539,35 @@ export default function Canvas() {
       const payload = JSON.parse(raw) as PaletteDragPayload;
       const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
 
-      if (payload.kind === "container") {
-        addContainer({ x: Math.round(point.x - 160), y: Math.round(point.y - 32) });
-        return;
-      }
-      // Components and text boxes dropped on a container go inside it.
+      // Boxes dropped on a container go inside it; a container dropped on one is nested in it.
       const size =
-        payload.kind === "shape" ? shapeInfo(payload.shape).size : payload.kind === "text" ? { width: 160, height: 32 } : { width: 140, height: 56 };
+        payload.kind === "container"
+          ? { width: 320, height: 64 }
+          : payload.kind === "shape"
+            ? shapeInfo(payload.shape).size
+            : payload.kind === "text"
+              ? { width: 160, height: 32 }
+              : { width: 140, height: 56 };
 
-      const containers = flowNodes.filter((node) => node.type === "container");
-      const target = findContainerAtPoint(containers, point);
-      const insets = target ? containerInsets(target.data as ContainerNodeData) : null;
+      const target = containerAt(section.nodes, point);
+      const insets = target ? containerInsets(target.node.data as ContainerNodeData) : null;
       const position =
         target && insets
           ? {
-              x: Math.round(Math.max(insets.left, point.x - target.position.x - size.width / 2)),
-              y: Math.round(Math.max(insets.top, point.y - target.position.y - size.height / 2)),
+              x: Math.round(Math.max(insets.left, point.x - target.abs.x - size.width / 2)),
+              y: Math.round(Math.max(insets.top, point.y - target.abs.y - size.height / 2)),
             }
           : { x: Math.round(point.x - size.width / 2), y: Math.round(point.y - size.height / 2) };
 
-      if (payload.kind === "text") addText(position, undefined, target?.id ?? null);
-      else if (payload.kind === "shape") addBlock(position, target?.id ?? null, undefined, payload.shape);
-      else addBlock(position, target?.id ?? null, payload.colorKey as BlockColorKey);
+      if (payload.kind === "container") {
+        addContainer(position, target?.node.id ?? null);
+        return;
+      }
+      if (payload.kind === "text") addText(position, undefined, target?.node.id ?? null);
+      else if (payload.kind === "shape") addBlock(position, target?.node.id ?? null, undefined, payload.shape);
+      else addBlock(position, target?.node.id ?? null, payload.colorKey as BlockColorKey);
     },
-    [addBlock, addContainer, addText, flowNodes, readOnly, screenToFlowPosition],
+    [addBlock, addContainer, addText, section.nodes, readOnly, screenToFlowPosition],
   );
 
   return (

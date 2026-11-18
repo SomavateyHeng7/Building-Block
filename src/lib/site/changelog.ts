@@ -11,6 +11,23 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-18",
+    title: "Lines that follow your components, and one-click connected components",
+    changes: [
+      "Connections now turn to the sides that face each other as you move components around, so lines no longer loop round the back. A line you drew to other sides on purpose stays where you put it, and the Sides switch in the details panel changes either way.",
+      "Hover any component for blue arrows off each side: click one to add a connected component that way, or drag it onto another component to connect the two, or onto empty space to put the new one there.",
+    ],
+  },
+  {
+    date: "2026-11-18",
+    title: "Containers inside containers",
+    changes: [
+      "Drag a container onto another one to put it inside, as you would a component: a region holding accounts holding VPCs, or a domain split into sub-domains. Drop a new container from the palette onto one to start it inside.",
+      "Group (Ctrl/\u2318 + G) now works on containers too, and grouping boxes that share a container puts the new one inside it.",
+      "Deleting or ungrouping a nested container keeps what was in it in the container around it. Mermaid and PlantUML exports keep the nesting.",
+    ],
+  },
+  {
     date: "2026-11-06",
     title: "Quicker landscapes, consistent connections and internal designs that start from L1",
     changes: [

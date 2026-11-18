@@ -2,14 +2,14 @@
 
 import { memo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
+import { Handle, NodeResizer, Position, useReactFlow, type Node, type NodeProps } from "@xyflow/react";
 import { componentIcon } from "@/lib/diagram/features/componentIcons";
 import { shapeInfo } from "@/lib/diagram/shapes";
 import { MIN_NODE_SIZE } from "@/lib/diagram/layout/layout";
 import { defaultLabel } from "@/lib/diagram/factory";
 import { readableTextOn } from "@/lib/diagram/palette";
-import { useDiagramStore } from "@/lib/diagram/store";
-import type { BlockNodeData } from "@/lib/diagram/types";
+import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
+import type { BlockNodeData, ConnectionSide } from "@/lib/diagram/types";
 import { showDetails } from "@/components/editor/shared/detailsPanel";
 import { CommentMarker } from "./CommentMarker";
 import { useReadOnly } from "@/components/editor/shared/viewMode";
@@ -40,7 +40,7 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
   const shape = data.shape ?? "process";
   const outline = selected ? "#2563eb" : "rgba(0,0,0,0.25)";
   const corners = shape === "terminal" ? "rounded-full px-3" : "rounded";
-  // Quick-add arrows on a flowchart tab (one with flowchart shapes on it), as draw.io offers them.
+  // Quick-add arrows offer a decision too on a flowchart tab (one with flowchart shapes on it).
   const flowchart = useIsFlowchart();
   const info = shapeInfo(shape);
   // Shapes other than a box or pill are an SVG outline behind the label, inset so the text stays inside.
@@ -77,7 +77,7 @@ function BlockNodeComponent({ id, data, selected }: NodeProps<BlockFlowNode>) {
           {info.detail && <path d={info.detail} fill="none" stroke={outline} strokeWidth={1} vectorEffect="non-scaling-stroke" />}
         </svg>
       )}
-      {flowchart && !readOnly && <QuickAdd id={id} />}
+      {!readOnly && <QuickAdd id={id} flowchart={flowchart} />}
       {/* Corner squares and edge strips resize; the round dots in the middle of each side draw connections. */}
       <NodeResizer minWidth={MIN_NODE_SIZE.block.width} minHeight={MIN_NODE_SIZE.block.height} isVisible={selected && !readOnly} />
       {/* Every side starts and ends connections (the canvas uses loose connection mode). */}
@@ -128,32 +128,109 @@ const QUICK_ARROWS = [
   { side: "left", className: "top-1/2 -left-7 -translate-y-1/2", rotate: 180 },
 ] as const;
 
+/** How far (in screen pixels) an arrow must be dragged before it draws a line instead of being a click. */
+const DRAG_START = 6;
+
+interface ArrowDrag {
+  side: ConnectionSide;
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  moved: boolean;
+}
+
 /**
- * draw.io's quick-add arrows: on a hovered or selected shape, a blue arrow off each side. Clicking one adds the
- * same kind of shape that way, lined up and connected (`addConnectedBlock`); Shift-click adds a decision instead.
+ * Quick-add arrows, as in Visio (AutoConnect) and draw.io: on a hovered or selected component, a blue arrow off each
+ * side. Clicking one adds the same kind of shape that way, lined up and connected (`addConnectedBlock`); on a
+ * flowchart, Shift-click adds a decision instead. Dragging one onto another component connects the two; dropping
+ * it anywhere else adds the new one there, inside the container it lands in.
  */
-function QuickAdd({ id }: { id: string }) {
+function QuickAdd({ id, flowchart }: { id: string; flowchart: boolean }) {
   const addConnectedBlock = useDiagramStore((state) => state.addConnectedBlock);
+  const addConnection = useDiagramStore((state) => state.addConnection);
+  const { screenToFlowPosition } = useReactFlow();
+  const [drag, setDrag] = useState<ArrowDrag | null>(null);
+  // A drag ends in a click on the arrow too; that click mustn't add a shape as well.
+  const dragged = useRef(false);
+
+  const finish = (current: ArrowDrag, point: { x: number; y: number }) => {
+    // The box under the pointer, other than this one (the top-most first, so a component wins over its container).
+    const under = document
+      .elementsFromPoint(point.x, point.y)
+      .map((element) => element.closest<HTMLElement>(".react-flow__node"))
+      .find((element) => element && element.dataset.id !== id);
+    const targetId = under?.dataset.id;
+    const target = targetId
+      ? getActiveSection(useDiagramStore.getState().diagram).nodes.find((node) => node.id === targetId)
+      : undefined;
+    if (target?.type === "block") {
+      addConnection({ source: id, target: target.id });
+      return;
+    }
+    // Over a container, or the canvas: a new component goes where it was dropped.
+    if (target || document.elementsFromPoint(point.x, point.y).some((element) => element.closest(".react-flow__pane"))) {
+      addConnectedBlock(id, current.side, undefined, screenToFlowPosition(point));
+    }
+  };
+
   return (
     <>
-      {QUICK_ARROWS.map(({ side, className, rotate }) => (
-        <button
-          key={side}
-          type="button"
-          title={`Add a connected shape ${side === "top" ? "above" : side === "bottom" ? "below" : `to the ${side}`} (Shift: a decision)`}
-          aria-label={`Add a connected shape ${side === "top" ? "above" : side === "bottom" ? "below" : `to the ${side}`}`}
-          className={`bb-quick-add nodrag nopan absolute z-10 flex h-5 w-5 min-h-0 items-center justify-center rounded-full text-[#29b6f2] hover:scale-125 hover:text-[#1a8fd1] ${className}`}
-          onClick={(event) => {
-            event.stopPropagation();
-            addConnectedBlock(id, side, event.shiftKey ? "decision" : undefined);
-          }}
-          onDoubleClick={(event) => event.stopPropagation()}
-        >
-          <svg viewBox="0 0 20 20" className="h-4 w-4" style={{ transform: `rotate(${rotate}deg)` }} aria-hidden>
-            <path d="M3 7h8V3l7 7-7 7v-4H3z" fill="currentColor" fillOpacity={0.75} />
-          </svg>
-        </button>
-      ))}
+      {QUICK_ARROWS.map(({ side, className, rotate }) => {
+        const where = side === "top" ? "above" : side === "bottom" ? "below" : `to the ${side}`;
+        return (
+          <button
+            key={side}
+            type="button"
+            title={`Add a connected ${flowchart ? "shape" : "component"} ${where}${flowchart ? " (Shift: a decision)" : ""}, or drag onto another to connect`}
+            aria-label={`Add a connected ${flowchart ? "shape" : "component"} ${where}`}
+            className={`bb-quick-add nodrag nopan absolute z-10 flex h-5 w-5 min-h-0 touch-none items-center justify-center rounded-full text-[#29b6f2] hover:scale-125 hover:text-[#1a8fd1] ${drag?.side === side ? "bb-quick-add-dragging" : ""} ${className}`}
+            onPointerDown={(event) => {
+              if (event.button !== 0) return;
+              event.stopPropagation();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              const box = event.currentTarget.getBoundingClientRect();
+              const from = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+              dragged.current = false;
+              setDrag({ side, from, to: { x: event.clientX, y: event.clientY }, moved: false });
+            }}
+            onPointerMove={(event) => {
+              if (!drag || drag.side !== side) return;
+              const to = { x: event.clientX, y: event.clientY };
+              const moved = drag.moved || Math.hypot(to.x - drag.from.x, to.y - drag.from.y) > DRAG_START;
+              setDrag({ ...drag, to, moved });
+            }}
+            onPointerUp={(event) => {
+              if (!drag || drag.side !== side) return;
+              setDrag(null);
+              if (!drag.moved) return;
+              dragged.current = true;
+              finish(drag, { x: event.clientX, y: event.clientY });
+            }}
+            onPointerCancel={() => setDrag(null)}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (dragged.current) {
+                dragged.current = false;
+                return;
+              }
+              addConnectedBlock(id, side, flowchart && event.shiftKey ? "decision" : undefined);
+            }}
+            onDoubleClick={(event) => event.stopPropagation()}
+          >
+            <svg viewBox="0 0 20 20" className="h-4 w-4" style={{ transform: `rotate(${rotate}deg)` }} aria-hidden>
+              <path d="M3 7h8V3l7 7-7 7v-4H3z" fill="currentColor" fillOpacity={0.75} />
+            </svg>
+          </button>
+        );
+      })}
+      {/* The line being drawn, on top of everything (in screen pixels, so it needn't follow the canvas zoom). */}
+      {drag?.moved &&
+        createPortal(
+          <svg aria-hidden className="pointer-events-none fixed inset-0 z-50 h-full w-full">
+            <line x1={drag.from.x} y1={drag.from.y} x2={drag.to.x} y2={drag.to.y} stroke="#29b6f2" strokeWidth={2} strokeDasharray="6 4" />
+            <circle cx={drag.to.x} cy={drag.to.y} r={4} fill="#29b6f2" />
+          </svg>,
+          document.body,
+        )}
     </>
   );
 }

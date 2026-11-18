@@ -8,6 +8,7 @@ import {
   type Position as Side,
 } from "@xyflow/react";
 import { CHANGE_COLORS, type ChangeMarks } from "../features/compare";
+import { parentsFirst } from "./layout";
 import { parallelShifts, type EndShift } from "./routing";
 import type { DiagramEdge, DiagramNode, DiagramNodeData, Position } from "../types";
 
@@ -27,7 +28,8 @@ export type FlowEdge = Edge<ConnectionEdgeData, "connection">;
 const flowNodeCache = new WeakMap<DiagramNode, { selected: boolean; className: string | undefined; flow: FlowNode }>();
 
 /**
- * React Flow needs parents before their children, so containers are listed first. With `marks`, changed
+ * React Flow needs parents before their children, so containers are listed first, outer ones before the
+ * containers nested in them (React Flow also draws a child above its parent). With `marks`, changed
  * nodes get a `bb-change-*` class that outlines and tags them (see globals.css).
  *
  * **Why the cache and `measured`:** React Flow rebuilds its record of every node object it hasn't seen before, and
@@ -38,7 +40,7 @@ const flowNodeCache = new WeakMap<DiagramNode, { selected: boolean; className: s
  */
 export function toFlowNodes(nodes: DiagramNode[], selectedIds: ReadonlySet<string>, marks?: ChangeMarks | null): FlowNode[] {
   const ordered = [
-    ...nodes.filter((node) => node.type === "container"),
+    ...parentsFirst(nodes.filter((node) => node.type === "container")),
     ...nodes.filter((node) => node.type !== "container"),
   ];
   return ordered.map((node) => {

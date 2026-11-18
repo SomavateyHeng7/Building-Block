@@ -9,16 +9,23 @@ import { syncLinkedParticipants } from "./sequence/sequence";
 import { l1Neighbours, lastProtocol, withL1Context } from "./features/levelTools";
 import {
   absolutePosition,
+  ancestorIds,
+  hasAncestorIn,
+  nestingDepth,
   arrangeNodes,
   fitContainerToContents,
   groupIntoContainer,
   growContainerToFit,
   MIN_NODE_SIZE,
   restyleContainer,
+  suggestConnectionSides,
+  containerAt,
+  containerInsets,
   tidyContainer,
   type ArrangeOp,
 } from "./layout/layout";
 import { tidyLayout, type TidyDirection } from "./layout/autoLayout";
+import { withAutoSides } from "./layout/autoSides";
 import { numberInFlowOrder } from "./layout/flowOrder";
 import type { ComponentIconKey } from "./features/componentIcons";
 import type {
@@ -112,6 +119,17 @@ function mapEveryNode(diagram: Diagram, fn: (node: DiagramNode) => DiagramNode):
   }));
 }
 
+/**
+ * Whether a new or moved connection joins the sides that face each other. If so, it gets automatic sides and keeps
+ * facing as the components move; picking other sides on purpose (a line round the back, a loop) keeps them.
+ * No sides given counts as facing.
+ */
+function facesEachOther(nodes: DiagramNode[], edge: NewConnection): boolean {
+  if (!edge.sourceSide && !edge.targetSide) return true;
+  const facing = suggestConnectionSides(nodes, edge.source, edge.target);
+  return facing.sourceSide === edge.sourceSide && facing.targetSide === edge.targetSide;
+}
+
 /** Connections are dropped with the components they join. */
 function withoutDanglingEdges(section: DiagramSection): DiagramSection {
   if (!section.edges?.length) return section;
@@ -145,8 +163,9 @@ let lastCommit: { key: string | null; at: number } = { key: null, at: 0 };
  * Pass a coalesceKey for bursts of edits (drags, typing) so they undo as one step.
  */
 function commit(state: DiagramState, changed: Diagram, coalesceKey?: string) {
-  // Sequence participants that stand for a component follow its name and colour, whatever the edit was.
-  const diagram = syncLinkedParticipants(changed);
+  // Sequence participants that stand for a component follow its name and colour, and connections with automatic
+  // sides face their components wherever they moved, whatever the edit was.
+  const diagram = withAutoSides(syncLinkedParticipants(changed));
   const now = Date.now();
   const coalesce =
     coalesceKey !== undefined && coalesceKey === lastCommit.key && now - lastCommit.at < COALESCE_MS;
@@ -180,25 +199,32 @@ function restore(state: DiagramState, restored: Diagram) {
   };
 }
 
-/** Selected nodes plus the children of selected containers. */
+/** Selected nodes plus everything inside selected containers, however deep. */
 function withDescendants(nodes: DiagramNode[], ids: string[]): DiagramNode[] {
   const included = new Set(ids);
-  for (const node of nodes) if (node.parentId && included.has(node.parentId)) included.add(node.id);
-  return nodes.filter((node) => included.has(node.id));
+  return nodes.filter((node) => included.has(node.id) || hasAncestorIn(node, nodes, included));
 }
 
-/** Drops the `removed` nodes; components of a removed container stay where they are on screen, out of it. */
+/**
+ * Drops the `removed` nodes. What was in a removed container stays where it is on screen, in the nearest
+ * container around it that is kept, or on the canvas.
+ */
 function withoutNodes(nodes: DiagramNode[], removed: ReadonlySet<string>): DiagramNode[] {
   return nodes
     .filter((node) => !removed.has(node.id))
     .map((node) => {
       if (!node.parentId || !removed.has(node.parentId)) return node;
+      const keptId = ancestorIds(node, nodes).find((id) => !removed.has(id));
+      const kept = keptId ? nodes.find((candidate) => candidate.id === keptId) : undefined;
+      const absolute = absolutePosition(node, nodes);
+      const offset = kept ? absolutePosition(kept, nodes) : { x: 0, y: 0 };
       const rest = { ...node };
       delete rest.parentId;
       return {
         ...rest,
-        position: absolutePosition(node, nodes),
-        data: node.data.kind === "block" ? { ...node.data, containerId: null } : node.data,
+        position: { x: absolute.x - offset.x, y: absolute.y - offset.y },
+        ...(kept ? { parentId: kept.id } : {}),
+        data: node.data.kind === "block" ? { ...node.data, containerId: kept?.id ?? null } : node.data,
       };
     });
 }
@@ -323,14 +349,16 @@ interface DiagramState {
   /** Brings in the comments from another copy of this diagram (see `mergeComments`). */
   mergeComments: (incoming: ReviewComment[]) => MergeResult;
   setActiveSectionNodes: (nodes: DiagramNode[], options?: NodesChangeOptions) => void;
-  addContainer: (position: Position) => void;
+  /** With `parentId`, inside that container (`position` is then relative to it). */
+  addContainer: (position: Position, parentId?: string | null) => void;
   /** With `shape`, a flowchart shape at its usual size, coloured by the legend category named for it if there is one. */
   addBlock: (position: Position, parentId?: string | null, colorKey?: BlockColorKey, shape?: BlockShape) => void;
   /**
    * draw.io's quick add: a new shape off one side of a component (the same kind, or `shape`), lined up with it,
-   * clear of other boxes and connected from it, as one undo step. The new one is selected.
+   * clear of other boxes and connected from it, as one undo step. The new one is selected. With `at` (a canvas
+   * point, from dragging the arrow), it is centred there instead, in the innermost container under that point.
    */
-  addConnectedBlock: (sourceId: string, side: ConnectionSide, shape?: BlockShape) => void;
+  addConnectedBlock: (sourceId: string, side: ConnectionSide, shape?: BlockShape, at?: Position) => void;
   /** Adds a text box (a heading, caption or note), in a container if given (growing it to fit), and selects it. */
   addText: (position: Position, text?: string, parentId?: string | null) => void;
   /** Sets a text box's look; undefined values go back to the defaults. */
@@ -426,11 +454,17 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
 
   setSelectedEdge: (id) => set((state) => ({ selectedEdgeId: id, selectedNodeIds: id ? [] : state.selectedNodeIds })),
 
-  addConnection: ({ source, target, sourceSide, targetSide }) => {
+  addConnection: (requested) => {
     const { diagram } = useDiagramStore.getState();
     const section = getActiveSection(diagram);
+    const { source, target } = requested;
     const known = (id: string) => section.nodes.some((node) => node.id === id && node.type !== "text");
     if (source === target || !known(source) || !known(target)) return null;
+    // One on the facing sides (or none given) follows the components, starting on the sides that face now.
+    const auto = facesEachOther(section.nodes, requested);
+    const facing = auto ? suggestConnectionSides(section.nodes, source, target) : undefined;
+    const sourceSide = facing?.sourceSide ?? requested.sourceSide;
+    const targetSide = facing?.targetSide ?? requested.targetSide;
     const exists = (section.edges ?? []).some(
       (edge) =>
         edge.source === source &&
@@ -448,6 +482,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       target,
       ...(sourceSide ? { sourceSide } : {}),
       ...(targetSide ? { targetSide } : {}),
+      ...(auto ? { autoSides: true } : {}),
       ...(protocol ? { protocol } : {}),
     };
     set((state) => ({
@@ -494,6 +529,9 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
             if (!sourceSide) delete moved.sourceSide;
             if (!targetSide) delete moved.targetSide;
             delete moved.bend;
+            // Dropped on the facing sides, it keeps following the components; on any other, it stays there.
+            if (facesEachOther(current.nodes, { source, target, sourceSide, targetSide })) moved.autoSides = true;
+            else delete moved.autoSides;
             return moved;
           }),
         })),
@@ -665,8 +703,10 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       commit(
         state,
         mapActiveSection(state.diagram, (nodes) =>
+          // Innermost first, so each container is fitted around contents that are already fitted.
           nodes
             .filter((node) => node.type === "container")
+            .sort((a, b) => nestingDepth(b, nodes) - nestingDepth(a, nodes))
             .reduce((current, container) => fitContainerToContents(current, container.id), nodes),
         ),
       ),
@@ -837,23 +877,28 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       ),
     ),
 
-  addContainer: (position) =>
+  addContainer: (position, parentId = null) =>
     set((state) => {
       if (onSequenceTab(state.diagram)) return state;
       const id = createId("container");
       return {
         ...commit(
           state,
-          mapActiveSection(state.diagram, (nodes) => [
-            ...nodes,
-            {
-              id,
-              type: "container",
-              position,
-              size: { width: 320, height: 220 },
-              data: { kind: "container", label: "New Container" },
-            },
-          ]),
+          mapActiveSection(state.diagram, (nodes) => {
+            const parent = parentId ? nodes.find((node) => node.id === parentId && node.type === "container") : undefined;
+            const added: DiagramNode[] = [
+              ...nodes,
+              {
+                id,
+                type: "container",
+                position,
+                size: { width: 320, height: 220 },
+                ...(parent ? { parentId: parent.id } : {}),
+                data: { kind: "container", label: "New Container" },
+              },
+            ];
+            return parent ? growContainerToFit(added, parent.id) : added;
+          }),
         ),
         selectedNodeIds: [id],
       };
@@ -898,7 +943,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       };
     }),
 
-  addConnectedBlock: (sourceId, side, shape) =>
+  addConnectedBlock: (sourceId, side, shape, at) =>
     set((state) => {
       const view = getActiveSection(state.diagram);
       const source = view.nodes.find((node) => node.id === sourceId);
@@ -924,11 +969,25 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
             at.y < node.position.y + node.size.height + 8 &&
             at.y + size.height + 8 > node.position.y,
         );
-      let from = { ...source.position, ...source.size };
-      let position = place(from);
-      for (let tries = 0; tries < 20 && overlaps(position); tries++) {
-        from = { ...position, ...size };
+      let parentId = source.parentId;
+      let position: Position;
+      if (at) {
+        const inside = containerAt(view.nodes, at);
+        const insets = inside ? containerInsets(inside.node.data.kind === "container" ? inside.node.data : undefined) : undefined;
+        parentId = inside?.node.id;
+        position = inside && insets
+          ? {
+              x: Math.max(insets.left, at.x - inside.abs.x - size.width / 2),
+              y: Math.max(insets.top, at.y - inside.abs.y - size.height / 2),
+            }
+          : { x: at.x - size.width / 2, y: at.y - size.height / 2 };
+      } else {
+        let from = { ...source.position, ...source.size };
         position = place(from);
+        for (let tries = 0; tries < 20 && overlaps(position); tries++) {
+          from = { ...position, ...size };
+          position = place(from);
+        }
       }
       position = { x: Math.round(position.x), y: Math.round(position.y) };
       // A new decision takes a "decision" category if the legend has one (as the flowchart template does).
@@ -940,13 +999,16 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
         type: "block",
         position,
         size: { ...size },
-        ...(source.parentId ? { parentId: source.parentId } : {}),
+        ...(parentId ? { parentId } : {}),
         data: {
           kind: "block",
-          // A pill after a pill is where the flow ends.
-          label: kind === "terminal" && sourceData.shape === "terminal" ? "End" : info.defaultName,
+          // A pill after a pill is where the flow ends. Off an architecture component, it's named like any new one.
+          label:
+            kind === "terminal" && sourceData.shape === "terminal"
+              ? "End"
+              : isFlowchart(view.nodes) ? info.defaultName : "New Block",
           colorKey: decisionKey ?? sourceData.colorKey,
-          containerId: source.parentId ?? null,
+          containerId: parentId ?? null,
           ...(kind !== "process" ? { shape: kind } : {}),
         },
       };
@@ -961,6 +1023,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
         target: id,
         sourceSide: side,
         targetSide: opposite[side],
+        autoSides: true,
         ...(label ? { label } : {}),
       };
       return {
@@ -970,7 +1033,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
             const nodes = [...section.nodes, node];
             return {
               ...section,
-              nodes: source.parentId ? growContainerToFit(nodes, source.parentId) : nodes,
+              nodes: parentId ? growContainerToFit(nodes, parentId) : nodes,
               edges: [...(section.edges ?? []), edge],
             };
           }),

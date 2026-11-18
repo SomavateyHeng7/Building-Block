@@ -52,21 +52,67 @@ describe("groupIntoContainer", () => {
     expect(grouped.at(-1)!.size).toEqual({ width: CONTAINER_MIN.width, height: CONTAINER_MIN.height });
   });
 
-  it("ignores containers and returns the same nodes with no component to group", () => {
-    const nodes = groupIntoContainer([block("a", 0, 0)], ["a"], { id: "c", label: "C" });
-    expect(groupIntoContainer(nodes, ["c"], { id: "g", label: "G" })).toBe(nodes);
+  it("returns the same nodes when there is nothing to group", () => {
+    const text: DiagramNode = { id: "t", type: "text", position: { x: 0, y: 0 }, size: { width: 80, height: 20 }, data: { kind: "text", label: "Note" } };
+    const nodes = [text];
+    expect(groupIntoContainer(nodes, ["t"], { id: "g", label: "G" })).toBe(nodes);
+    expect(groupIntoContainer(nodes, [], { id: "g", label: "G" })).toBe(nodes);
+  });
+
+  it("nests a container in the new one, its components moving with it", () => {
+    const nodes = groupIntoContainer([block("a", 100, 100)], ["a"], { id: "c", label: "C" });
+    const before = absolutePosition(nodes.find((n) => n.id === "a")!, nodes);
+    const grouped = groupIntoContainer(nodes, ["c", "a"], { id: "g", label: "G" });
+    const find = (id: string) => grouped.find((n) => n.id === id)!;
+    expect(find("c").parentId).toBe("g");
+    expect(find("a").parentId).toBe("c");
+    expect(absolutePosition(find("a"), grouped)).toEqual(before);
+  });
+
+  it("puts the new container inside the container the grouped boxes shared", () => {
+    const outer: DiagramNode = { id: "o", type: "container", position: { x: 50, y: 50 }, size: { width: 400, height: 300 }, data: { kind: "container", label: "O" } };
+    const nodes = [outer, block("a", 20, 60, "o"), block("b", 200, 60, "o")];
+    const grouped = groupIntoContainer(nodes, ["a", "b"], { id: "g", label: "G" });
+    const find = (id: string) => grouped.find((n) => n.id === id)!;
+    expect(find("g").parentId).toBe("o");
+    expect(find("a").parentId).toBe("g");
+    expect(absolutePosition(find("a"), grouped)).toEqual({ x: 70, y: 110 });
+    // The outer container grows to hold the new one.
+    expect(find("o").size.width).toBeGreaterThanOrEqual(find("g").position.x + find("g").size.width);
   });
 });
 
 describe("grouping in the editor", () => {
   beforeEach(() => store().loadDiagram(createBlankDiagram()));
 
+  it("keeps a deleted nested container's components in the container around it", () => {
+    const outer = addContainer(0, 0);
+    store().addContainer({ x: 16, y: 40 }, outer);
+    const inner = store().selectedNodeIds[0];
+    expect(find(inner).parentId).toBe(outer);
+    const inside = addBlock(16, 40, inner);
+    const before = onScreen(inside);
+    store().deleteNodes([inner]);
+    expect(find(inside).parentId).toBe(outer);
+    expect(find(inside).data.kind === "block" && find(inside).data.containerId).toBe(outer);
+    expect(onScreen(inside)).toEqual(before);
+  });
+
+  it("deletes everything inside, however deep, with its contents", () => {
+    const outer = addContainer(0, 0);
+    store().addContainer({ x: 16, y: 40 }, outer);
+    const inner = store().selectedNodeIds[0];
+    addBlock(16, 40, inner);
+    store().deleteNodes([outer], { withContents: true });
+    expect(active().nodes).toHaveLength(0);
+  });
+
   it("groups components from inside and outside containers, as one undo step", () => {
     const old = addContainer(0, 0);
     const inside = addBlock(16, 40, old);
     const outside = addBlock(600, 400);
     const before = [onScreen(inside), onScreen(outside)];
-    const id = store().groupNodes([inside, outside, old])!;
+    const id = store().groupNodes([inside, outside])!;
     expect(store().selectedNodeIds).toEqual([id]);
     expect(find(inside).parentId).toBe(id);
     expect(find(outside).parentId).toBe(id);

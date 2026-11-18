@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { codeForView } from "@/lib/diagram/export/exportCode";
+import { codeForView, flowchartMermaid, plantUml } from "@/lib/diagram/export/exportCode";
 import { exportViews, planExport } from "@/lib/diagram/export/exportPlan";
 import { createBlankDiagram, createBlankSection } from "@/lib/diagram/factory";
 import type { Diagram, DiagramNode } from "@/lib/diagram/types";
@@ -96,5 +96,34 @@ describe("planning code files", () => {
     const names = (formats: ("mermaid" | "plantuml")[]) => planExport(diagram, { views, formats, bundle: "separate" }).files.map((file) => file.name);
     expect(names(["mermaid"])).toEqual(["shop-current.mmd", "shop-login.mmd"]);
     expect(names(["plantuml"])).toEqual(["shop-current.puml"]);
+  });
+});
+
+describe("nested containers in code", () => {
+  const box = (id: string, type: "container" | "block", parentId?: string): DiagramNode => ({
+    id,
+    type,
+    position: { x: 0, y: 0 },
+    size: { width: 100, height: 50 },
+    ...(parentId ? { parentId } : {}),
+    data: type === "container" ? { kind: "container", label: id } : { kind: "block", label: id, containerId: parentId ?? null },
+  });
+  const canvas = { title: "T", nodes: [box("Outer", "container"), box("Inner", "container", "Outer"), box("Api", "block", "Inner")], edges: [] };
+
+  it("writes a Mermaid subgraph inside its parent's", () => {
+    const lines = flowchartMermaid(canvas).split("\n");
+    const outer = lines.findIndex((line) => line.includes('"Outer"'));
+    const inner = lines.findIndex((line) => line.includes('"Inner"'));
+    expect(lines[inner].startsWith("    subgraph")).toBe(true);
+    expect(inner).toBeGreaterThan(outer);
+    expect(lines.filter((line) => line.trim() === "end")).toHaveLength(2);
+    expect(lines.filter((line) => line.includes("subgraph"))).toHaveLength(2);
+  });
+
+  it("writes a PlantUML boundary inside its parent's", () => {
+    const lines = plantUml(canvas).split("\n");
+    const inner = lines.find((line) => line.includes('"Inner"'))!;
+    expect(inner.startsWith("  Boundary(")).toBe(true);
+    expect(lines.filter((line) => line.includes("Boundary("))).toHaveLength(2);
   });
 });

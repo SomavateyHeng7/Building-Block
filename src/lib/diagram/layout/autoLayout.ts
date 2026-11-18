@@ -1,4 +1,4 @@
-import { CONTAINER_MIN, absolutePosition, containerInsets, LAYOUT_GAP, suggestConnectionSides } from "./layout";
+import { CONTAINER_MIN, absolutePosition, ancestorIds, containerInsets, LAYOUT_GAP, nestingDepth, suggestConnectionSides } from "./layout";
 import type { DiagramEdge, DiagramNode, Position, Size } from "../types";
 
 export type TidyDirection = "LR" | "TB";
@@ -16,8 +16,6 @@ const LOOSE_HEIGHT = 800;
 interface Item {
   id: string;
   size: Size;
-  /** Where its components go, relative to it, for a container. */
-  inside?: Map<string, Position>;
   /** Where it was, to keep the order people had. */
   was: Position;
 }
@@ -38,36 +36,41 @@ export function tidyLayout(
   const known = new Set(nodes.map((node) => node.id));
   const containers = nodes.filter((node) => node.type === "container");
   const containerIds = new Set(containers.map((node) => node.id));
-  const itemIdOf = (node: DiagramNode) => (node.parentId && containerIds.has(node.parentId) ? node.parentId : node.id);
+  const isNested = (node: DiagramNode) => !!node.parentId && containerIds.has(node.parentId);
+  // A connection to a box inside a container is laid out as one to the outermost container around it.
+  const itemIdOf = (node: DiagramNode) => ancestorIds(node, nodes).at(-1) ?? node.id;
 
   // What was where, so the order people had is kept wherever the flow doesn't decide.
   const was = (node: DiagramNode) => absolutePosition(node, nodes);
   const readingOrder = (a: Position, b: Position) => (lr ? a.x - b.x || a.y - b.y : a.y - b.y || a.x - b.x);
 
-  const items = new Map<string, Item>();
-  for (const node of nodes) {
-    if (node.parentId && containerIds.has(node.parentId)) continue;
-    items.set(node.id, { id: node.id, size: node.size, was: was(node) });
-  }
-  for (const container of containers) {
+  // Each container's contents are stacked inside it, innermost containers first so their new size is known.
+  const sizeOf = new Map<string, Size>();
+  const inside = new Map<string, Position>();
+  const depth = new Map(containers.map((node) => [node.id, nestingDepth(node, nodes)]));
+  for (const container of [...containers].sort((a, b) => depth.get(b.id)! - depth.get(a.id)!)) {
     const children = nodes
       .filter((node) => node.parentId === container.id)
+      .map((node) => ({ ...node, size: sizeOf.get(node.id) ?? node.size }))
       .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
     const insets = containerInsets(container.data.kind === "container" ? container.data : undefined);
     const { positions, content } = stack(children, lr);
-    const inside = new Map<string, Position>();
     for (const [id, position] of positions) inside.set(id, { x: insets.left + position.x, y: insets.top + position.y });
-    items.set(container.id, {
-      id: container.id,
-      size: children.length
+    sizeOf.set(
+      container.id,
+      children.length
         ? {
             width: Math.max(CONTAINER_MIN.width, insets.left + content.width + insets.right),
             height: Math.max(CONTAINER_MIN.height, insets.top + content.height + insets.bottom),
           }
         : container.size,
-      inside,
-      was: was(container),
-    });
+    );
+  }
+
+  const items = new Map<string, Item>();
+  for (const node of nodes) {
+    if (isNested(node)) continue;
+    items.set(node.id, { id: node.id, size: sizeOf.get(node.id) ?? node.size, was: was(node) });
   }
 
   // Connections between different boxes, as pairs of items.
@@ -131,14 +134,10 @@ export function tidyLayout(
   }
 
   const laidOut = nodes.map((node) => {
-    const item = items.get(node.id);
-    if (item) {
-      const at = origin.get(node.id)!;
-      return { ...node, position: at, size: node.type === "container" ? item.size : node.size };
-    }
-    const parent = node.parentId ? items.get(node.parentId) : undefined;
-    const inside = parent?.inside?.get(node.id);
-    return inside ? { ...node, position: inside } : node;
+    const size = node.type === "container" ? (sizeOf.get(node.id) ?? node.size) : node.size;
+    if (items.has(node.id)) return { ...node, position: origin.get(node.id)!, size };
+    const at = isNested(node) ? inside.get(node.id) : undefined;
+    return at ? { ...node, position: at, size } : node;
   });
 
   const tidied = edges.map((edge) => {

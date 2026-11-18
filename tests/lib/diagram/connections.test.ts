@@ -97,7 +97,8 @@ describe("connections in the editor", () => {
   it("joins two components and selects the connection", () => {
     const id = store().addConnection({ source: a, target: b, sourceSide: "right", targetSide: "left" });
     expect(id).not.toBeNull();
-    expect(active().edges).toEqual([{ id, source: a, target: b, sourceSide: "right", targetSide: "left" }]);
+    // Drawn on the facing sides, so it follows the components.
+    expect(active().edges).toEqual([{ id, source: a, target: b, sourceSide: "right", targetSide: "left", autoSides: true }]);
     expect(store().selectedEdgeId).toBe(id);
     expect(store().selectedNodeIds).toEqual([]);
   });
@@ -107,7 +108,7 @@ describe("connections in the editor", () => {
     const container = store().selectedNodeIds[0];
     const id = store().addConnection({ source: a, target: container, sourceSide: "bottom", targetSide: "top" });
     expect(id).not.toBeNull();
-    expect(active().edges).toEqual([{ id, source: a, target: container, sourceSide: "bottom", targetSide: "top" }]);
+    expect(active().edges).toEqual([{ id, source: a, target: container, sourceSide: "bottom", targetSide: "top", autoSides: true }]);
   });
 
   it("drops a container's connections when the container is deleted, keeping its components'", () => {

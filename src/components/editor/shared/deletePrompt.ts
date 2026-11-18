@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { toast } from "@/lib/editor/toast";
+import { hasAncestorIn } from "@/lib/diagram/layout/layout";
 
 /** A delete waiting for an answer about the components inside the containers being deleted. */
 export interface PendingDelete {
@@ -36,7 +37,9 @@ export function requestDelete(ids: string[], edgeIds: string[] = []) {
     deleteBoth(ids, edgeIds);
     return;
   }
-  const contents = nodes.filter((node) => holding.some((container) => container.id === node.parentId)).length;
+  // Everything inside, however deep: a nested container's contents go too when "delete all" is picked.
+  const holdingIds = new Set(holding.map((container) => container.id));
+  const contents = nodes.filter((node) => hasAncestorIn(node, nodes, holdingIds)).length;
   useDeletePrompt.setState({
     pending: { ids, edgeIds, containers: holding.map((container) => container.data.label), contents },
   });
@@ -52,9 +55,9 @@ export function resolveDelete(choice: "keep" | "all" | "cancel") {
     return;
   }
   const nodes = getActiveSection(useDiagramStore.getState().diagram).nodes;
-  const parentOf = new Map(nodes.map((node) => [node.id, node.parentId]));
-  // A component selected along with its container is kept with the others.
-  deleteBoth(pending.ids.filter((id) => !pending.ids.includes(parentOf.get(id) ?? "")), pending.edgeIds);
+  // A box selected along with a container it's in is kept with the others.
+  const kept = new Set(nodes.filter((node) => hasAncestorIn(node, nodes, pending.ids)).map((node) => node.id));
+  deleteBoth(pending.ids.filter((id) => !kept.has(id)), pending.edgeIds);
 }
 
 /**

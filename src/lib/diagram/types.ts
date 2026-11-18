@@ -133,6 +133,11 @@ export interface DiagramEdge {
   target: string;
   sourceSide?: ConnectionSide;
   targetSide?: ConnectionSide;
+  /**
+   * The sides follow the components (Visio's dynamic glue): whenever either end moves, `sourceSide` and
+   * `targetSide` are set again to the sides that face each other (`withAutoSides`). Absent: they stay where they are.
+   */
+  autoSides?: boolean;
   /** What flows, e.g. "Orders". */
   label?: string;
   /** How it flows, e.g. "REST", "Kafka". */

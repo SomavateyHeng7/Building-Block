@@ -209,12 +209,16 @@ what's on screen), a hint about C/B/? on devices with a mouse, and, inside an in
 Flowcharts are drawn in the app's own look, like every architecture tab; draw.io is the inspiration for how they're
 **edited**, not for how they look.
 
-- **Quick add**, as in draw.io: on a **flowchart tab** (one with at least one flowchart shape on it: `isFlowchart` in
-  `shapes.ts`, worked out once per nodes array; `useIsFlowchart` in `flowchartView.ts` reads it for the view on screen), a hovered or selected component shows a blue arrow off each
-  side. Clicking one adds the same kind of shape that way (Shift-click: a decision), 60 px below or 80 px beside it,
-  stepping past anything in the way, connected from that side (`addConnectedBlock`), as one undo step. Ways out of a
-  decision are labelled "Yes", then "No"; a pill after a pill is called "End". Tabs without flowchart shapes (L0
-  architecture) don't show the arrows, so editing them is unchanged.
+- **Quick add**, as in Visio (AutoConnect) and draw.io: on **every tab**, a hovered or selected component shows a
+  blue arrow off each side (`QuickAdd` in `BlockNode.tsx`). Clicking one adds the same kind of shape that way, 60 px
+  below or 80 px beside it, stepping past anything in the way, connected from that side (`addConnectedBlock`), as one
+  undo step. **Dragging** an arrow (more than 6 px) draws a dashed line to the pointer: let go over another component
+  to connect the two (`addConnection`), or over empty canvas or a container to add the new component centred there,
+  inside the innermost container under it (`containerAt`). The new connection follows its components (`autoSides`).
+  On a **flowchart tab** (one with at least one flowchart shape on it: `isFlowchart` in `shapes.ts`; `useIsFlowchart`
+  in `flowchartView.ts` reads it for the view on screen), Shift-click adds a decision, ways out of a decision are
+  labelled "Yes", then "No", a pill after a pill is called "End", and new shapes are named "Step"; elsewhere they're
+  "New Block".
 
 ### Flowchart shapes
 
@@ -374,7 +378,7 @@ See the [decision log](17-decision-log.md#import-drawio-for-architecture-mermaid
 - **Shape** (`data.shape`): a box or pill in CSS; the other flowchart shapes are an SVG outline from `shapes.ts`
   behind the label, stretched to the box, with the label kept inside by the shape's `inset` (a diamond's corners are
   where its connection dots are).
-- On a flowchart tab, the quick-add arrows (`QuickAdd`): see [flowcharts](#flowcharts).
+- The quick-add arrows (`QuickAdd`), on every tab: see [flowcharts](#flowcharts).
 - Four `Handle`s (`bb-handle` class), hidden until hover, selection, or while a connection is being dragged (CSS in
   `globals.css`); always visible on touch screens.
 - Double-click to rename inline. Enter or blur saves (blank → "Untitled"); Escape cancels.

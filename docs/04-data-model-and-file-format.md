@@ -29,7 +29,7 @@ classDiagram
   class BlockNodeData { kind "block"; label; colorKey?; containerId; details; icon?; shape?; detail?: ComponentDetail }
   class TextNodeData { kind "text"; label; fontSize?; align?; bold? }
   class ComponentDetail { nodes: DiagramNode[]; edges?: DiagramEdge[] }
-  class DiagramEdge { id; source; target; sourceSide?; targetSide?; label?; protocol?; description?; direction?; style? }
+  class DiagramEdge { id; source; target; sourceSide?; targetSide?; autoSides?; label?; protocol?; description?; direction?; style? }
   Diagram "1" *-- "many" LegendEntry
   Diagram "1" *-- "1..*" DiagramSection
   DiagramSection "1" *-- "many" DiagramNode
@@ -169,6 +169,7 @@ never have their own `detail`. Absent until something is drawn in it, and remove
 | --- | --- | --- |
 | `source`, `target` | Component ids **in the same canvas** (tab or internal design). Never a container, never the same id. | |
 | `sourceSide`, `targetSide` | `top`/`right`/`bottom`/`left`: which handle the line attaches to. | React Flow picks |
+| `autoSides` | `true`: the sides are set again to the facing ones whenever an end moves (`withAutoSides`). | Sides stay put |
 | `label` | What flows, e.g. "Orders". | |
 | `protocol` | How, e.g. "REST", "Kafka". | |
 | `description` | Free text. | |
@@ -237,8 +238,9 @@ The store and the validator together keep these true. Code may rely on them.
 
 1. A diagram has at least one section, and `activeSectionId` names one of them.
 2. Node ids are unique within their canvas (a tab, or one internal design). Section ids are unique.
-3. Only components have `parentId`, it names a **container in the same canvas**, and containers have no parent
-   (one level of nesting). Text boxes can be in a container too, the same way.
+3. A `parentId` names a **container in the same canvas**. Components, text boxes and containers can all have one,
+   so containers nest to any depth, but never (through others) inside themselves. A file is read with each
+   container before what's inside it.
 4. A component's `data.containerId` equals its `parentId` (or `null`).
 5. Every edge joins two different components (or containers) that exist in the same canvas, never a text box. Deleting a component deletes its
    edges (`withoutDanglingEdges` in the store).

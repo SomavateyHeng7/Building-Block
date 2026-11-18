@@ -1,6 +1,7 @@
 import { COMPONENT_ICON_KEYS } from "./features/componentIcons";
 import { DEFAULT_LEGEND } from "./features/defaultLegend";
 import { createBlankSection, createId } from "./factory";
+import { parentsFirst } from "./layout/layout";
 import { MAX_EDGES, MAX_NAME_LENGTH, MAX_NODES, MAX_PARTICIPANTS, MAX_SECTIONS, MAX_STEPS, MAX_TEXT_LENGTH } from "./limits";
 import { parseBranding } from "./export/branding";
 import { MAX_CHECKPOINTS, snapshotOf, type Checkpoint } from "./persistence/checkpoints";
@@ -259,6 +260,7 @@ function parseEdges(raw: unknown, nodes: DiagramNode[], name: string, fixes: str
     const bend = isObject(item.bend) ? { x: finite(item.bend.x), y: finite(item.bend.y) } : undefined;
     if (sourceSide) edge.sourceSide = sourceSide;
     if (targetSide) edge.targetSide = targetSide;
+    if (item.autoSides === true) edge.autoSides = true;
     if (direction) edge.direction = direction;
     if (style) edge.style = style;
     if (shape) edge.shape = shape;
@@ -432,26 +434,40 @@ function parseView(
   }
   if (unknownIcons) fixes.push(`"${name}": removed ${plural(unknownIcons, "icon")} this version doesn't have.`);
 
-  // Only containers can hold components, and only one level deep.
+  // Only containers can hold boxes; containers can sit in containers, but not (through others) in themselves.
   const containers = new Map(nodes.filter((node) => node.type === "container").map((node) => [node.id, node]));
-  let detached = 0;
-  const linked = nodes.map((node) => {
-    if (!node.parentId) return node;
-    // Components and text boxes can be in a container; containers can't.
-    const parent = node.type !== "container" ? containers.get(node.parentId) : undefined;
-    if (!parent) {
-      detached += 1;
-      // Keep it where it was on screen when the parent is known but not allowed.
-      const known = nodes.find((candidate) => candidate.id === node.parentId);
-      const position = known
-        ? { x: node.position.x + known.position.x, y: node.position.y + known.position.y }
-        : node.position;
-      return { ...node, parentId: undefined, position };
+  const parentOf = new Map(nodes.flatMap((node) => (node.parentId && containers.has(node.parentId) ? [[node.id, node.parentId]] : [])));
+  for (const node of nodes) {
+    if (node.type !== "container" || !parentOf.has(node.id)) continue;
+    const seen = new Set<string>();
+    for (let at = parentOf.get(node.id); at && !seen.has(at); at = parentOf.get(at)) {
+      if (at === node.id) {
+        parentOf.delete(node.id);
+        break;
+      }
+      seen.add(at);
     }
-    return node.data.kind === "block" ? { ...node, data: { ...node.data, containerId: parent.id } } : node;
-  });
+  }
+  let detached = 0;
+  const linked = parentsFirst(
+    nodes.map((node) => {
+      if (!node.parentId) return node;
+      const parent = parentOf.has(node.id) ? containers.get(node.parentId) : undefined;
+      if (!parent) {
+        detached += 1;
+        // Keep it where it was on screen when the parent is known but not allowed.
+        const known = nodes.find((candidate) => candidate.id === node.parentId);
+        const position =
+          known && known.id !== node.id
+            ? { x: node.position.x + known.position.x, y: node.position.y + known.position.y }
+            : node.position;
+        return { ...node, parentId: undefined, position };
+      }
+      return node.data.kind === "block" ? { ...node, data: { ...node.data, containerId: parent.id } } : node;
+    }),
+  );
   if (detached) {
-    fixes.push(`"${name}": took ${plural(detached, "item")} out of a container that is missing or isn't a container.`);
+    fixes.push(`"${name}": took ${plural(detached, "item")} out of a container that is missing, isn't a container or is inside it.`);
   }
 
   const edges = parseEdges(rawEdges, linked, name, fixes);

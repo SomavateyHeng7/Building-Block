@@ -4,6 +4,7 @@ import { useState } from "react";
 import { layoutSequence } from "@/lib/diagram/sequence/sequence";
 import { readableTextOn } from "@/lib/diagram/palette";
 import { shapeInfo } from "@/lib/diagram/shapes";
+import { absolutePosition } from "@/lib/diagram/layout/layout";
 import type { ConnectionSide, Diagram, DiagramNode, SequenceDiagram } from "@/lib/diagram/types";
 
 const PADDING = 24;
@@ -32,10 +33,7 @@ export default function TemplatePreview({ build, name }: { build: () => Diagram;
   const layout = (() => {
     const nodes = section?.nodes ?? [];
     const byId = new Map(nodes.map((node) => [node.id, node]));
-    const absolute = (node: DiagramNode) => {
-      const parent = node.parentId ? byId.get(node.parentId) : undefined;
-      return { x: node.position.x + (parent?.position.x ?? 0), y: node.position.y + (parent?.position.y ?? 0) };
-    };
+    const absolute = (node: DiagramNode) => absolutePosition(node, nodes);
     const boxes = nodes.map((node) => ({ node, ...absolute(node) }));
     const maxX = Math.max(0, ...boxes.map((box) => box.x + box.node.size.width));
     const maxY = Math.max(0, ...boxes.map((box) => box.y + box.node.size.height));

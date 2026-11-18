@@ -101,7 +101,7 @@ page's Content-Security-Policy with a fresh nonce ([security](14-security.md#con
 | `sequence/SequencePanel.tsx` | The right panel on a sequence tab: details for a participant, message (with activation), note, frame or divider |
 | `sequence/sequenceSelection.ts` | What's selected on a sequence tab |
 | `dialogs/ImportDialog.tsx` | Import from a file or pasted text; used by the start page and File menu |
-| `canvas/nodes/BlockNode.tsx` | A component on the canvas: colour, flowchart shape, handles, rename, notes marker, L2 badge, quick-add arrows (flowchart tabs) |
+| `canvas/nodes/BlockNode.tsx` | A component on the canvas: colour, flowchart shape, handles, rename, notes marker, L2 badge, quick-add arrows (click to add, drag to connect) |
 | `canvas/nodes/TextNode.tsx` | A text box: writing in place, font size, alignment, grows to fit its text |
 | `canvas/nodes/ContainerNode.tsx` | A container: header placement, outline, resize limits, Fit/Tidy toolbar |
 
