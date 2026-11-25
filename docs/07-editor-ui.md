@@ -44,13 +44,15 @@ Responsibilities, top to bottom:
 | Ctrl/⌘+S | Save (works even while typing in a field) | EditorApp |
 | Ctrl/⌘+Shift+S | Save as | EditorApp |
 | Ctrl/⌘+F | Find (`SearchDialog`); works in view mode too | EditorApp |
+| Ctrl/⌘+K | Command palette (`CommandPalette`): every action in one searchable list; Edit commands are left out in view mode | EditorApp |
+| ←/→, ↑/↓, PageUp/PageDown, Space, Enter, Backspace, Home, End | While presenting: turn through the views (`stepPresentation`) | EditorApp |
 | B | Add a component (inside the selected container, or the selected component's container) | EditorApp |
 | C | Add a container | EditorApp |
 | Arrow keys / Shift+arrows | Nudge selection 1 px / 10 px (`nudgeNodes`); on a focused box Canvas's `onKeyDownCapture` does it instead of React Flow's 5 px move | EditorApp, Canvas |
 | T | Add a text box (Enter on a selected one starts writing) | EditorApp |
 | Alt + hover | With one box selected, measure the px distances to the hovered box (`PixelGuides`) | PixelGuides |
 | Delete / Backspace | Delete selected nodes or connection; a container holding components asks first (`requestDelete`) | React Flow (`deleteKeyCode`) |
-| Esc | Close a drawer (not while typing in a field or in a dialog); clear the selection; with nothing selected, leave an internal design | EditorApp |
+| Esc | While presenting, leave the presentation. Otherwise: close a drawer (not while typing in a field or in a dialog); clear the selection; with nothing selected, leave an internal design | EditorApp |
 | Ctrl/⌘+A | Select everything in the view | EditorApp |
 | Ctrl/⌘+C / X / V | Copy / cut / paste (cut takes a container's components with it, as the copy does) | EditorApp |
 | Ctrl/⌘+D | Duplicate | EditorApp |
@@ -504,3 +506,23 @@ Used by the legend (with "already used" hints) and container outlines.
 and tabs are at least 40px tall, React Flow controls and handles are bigger, connection handles are always
 visible, `touch-action: manipulation` removes the double-tap-zoom delay, and safe-area padding utilities
 (`pt-safe`, `pb-safe`, `px-safe`, …) keep content clear of notches. `prefers-reduced-motion` turns animations off.
+
+## Presenting, dropping files and the command palette
+
+- **Present** (toolbar ▶, or "Present full screen" in the palette): `EditorApp` sets `presenting`, which forces the
+  read-only context, removes the toolbar, tabs, panels and drawers, and shows `PresentBar` (back, "tab › design  2 / 5",
+  forward, Exit; it fades after 2.5 s without pointer movement and returns on movement or focus). It asks the browser
+  for full screen; if that's refused the diagram still fills the page, and leaving full screen with the browser's Esc
+  ends the presentation. The steps are `presentSteps` (`shared/present.ts`): every tab and internal design with
+  something in it, in `exportViews` order. Moving between them is navigation (no undo step, not "unsaved").
+  **Why not a separate canvas:** reusing `Canvas` and `SequenceCanvas` means the presentation can't drift from what the
+  editor draws.
+- **Drop a file** anywhere on the editor (window-level listeners in `EditorApp`; palette drags carry no files, so
+  `Canvas.handleDrop` is untouched). A diagram `.json` goes through the same `takeDroppedFile`/`openDroppedDiagram` as the
+  start page, behind `useUnsavedGuard`. A draw.io or Mermaid file (`isImportable`) is added as new tabs like File →
+  Import (one undo step), and refused in view mode.
+- **Command palette** (`dialogs/CommandPalette.tsx`): `matchCommands` needs every typed word in the name, group or extra
+  words, names starting with the first word first. `EditorApp.paletteCommands()` builds the list. Actions owned by the
+  toolbar (export, save, open, new, import, history, merge comments, copy as image) are registered with
+  `shared/commands.ts` while the toolbar is mounted and are only listed when registered, so view mode leaves out what it
+  can't do. A command runs after the palette closes (so a dialog it opens keeps focus), except `immediate` ones.

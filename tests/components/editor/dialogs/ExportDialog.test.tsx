@@ -43,6 +43,41 @@ function renderDialog(formats: ("png" | "html")[] = ["png"], diagram = diagramWi
   return { onExport };
 }
 
+describe("ExportDialog copy as image", () => {
+  function renderWithCopy() {
+    const onCopyImage = vi.fn();
+    const diagram = diagramWithOneComponent();
+    render(
+      <ExportDialog
+        diagram={diagram}
+        currentViewId={diagram.sections[0].id}
+        prefs={{ formats: ["png"], bundle: "one", theme: "dark" }}
+        onCancel={() => {}}
+        onExport={() => {}}
+        onCopyImage={onCopyImage}
+      />,
+    );
+    return onCopyImage;
+  }
+
+  it("copies the tab on screen, in the chosen look", () => {
+    vi.stubGlobal("ClipboardItem", class {});
+    const onCopyImage = renderWithCopy();
+    fireEvent.click(screen.getByRole("button", { name: "Copy as image" }));
+    expect(onCopyImage).toHaveBeenCalledWith(
+      expect.objectContaining({ theme: "dark", views: [expect.objectContaining({ label: "Section 1" })] }),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("is left out when the browser can't copy pictures", () => {
+    vi.stubGlobal("ClipboardItem", undefined);
+    renderWithCopy();
+    expect(screen.queryByRole("button", { name: "Copy as image" })).toBeNull();
+    vi.unstubAllGlobals();
+  });
+});
+
 describe("ExportDialog", () => {
   it("offers the interactive viewer and says which file it will make", () => {
     renderDialog();

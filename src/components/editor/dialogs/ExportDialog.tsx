@@ -163,6 +163,7 @@ export default function ExportDialog({
   markedViewIds = [],
   onCancel,
   onExport,
+  onCopyImage,
 }: {
   diagram: Diagram;
   currentViewId: string;
@@ -171,6 +172,8 @@ export default function ExportDialog({
   markedViewIds?: string[];
   onCancel: () => void;
   onExport: (choice: ExportChoice) => void;
+  /** Copies one picture to the clipboard. Called straight from the click, which the browser needs to allow it. */
+  onCopyImage?: (choice: ExportChoice) => void;
 }) {
   const dialog = useRef<HTMLDivElement>(null);
   useDialogFocus(dialog);
@@ -238,6 +241,10 @@ export default function ExportDialog({
       : !plan.files.length
         ? "There's nothing to export yet. Add a container or component first."
         : null;
+
+  // The clipboard holds one picture, so it needs exactly one tab with something in it.
+  const copyView = chosenViews.length === 1 && chosenViews[0].nodeCount > 0 ? chosenViews[0] : null;
+  const canCopy = !!onCopyImage && typeof ClipboardItem !== "undefined";
 
   const fileCount = plan.zipName ? 1 : plan.files.length;
   const downloadLabel = plan.zipName
@@ -515,6 +522,17 @@ export default function ExportDialog({
             >
               Cancel
             </button>
+            {canCopy && (
+              <button
+                type="button"
+                disabled={!copyView}
+                title={copyView ? "Put a picture of this tab on the clipboard, to paste into a message, page or slide" : "Choose one tab to copy as a picture"}
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                onClick={() => onCopyImage?.({ formats: ["png"], views: [copyView!], bundle: "one", theme, legend })}
+              >
+                Copy as image
+              </button>
+            )}
             <button
               type="button"
               disabled={!!problem}

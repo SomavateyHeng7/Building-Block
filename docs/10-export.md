@@ -130,6 +130,14 @@ Why each step:
 - **Afterwards** the original tab and internal design are reopened, even if the export failed (`finally`).
 - **Errors** show "Couldn't export" with advice to save the diagram so work is safe.
 
+### Copy as image
+
+`Toolbar.copyImage(choice)` (button in `ExportDialog`; "Copy tab as image" in the command palette) draws one view the
+same way an export does (`pictureOptions`, shared with `runExport`) and puts the PNG on the clipboard. Browsers only
+allow clipboard writes during a click or key press, so it calls `navigator.clipboard.write` straight away with a
+`ClipboardItem` holding a *promise* of the PNG, then does the drawing. The button needs exactly one view with something
+in it, and is hidden where `ClipboardItem` doesn't exist.
+
 ## Rendering — `export.ts`
 
 ### `renderComposite(options)` → canvas (for PNG and PDF)

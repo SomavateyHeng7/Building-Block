@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { useTheme } from "next-themes";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
@@ -29,7 +29,7 @@ import {
   renderSvg,
   type RenderedComposite,
 } from "@/lib/diagram/export/export";
-import { DATA_FORMATS, IMAGE_FORMATS, describeFiles, planExport, type ExportFormat, type ExportView } from "@/lib/diagram/export/exportPlan";
+import { DATA_FORMATS, IMAGE_FORMATS, describeFiles, exportViews, planExport, type ExportFormat, type ExportView } from "@/lib/diagram/export/exportPlan";
 import HistoryDialog from "./dialogs/HistoryDialog";
 import { buildViewerHtml } from "@/lib/diagram/export/exportViewer";
 import { solutionDocument } from "@/lib/diagram/export/exportDocument";
@@ -43,6 +43,7 @@ import { Icon } from "./shared/Icon";
 import { useReadOnly } from "./shared/viewMode";
 import { useCompareView } from "./shared/compareView";
 import { useRenderEverything } from "./shared/exportRendering";
+import { registerCommands } from "./shared/commands";
 import { changeMarksForView } from "@/lib/diagram/features/compare";
 import { LogoMark } from "@/components/app/Logo";
 import { ThemeToggle } from "@/components/app/theme-toggle";
@@ -258,7 +259,15 @@ function SaveStatus() {
   return null;
 }
 
-export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts: () => void; onSearch: () => void }) {
+export default function Toolbar({
+  onShowShortcuts,
+  onSearch,
+  onPresent,
+}: {
+  onShowShortcuts: () => void;
+  onSearch: () => void;
+  onPresent: () => void;
+}) {
   const router = useRouter();
   const { getNodes, getNodesBounds } = useReactFlow();
   const { theme, resolvedTheme, setTheme } = useTheme();
@@ -351,6 +360,91 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
   }
 
   /**
+   * Opens a view and works out how to picture it: the page element to draw, how far it reaches, and its title and
+   * legend. Waits until the canvas has drawn everything first.
+   */
+  async function pictureOptions(target: ExportView, choice: ExportChoice) {
+    const { setActiveSection, openDetail } = useDiagramStore.getState();
+    setActiveSection(target.sectionId);
+    if (target.componentId) openDetail(target.componentId);
+    const view = getActiveSection(useDiagramStore.getState().diagram);
+    // A sequence tab is one sheet drawn at its full size; a canvas is the area its nodes cover.
+    const sheet = view.sequence ? await waitForSequenceSheet() : null;
+    if (!view.sequence) await waitForSection(view.nodes.length, view.edges?.length ?? 0);
+    const viewport = sheet ?? document.querySelector<HTMLElement>(".react-flow__viewport");
+    if (!viewport) throw new Error("The canvas isn't showing");
+    return {
+      viewport,
+      bounds: sheet ? { x: 0, y: 0, width: sheet.offsetWidth, height: sheet.offsetHeight } : getNodesBounds(getNodes()),
+      title: exportTitle(diagram, view),
+      // While a comparison is shown, the picture's legend says what the change colours mean.
+      // Left out entirely when the person chose a picture without a legend.
+      legend: choice.legend
+        ? [
+            ...legendUsedIn(diagram, view),
+            ...(changeMarksForView(diagram, useCompareView.getState().pair, view)?.legend ?? []),
+          ]
+        : [],
+      dark: choice.theme === "dark",
+      branding: diagram.branding,
+    };
+  }
+
+  /**
+   * Puts a picture of one view on the clipboard, to paste into a chat, a wiki page or a slide. Must be called
+   * straight from a click or key press: the browser only lets the clipboard be written then, so it hands over
+   * the picture as a promise and finishes drawing it afterwards.
+   */
+  function copyImage(choice: ExportChoice) {
+    setExportOpen(false);
+    const target = choice.views[0];
+    if (!target) return;
+    if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) {
+      toast.error("This browser can't copy images", { description: "Export a PNG instead." });
+      return;
+    }
+    const originalId = diagram.activeSectionId;
+    const originalDetailId = diagram.activeDetailId;
+    const { setActiveSection, openDetail } = useDiagramStore.getState();
+    setExporting(true);
+    useRenderEverything.getState().set(true);
+    setSelection([]);
+    useDiagramStore.getState().setSelectedEdge(null);
+    const picture = (async () => {
+      try {
+        return await inTheme(choice.theme, async () => {
+          const options = await pictureOptions(target, choice);
+          return canvasToPng((await renderComposite(options)).canvas);
+        });
+      } finally {
+        setActiveSection(originalId);
+        if (originalDetailId) openDetail(originalDetailId);
+        setExporting(false);
+        useRenderEverything.getState().set(false);
+      }
+    })();
+    navigator.clipboard
+      .write([new ClipboardItem({ "image/png": picture })])
+      .then(() => toast.success("Copied the picture", { description: "Paste it into a message, a page or a slide." }))
+      .catch((error) => {
+        console.error(error);
+        toast.error("Couldn't copy the picture", { description: "Export a PNG instead, or try again." });
+      });
+  }
+
+  /** Copies the tab (or internal design) on screen, looking the way the last export did. */
+  function copyCurrentView() {
+    const views = exportViews(diagram);
+    const view = views.find((candidate) => candidate.sectionId === diagram.activeSectionId && candidate.componentId === diagram.activeDetailId);
+    if (!view?.nodeCount) {
+      toast.info("There's nothing on this tab to copy yet");
+      return;
+    }
+    const prefs = readExportPrefs();
+    copyImage({ formats: ["png"], views: [view], bundle: "one", theme: prefs.theme, legend: prefs.legend ?? true });
+  }
+
+  /**
    * Makes the chosen files and downloads them, as one .zip or one by one. The canvas only renders one view,
    * so it steps through the views being pictured, then puts back what was open.
    */
@@ -385,29 +479,7 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
       if (pictured.length) {
         await inTheme(choice.theme, async () => {
           for (const target of pictured) {
-            setActiveSection(target.sectionId);
-            if (target.componentId) openDetail(target.componentId);
-            const view = getActiveSection(useDiagramStore.getState().diagram);
-            // A sequence tab is one sheet drawn at its full size; a canvas is the area its nodes cover.
-            const sheet = view.sequence ? await waitForSequenceSheet() : null;
-            if (!view.sequence) await waitForSection(view.nodes.length, view.edges?.length ?? 0);
-            const viewport = sheet ?? document.querySelector<HTMLElement>(".react-flow__viewport");
-            if (!viewport) throw new Error("The canvas isn't showing");
-            const options = {
-              viewport,
-              bounds: sheet ? { x: 0, y: 0, width: sheet.offsetWidth, height: sheet.offsetHeight } : getNodesBounds(getNodes()),
-              title: exportTitle(diagram, view),
-              // While a comparison is shown, the picture's legend says what the change colours mean.
-              // Left out entirely when the person chose a picture without a legend.
-              legend: choice.legend
-                ? [
-                    ...legendUsedIn(diagram, view),
-                    ...(changeMarksForView(diagram, useCompareView.getState().pair, view)?.legend ?? []),
-                  ]
-                : [],
-              dark: choice.theme === "dark",
-              branding: diagram.branding,
-            };
+            const options = await pictureOptions(target, choice);
             if (needs("png") || needs("pdf")) pages.set(target.id, await renderComposite(options));
             if (needs("svg") || needs("html")) svgs.set(target.id, await renderSvg(options));
           }
@@ -498,6 +570,20 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
     }
   }
 
+  // Let the command palette start what lives in this toolbar. Re-registered each render so they see the latest diagram.
+  useEffect(
+    () =>
+      registerCommands({
+        new: handleNew,
+        open: handleOpen,
+        ...(readOnly ? {} : { import: () => setImportOpen(true), history: () => setHistoryOpen(true), "merge-comments": () => void mergeCommentsFromDevice() }),
+        save: () => void saveDiagramToFile(),
+        "save-as": () => void saveDiagramToFile({ saveAs: true }),
+        export: () => setExportOpen(true),
+        "copy-image": copyCurrentView,
+      }),
+  );
+
   return (
     <div className="flex flex-wrap items-center gap-x-1 gap-y-2 border-b border-zinc-200 bg-white px-2 py-1.5 sm:gap-x-1.5 sm:px-3 dark:border-zinc-800 dark:bg-zinc-950">
       <button
@@ -562,6 +648,9 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
             <Icon name="keyboard" />
           </button>
         </span>
+        <button type="button" title="Present full screen" aria-label="Present" onClick={onPresent} className={ICON_BUTTON}>
+          <Icon name="play" />
+        </button>
         <div className={DIVIDER} />
         <div className="hidden sm:block">
           <ThemeToggle />
@@ -613,6 +702,7 @@ export default function Toolbar({ onShowShortcuts, onSearch }: { onShowShortcuts
             .map((tab) => tab.id)}
           onCancel={() => setExportOpen(false)}
           onExport={(choice) => void runExport(choice)}
+          onCopyImage={copyImage}
         />
       )}
     </div>

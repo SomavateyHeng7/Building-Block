@@ -11,6 +11,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-25",
+    title: "Present, copy as an image, drop files in, and a command palette",
+    changes: [
+      "Present your diagram full screen from the toolbar: the arrow keys (or Space) turn through your tabs and internal designs, a small bar shows where you are, and Esc leaves. Nothing can be changed while you present.",
+      "Copy a tab as a picture from Export → Copy as image, then paste it straight into a message, a wiki page or a slide.",
+      "Drop a diagram file anywhere on the editor to open it, asking about unsaved changes first. A draw.io or Mermaid file is added as new tabs instead.",
+      "Press Ctrl/\u2318 + K to search every action in one list: export, copy as image, present, group, go to a tab and more.",
+    ],
+  },
+  {
     date: "2026-11-18",
     title: "Lines that follow your components, and one-click connected components",
     changes: [

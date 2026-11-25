@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
 import { ReactFlowProvider } from "@xyflow/react";
 import Canvas from "./canvas/Canvas";
 import SequenceCanvas from "./sequence/SequenceCanvas";
@@ -19,6 +20,11 @@ import DetailBar from "./panels/DetailBar";
 import CompareBar from "./dialogs/CompareBar";
 import SearchDialog from "./dialogs/SearchDialog";
 import ShortcutsHelp from "./dialogs/ShortcutsHelp";
+import CommandPalette, { type PaletteCommand } from "./dialogs/CommandPalette";
+import PresentBar from "./dialogs/PresentBar";
+import { hasCommand, runCommand } from "./shared/commands";
+import { currentStepIndex, goToStep, presentSteps, stepPresentation } from "./shared/present";
+import { useUnsavedGuard } from "./shared/useUnsavedGuard";
 import Announcer from "./shared/Announcer";
 import DeleteContainerDialog from "./dialogs/DeleteContainerDialog";
 import { ungroup } from "./shared/deletePrompt";
@@ -32,7 +38,9 @@ import ViewSheet from "./canvas/ViewSheet";
 import { ReadOnlyContext, useMediaQuery } from "./shared/viewMode";
 import { getActiveSection, useDiagramStore } from "@/lib/diagram/store";
 import { nextSlotInContainer, nudgeNodes } from "@/lib/diagram/layout/layout";
-import { saveDiagramToFile, supportsFilePicker, useFileStore, useIsDirty } from "@/lib/diagram/persistence/file";
+import { openDroppedDiagram, saveDiagramToFile, supportsFilePicker, takeDroppedFile, useFileStore, useIsDirty } from "@/lib/diagram/persistence/file";
+import { ImportError, importDiagramText, isImportable, readImportText } from "@/lib/diagram/import/importFile";
+import { describeImport } from "./dialogs/ImportDialog";
 import { clearRecoveryCopy, isRecoveryEnabled, markLostUnsaved, useRecoveryEnabled, writeRecoveryCopy } from "@/lib/diagram/persistence/recovery";
 import { toast } from "@/lib/editor/toast";
 
@@ -73,6 +81,12 @@ export default function EditorApp() {
   useDocumentTitle(opened ? editorTitle(diagram.name, dirty) : EDITOR_TITLE);
   const [helpOpen, setHelpOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [presenting, setPresenting] = useState(false);
+  // A file is being dragged over the page: say that dropping it opens it.
+  const [dropping, setDropping] = useState(false);
+  const { guard: guardUnsaved, dialog: unsavedDialog } = useUnsavedGuard();
+  const { resolvedTheme, setTheme } = useTheme();
   // Below the lg breakpoint the palette and properties panels are drawers over the canvas.
   const [drawer, setDrawer] = useState<"palette" | "properties" | null>(null);
   // On wide screens the panels sit beside the canvas and can be collapsed to give it more room.
@@ -81,13 +95,61 @@ export default function EditorApp() {
   const phone = useMediaQuery("(max-width: 767px)", false);
   const wide = useMediaQuery("(min-width: 1024px)", true);
   const [mode, setMode] = useState<"view" | "edit" | null>(null);
-  const readOnly = !wide && (mode ?? (phone ? "view" : "edit")) === "view";
+  // Presenting only looks, on any screen.
+  const readOnly = presenting || (!wide && (mode ?? (phone ? "view" : "edit")) === "view");
   const [legendOpen, setLegendOpen] = useState(false);
   // The keyboard handler is set up once, so it reads the mode from here.
   const readOnlyRef = useRef(readOnly);
   useEffect(() => {
     readOnlyRef.current = readOnly;
   }, [readOnly]);
+
+  // The keyboard handler and the drop listeners are set up once, so they read these from refs.
+  const presentingRef = useRef(false);
+  const guardRef = useRef(guardUnsaved);
+  useEffect(() => {
+    presentingRef.current = presenting;
+    guardRef.current = guardUnsaved;
+  });
+
+  /** Fills the screen with the diagram and its controls, starting from what's open (or the first tab with content). */
+  function startPresenting() {
+    const { diagram: current, setSelection, setSelectedEdge } = useDiagramStore.getState();
+    const steps = presentSteps(current);
+    if (!steps.length) {
+      toast.info("There's nothing to present yet", { description: "Add a container or component first." });
+      return;
+    }
+    setSelection([]);
+    setSelectedEdge(null);
+    setPaletteOpen(false);
+    setDrawer(null);
+    if (currentStepIndex(current, steps) < 0) goToStep(steps[0]);
+    setPresenting(true);
+    // Browsers only allow full screen from a click or key press; if it's refused the diagram still fills the page.
+    document.documentElement.requestFullscreen?.().catch(() => {});
+  }
+
+  function stopPresenting() {
+    setPresenting(false);
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+  }
+  const stopPresentingRef = useRef(stopPresenting);
+  useEffect(() => {
+    stopPresentingRef.current = stopPresenting;
+  });
+
+  // Leaving full screen with the browser's own Esc ends the presentation too.
+  useEffect(() => {
+    if (!presenting) return;
+    let wasFullscreen = !!document.fullscreenElement;
+    function handleChange() {
+      if (document.fullscreenElement) wasFullscreen = true;
+      else if (wasFullscreen) stopPresentingRef.current();
+    }
+    document.addEventListener("fullscreenchange", handleChange);
+    return () => document.removeEventListener("fullscreenchange", handleChange);
+  }, [presenting]);
 
   function switchMode(next: "view" | "edit") {
     setMode(next);
@@ -168,6 +230,25 @@ export default function EditorApp() {
       if (target?.closest("input, textarea, select, [contenteditable='true'], [role='dialog'], [role='alertdialog'], [role='menu']")) return;
       // After that check, so Esc while typing in a drawer (say, cancelling a rename) leaves the drawer open.
       if (event.key === "Escape") setDrawer(null);
+
+      // While presenting, the keys turn the pages and nothing can be edited.
+      if (presentingRef.current) {
+        if (event.metaKey || event.ctrlKey) return;
+        if (event.key === "Escape") stopPresentingRef.current();
+        else if (["ArrowRight", "ArrowDown", "PageDown", " ", "Enter"].includes(event.key)) stepPresentation(1);
+        else if (["ArrowLeft", "ArrowUp", "PageUp", "Backspace"].includes(event.key)) stepPresentation(-1);
+        else if (event.key === "Home") stepPresentation(-Infinity);
+        else if (event.key === "End") stepPresentation(Infinity);
+        else return;
+        event.preventDefault();
+        return;
+      }
+
+      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen(true);
+        return;
+      }
 
       // Finding things is reading, so it works in view mode too.
       if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === "f") {
@@ -288,6 +369,62 @@ export default function EditorApp() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Dropping a file anywhere on the editor opens it: a diagram file replaces the open diagram (after asking about
+  // unsaved changes), a draw.io or Mermaid file is added as new tabs. Palette items dragged onto the canvas carry no files.
+  useEffect(() => {
+    const hasFiles = (event: DragEvent) => !!event.dataTransfer?.types.includes("Files");
+    function handleDragOver(event: DragEvent) {
+      if (!hasFiles(event)) return;
+      // Without this the browser would leave the app to show the dropped file.
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+      setDropping(true);
+    }
+    function handleDragLeave(event: DragEvent) {
+      // Leaving the window, not moving between elements in it.
+      if (!event.relatedTarget) setDropping(false);
+    }
+    function handleDrop(event: DragEvent) {
+      if (!hasFiles(event) || !event.dataTransfer) return;
+      event.preventDefault();
+      setDropping(false);
+      if (presentingRef.current) return;
+      // Starts reading synchronously, while the browser still allows access to the dropped file.
+      const dropped = takeDroppedFile(event.dataTransfer);
+      const name = event.dataTransfer.files[0]?.name ?? "";
+      if (isImportable(name)) {
+        if (readOnlyRef.current) {
+          toast.info("Switch to Edit to import a file");
+          return;
+        }
+        void (async () => {
+          const file = await dropped;
+          if (!file) return;
+          try {
+            const result = await importDiagramText(await readImportText(file.file), file.file.name, useDiagramStore.getState().diagram.legend);
+            useDiagramStore.getState().addImportedSections(result.sections, result.legend);
+            const { title, details } = describeImport(result);
+            toast.success(title, { description: "Added after the other tabs. Undo removes them again.", details });
+          } catch (problem) {
+            toast.error(`Couldn't import "${file.file.name}"`, {
+              description: problem instanceof ImportError ? problem.message : "Check it's a draw.io file or a Mermaid sequence diagram.",
+            });
+          }
+        })();
+        return;
+      }
+      guardRef.current(() => void dropped.then(openDroppedDiagram));
+    }
+    window.addEventListener("dragover", handleDragOver);
+    window.addEventListener("dragleave", handleDragLeave);
+    window.addEventListener("drop", handleDrop);
+    return () => {
+      window.removeEventListener("dragover", handleDragOver);
+      window.removeEventListener("dragleave", handleDragLeave);
+      window.removeEventListener("drop", handleDrop);
+    };
+  }, []);
+
   // With a file to write to, keep it current, like draw.io's autosave to device.
   // Paused after a failed write (the toolbar says "Not saved") until a manual Save succeeds.
   useEffect(() => {
@@ -347,6 +484,64 @@ export default function EditorApp() {
     };
   }, [dirty]);
 
+  /** Everything the palette offers. What this screen or mode can't do right now is left out. */
+  function paletteCommands(): PaletteCommand[] {
+    const store = useDiagramStore.getState();
+    const view = getActiveSection(store.diagram);
+    const mod = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+";
+    const hasSelection = store.selectedNodeIds.length > 0;
+    const canvasTab = !isSequenceSection(view);
+    const owned = (
+      id: Parameters<typeof hasCommand>[0],
+      label: string,
+      group: string,
+      extra: Partial<PaletteCommand> = {},
+    ): PaletteCommand[] => (hasCommand(id) ? [{ id, label, group, run: () => runCommand(id), ...extra }] : []);
+    return [
+      ...owned("export", "Export…", "File", { words: "download png svg pdf csv mermaid plantuml document" }),
+      ...owned("copy-image", "Copy tab as image", "File", { immediate: true, words: "clipboard picture png paste" }),
+      { id: "present", label: "Present full screen", group: "View", words: "slideshow fullscreen", run: startPresenting },
+      { id: "find", label: "Find in diagram", group: "View", keys: `${mod}F`, run: () => setSearchOpen(true) },
+      ...owned("save", "Save", "File", { keys: `${mod}S` }),
+      ...owned("save-as", supportsFilePicker() ? "Save as…" : "Download a copy", "File", { keys: supportsFilePicker() ? `${mod}⇧S` : undefined }),
+      ...owned("open", "Open a diagram…", "File"),
+      ...owned("new", "New diagram", "File"),
+      ...owned("import", "Import draw.io or Mermaid…", "File"),
+      ...owned("history", "Version history…", "File", { words: "checkpoint restore" }),
+      ...owned("merge-comments", "Merge comments from a file…", "File", { words: "review reviewer" }),
+      ...(readOnly
+        ? []
+        : [
+            { id: "undo", label: "Undo", group: "Edit", keys: `${mod}Z`, run: () => store.undo() },
+            { id: "redo", label: "Redo", group: "Edit", keys: `${mod}⇧Z`, run: () => store.redo() },
+            ...(canvasTab
+              ? [
+                  { id: "add-block", label: "Add a component", group: "Add", keys: "B", words: "box system service", run: () => store.addBlock({ x: 80, y: 80 }) },
+                  { id: "add-container", label: "Add a container", group: "Add", keys: "C", words: "domain layer group", run: () => store.addContainer({ x: 80, y: 80 }) },
+                  { id: "add-text", label: "Add a text box", group: "Add", keys: "T", words: "label note", run: () => store.addText({ x: 80, y: 80 }) },
+                ]
+              : []),
+            ...(hasSelection
+              ? [
+                  { id: "group", label: "Group selection in a container", group: "Edit", keys: `${mod}G`, run: () => store.groupNodes(store.selectedNodeIds) },
+                  { id: "ungroup", label: "Ungroup", group: "Edit", keys: `${mod}⇧G`, run: () => ungroup(store.selectedNodeIds) },
+                  { id: "duplicate", label: "Duplicate selection", group: "Edit", keys: `${mod}D`, run: () => store.duplicateSelection() },
+                  { id: "copy", label: "Copy selection", group: "Edit", keys: `${mod}C`, run: () => store.copySelection() },
+                ]
+              : []),
+            { id: "select-all", label: "Select everything on this tab", group: "Edit", keys: `${mod}A`, run: () => store.selectAll() },
+          ]),
+      { id: "theme", label: resolvedTheme === "dark" ? "Switch to the light theme" : "Switch to the dark theme", group: "View", words: "mode appearance", run: () => setTheme(resolvedTheme === "dark" ? "light" : "dark") },
+      { id: "shortcuts", label: "Keyboard shortcuts", group: "Help", keys: "?", run: () => setHelpOpen(true) },
+      ...store.diagram.sections.map((tab) => ({
+        id: `tab:${tab.id}`,
+        label: `Go to tab: ${tab.name}`,
+        group: "Tab",
+        run: () => store.setActiveSection(tab.id),
+      })),
+    ];
+  }
+
   if (!opened) {
     return (
       <div role="status" aria-label="Loading" className="flex h-dvh w-full items-center justify-center bg-zinc-100 text-sm text-zinc-500 dark:bg-zinc-900">
@@ -361,13 +556,17 @@ export default function EditorApp() {
     <ReactFlowProvider>
       <ReadOnlyContext.Provider value={readOnly}>
       <div className="flex h-dvh w-full flex-col bg-zinc-100 pb-safe pt-safe px-safe dark:bg-zinc-900">
-        <Toolbar onShowShortcuts={() => setHelpOpen(true)} onSearch={() => setSearchOpen(true)} />
-        <SectionTabs />
-        <DetailBar />
-        <CompareBar />
+        {!presenting && (
+          <>
+            <Toolbar onShowShortcuts={() => setHelpOpen(true)} onSearch={() => setSearchOpen(true)} onPresent={startPresenting} />
+            <SectionTabs />
+            <DetailBar />
+            <CompareBar />
+          </>
+        )}
         <Announcer />
         <main aria-label="Diagram editor" className="relative flex min-h-0 flex-1 overflow-hidden">
-          {drawer && (
+          {!presenting && drawer && (
             <button
               type="button"
               aria-label="Close panel"
@@ -376,7 +575,7 @@ export default function EditorApp() {
               onClick={() => setDrawer(null)}
             />
           )}
-          {hidden.palette && (
+          {!presenting && hidden.palette && (
             <div className={`${RAIL} border-r border-zinc-200 dark:border-zinc-800`}>
               <PanelToggle
                 side="left"
@@ -387,7 +586,7 @@ export default function EditorApp() {
             </div>
           )}
           {/* Sequence tabs are written as Mermaid code, so the code takes the palette's place. */}
-          {sequenceTab ? (
+          {presenting ? null : sequenceTab ? (
             <SequenceCode
               onCollapse={() => togglePanel("palette")}
               className={`${drawer === "palette" ? "flex" : "hidden"} absolute inset-y-0 left-0 z-30 w-80 max-w-[85%] shadow-xl lg:relative lg:z-auto ${hidden.palette ? "lg:hidden" : "lg:flex"} lg:max-w-[calc(100%-320px)] lg:shrink-0 lg:shadow-none`}
@@ -401,6 +600,8 @@ export default function EditorApp() {
           )}
           <div className={`relative min-w-0 flex-1 overflow-hidden ${readOnly ? "bb-readonly" : ""}`}>
             {sequenceTab ? <SequenceCanvas /> : <Canvas />}
+            {!presenting && (
+              <>
             {/* On a sequence tab these sit below its toolbar. */}
             <div className={`absolute left-3 z-10 flex gap-2 lg:hidden ${sequenceTab && !readOnly ? "top-14" : "top-3"}`}>
               {sequenceTab && (
@@ -462,9 +663,12 @@ export default function EditorApp() {
                 )}
               </div>
             )}
-            {readOnly && <ViewSheet legendOpen={legendOpen} onCloseLegend={() => setLegendOpen(false)} />}
+              </>
+            )}
+            {readOnly && !presenting && <ViewSheet legendOpen={legendOpen} onCloseLegend={() => setLegendOpen(false)} />}
+            {presenting && <PresentBar onExit={stopPresenting} />}
           </div>
-          {!(sequenceTab && readOnly) && (
+          {!presenting && !(sequenceTab && readOnly) && (
             <aside
               className={`${drawer === "properties" ? "flex" : "hidden"} absolute inset-y-0 right-0 z-30 w-80 max-w-[85%] flex-col overflow-y-auto border-l border-zinc-200 bg-white pr-safe shadow-xl lg:static lg:z-auto ${hidden.properties ? "lg:hidden" : "lg:flex"} lg:w-72 lg:shrink-0 lg:shadow-none dark:border-zinc-800 dark:bg-zinc-950`}
             >
@@ -474,7 +678,7 @@ export default function EditorApp() {
               <LegendPanel />
             </aside>
           )}
-          {!(sequenceTab && readOnly) && hidden.properties && (
+          {!presenting && !(sequenceTab && readOnly) && hidden.properties && (
             <div className={`${RAIL} border-l border-zinc-200 dark:border-zinc-800`}>
               <PanelToggle side="right" expanded={false} label="details and legend" onClick={() => togglePanel("properties")} />
             </div>
@@ -483,6 +687,17 @@ export default function EditorApp() {
       </div>
       {helpOpen && <ShortcutsHelp onClose={() => setHelpOpen(false)} />}
       {searchOpen && <SearchDialog onClose={() => setSearchOpen(false)} />}
+      {paletteOpen && <CommandPalette commands={paletteCommands()} onClose={() => setPaletteOpen(false)} />}
+      {unsavedDialog}
+      {dropping && (
+        <div className="pointer-events-none fixed inset-0 z-[60] flex items-center justify-center bg-zinc-900/40 p-6" role="status">
+          <div className="flex max-w-md flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-white/80 bg-zinc-900/80 p-10 text-center text-white">
+            <Icon name="file" className="h-8 w-8" />
+            <p className="font-semibold">Drop to open your diagram</p>
+            <p className="text-sm text-zinc-300">A .json file saved from Building Block replaces this diagram. A draw.io or Mermaid file is added as new tabs.</p>
+          </div>
+        </div>
+      )}
       <DeleteContainerDialog />
       </ReadOnlyContext.Provider>
     </ReactFlowProvider>

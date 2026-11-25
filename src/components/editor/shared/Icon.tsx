@@ -15,6 +15,7 @@ export const ICONS = {
   panel: "M4 4h16v16H4zM14 4v16",
   panelLeft: "M4 4h16v16H4zM10 4v16",
   pencil: "M4 20h4L19 9l-4-4L4 16zM13 7l4 4",
+  play: "M7 4v16l13-8z",
   plus: "M12 5v14M5 12h14",
   redo: "m15 14 5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13",
   save: "M5 3h11l3 3v15H5zM8 3v5h7V3M8 21v-7h8v7",
